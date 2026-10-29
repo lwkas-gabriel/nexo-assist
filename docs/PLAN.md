@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 e T04 concluídas; próxima T05 (matriz de prioridade).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T05 concluídas; próxima T06 (reabertura e duplicidade).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -135,7 +135,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 **Fase 3 — Domínio e serviços**
 - [x] T03 Domínio puro: tipos, categorias, status, campos obrigatórios (RN01–RN03, A12) — **concluída** (`a267294`, `7b56f01`). Inclui leitura do número do chamado escrito pelo funcionário e a lista ordenada do que falta no rascunho; nova suposição A23 ("Não sei").
 - [x] T04 Calendário útil + SLA + vencimento (RN12, RN13, A10) — **concluída** (`b1826d0` e seguinte). Calendário configurável testado também com virada de horário de verão; nova suposição A24 (dias úteis = 10 h de expediente cada).
-- [ ] T05 Matriz de prioridade (RN11, A06)
+- [x] T05 Matriz de prioridade (RN11, A06) — **concluída**. A função devolve a prioridade e a justificativa ("RN11: somente você + compromisso hoje → Alta"), que vai para o registro de decisão.
 - [ ] T06 Reabertura ≤ 7 dias + candidatos a duplicidade (RN05, RN06)
 - [ ] T07 Tickets-service: schema, seed (funcionários, analistas, 5–10 artigos, chamados variados), REST validado por `packages/contracts`, isolamento por dono na query, token de serviço (RF22, RN09, RT05, RT11)
 - [ ] T08 Injeção de falhas no tickets-service + adapter `TicketGateway` com timeout, retry/backoff e erro tipado `TICKETS_UNAVAILABLE` (RT05, RT09)
