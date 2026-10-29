@@ -134,3 +134,8 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 ### 26. Desvios do plano
 - **Sem "login fake":** a autenticação real é a T10; um login falso seria código descartável.
 - **Só a api no deploy:** o tickets-service entra quando a api passar a usá-lo, evitando custo de um serviço ocioso.
+
+### 27. Teste manual e decisões de custo (usuário)
+- **Usuário testou** o esqueleto localmente no modo de teste: mensagem enviada, chip "buscou na central de ajuda" e resposta citando o artigo, como esperado.
+- **Usuário questionou o custo** da API da Anthropic. A IA explicou que a chave é grátis, mas o uso é pré-pago (estimativa: menos de um décimo de centavo de dólar por mensagem com o Haiku), e mostrou que o modo de teste permite desenvolver quase tudo sem custo.
+- **Usuário decidiu:** manter o Claude Haiku (crédito comprado perto da T11, quando a qualidade do agent precisa do modelo real) e **adiar o deploy para o fim do projeto (T29)**, publicando uma vez com tudo pronto. O `railway.json` e as proteções contra abuso ficam prontos desde já.
