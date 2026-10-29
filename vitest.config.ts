@@ -18,6 +18,13 @@ export default defineConfig({
           environment: "node",
         },
       },
+      {
+        test: {
+          name: "api",
+          include: ["apps/api/src/**/*.test.ts"],
+          environment: "node",
+        },
+      },
     ],
   },
 });
