@@ -4,7 +4,6 @@ import {
   createMarkdownKnowledgeBase,
   parseArticle,
   searchArticles,
-  tokenize,
 } from "./markdown-knowledge-base.ts";
 
 const vpn = parseArticle(
@@ -35,12 +34,6 @@ describe("parseArticle", () => {
 
   it("recusa artigo sem cabeçalho, para o erro aparecer na inicialização", () => {
     expect(() => parseArticle("ruim", "só corpo")).toThrowError(/sem cabeçalho/);
-  });
-});
-
-describe("tokenize", () => {
-  it("ignora acentos, maiúsculas, pontuação e palavras vazias", () => {
-    expect(tokenize("A conexão da VPN não funciona!")).toEqual(["conexao", "vpn", "funciona"]);
   });
 });
 

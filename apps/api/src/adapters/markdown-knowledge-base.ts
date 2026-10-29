@@ -1,38 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { countSharedTokens, tokenize } from "@nexo/shared/domain";
 import type { Article, KnowledgeBase } from "../ports/knowledge-base.ts";
-
-/** Palavras comuns que não ajudam a distinguir um artigo de outro. */
-const STOPWORDS = new Set([
-  "a",
-  "o",
-  "as",
-  "os",
-  "um",
-  "uma",
-  "de",
-  "da",
-  "do",
-  "das",
-  "dos",
-  "e",
-  "em",
-  "no",
-  "na",
-  "nos",
-  "nas",
-  "com",
-  "por",
-  "para",
-  "que",
-  "meu",
-  "minha",
-  "se",
-  "ao",
-  "nao",
-  "esta",
-  "estou",
-]);
 
 /** Peso maior para título e tags: são escritos para descrever o assunto do artigo. */
 const TITLE_WEIGHT = 3;
@@ -74,26 +43,11 @@ export function parseArticle(id: string, raw: string): Article {
   return { id, title, tags, content: body.trim() };
 }
 
-/** Minúsculas, sem acentos, sem pontuação e sem palavras vazias. */
-export function tokenize(text: string): string[] {
-  return text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 1 && !STOPWORDS.has(token));
-}
-
-function countMatches(queryTokens: readonly string[], text: string): number {
-  const textTokens = new Set(tokenize(text));
-  return queryTokens.filter((token) => textTokens.has(token)).length;
-}
-
 function scoreArticle(article: Article, queryTokens: readonly string[]): number {
   return (
-    countMatches(queryTokens, article.title) * TITLE_WEIGHT +
-    countMatches(queryTokens, article.tags.join(" ")) * TAG_WEIGHT +
-    countMatches(queryTokens, article.content) * BODY_WEIGHT
+    countSharedTokens(queryTokens, article.title) * TITLE_WEIGHT +
+    countSharedTokens(queryTokens, article.tags.join(" ")) * TAG_WEIGHT +
+    countSharedTokens(queryTokens, article.content) * BODY_WEIGHT
   );
 }
 
