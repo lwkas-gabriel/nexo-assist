@@ -1,4 +1,5 @@
 export * from "./business-calendar.ts";
+export * from "./duplicates.ts";
 export * from "./priority.ts";
 export * from "./reopen.ts";
 export * from "./sla.ts";
