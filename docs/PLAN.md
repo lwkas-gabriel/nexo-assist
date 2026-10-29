@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 (análise) concluída e aprovada em 29/10/2026. Próximo passo: Fase 2 (setup), aguardando aprovação.
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 em andamento: T01 concluída; próximas T02 (CI) e T02b (esqueleto ponta a ponta + deploy).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -126,7 +126,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 ## 7. Tarefas (ordenadas, uma tela ou regra por tarefa)
 
 **Fase 2 — Setup**
-- [ ] T01 Monorepo (apps/web, apps/api, apps/tickets-service, packages/shared), config Zod por app, TS strict, ESLint, Prettier, Vitest, Playwright, CLAUDE.md (com as convenções de legibilidade da seção 12), AI_LOG.md, esqueleto do README, ADRs iniciais em `docs/decisions/`, scripts cross-platform, `.nvmrc` (RT01, RT07, RT09, RT12, R47)
+- [x] T01 Monorepo (apps/web, apps/api, apps/tickets-service, packages/shared), config Zod por app, TS strict, ESLint, Prettier, Vitest, Playwright, CLAUDE.md (com as convenções de legibilidade da seção 12), AI_LOG.md, esqueleto do README, ADRs iniciais em `docs/decisions/`, scripts cross-platform, `.nvmrc` (RT01, RT07, RT09, RT12, R47) — **concluída** (`47913d2`…`3eb3526`). Desvios: TypeScript fixado na 6.0 e servidores rodando TS nativo no Node 24, sem build (ADR-0004); pastas `domain/` e `contracts/` do shared nascem na T03, junto com o código.
 - [ ] T02 CI GitHub Actions (lint, test, build, gitleaks, `pnpm audit`) + hook de pre-commit com gitleaks + configuração de deploy contínuo (RT11, RT13)
 - [ ] T02b **Esqueleto ponta a ponta + deploy:** login fake → chat → agent com 1 tool → streaming (protocolo de UI do AI SDK) → chip → deploy no Railway; versões do Mastra/AI SDK fixadas (R07, R10, R25)
 
