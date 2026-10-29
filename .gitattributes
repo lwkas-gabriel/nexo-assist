@@ -1,0 +1,6 @@
+# Fim de linha LF em todo o repositório (evita diffs falsos entre Windows e o CI)
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary
+*.ico binary
