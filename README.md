@@ -18,6 +18,8 @@ pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-ser
 
 Acesse http://localhost:5173.
 
+> **Windows:** clone o repositório num caminho curto (ex.: `C:\dev\nexo-assist`). Em pastas muito profundas, o pnpm ultrapassa o limite de 260 caracteres de caminho do Windows e falha com "O sistema não pode encontrar o caminho especificado". Outra saída é habilitar caminhos longos no Windows.
+
 ### Outros comandos
 
 | Comando                                        | O que faz                                                                                                         |
