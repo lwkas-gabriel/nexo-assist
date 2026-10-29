@@ -167,3 +167,10 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Dados de demonstração** com datas relativas (R08), e testes que verificam os cenários do protótipo (vencido, em dia, reabrível) usando as próprias regras do domínio, numa segunda e num sábado.
 - **Reuso:** o relógio injetável e a normalização de texto foram para o domínio compartilhado; erros tipados, contratos HTTP e usuários de demonstração também ficaram em `packages/shared`.
 - **Correções durante a tarefa:** o lint pegou uma conversão de valor do banco que podia virar "[object Object]"; a IA trocou um método só para testes que tinha colocado no serviço de produção por um ajuste direto no banco do teste; um heredoc do shell falhou com um apóstrofo no texto, e os arquivos foram escritos com a ferramenta de arquivos.
+
+### 32. T08: legado instável, retry e idempotência
+- **IA gerou:** simulação de falhas no tickets-service em dois momentos (antes de processar e depois de gravar, quando a resposta se perde), idempotência obrigatória em todo POST e um cliente HTTP na api com timeout, até 3 tentativas com espera crescente e variação aleatória, reusando a mesma chave de idempotência.
+- **O teste que fecha o achado R01 da revisão:** falha depois de gravar + retry com a mesma chave = um único chamado.
+- **Decisões:** só tenta de novo o que pode mudar (rede, timeout, 5xx); 404 e 409 viram respostas de negócio para o agent explicar; qualquer outro 4xx é erro nosso e não vaza detalhes. A resposta do serviço é validada pelo contrato compartilhado antes de ser usada.
+- **Segredos nos testes:** os testes e o E2E geram tokens aleatórios a cada execução, em vez de escrever um valor fixo no código.
+- **Desvio:** a latência simulada do plano (`FAILURE_LATENCY_MS`) ficou de fora; o comportamento com timeout é coberto nos testes do gateway.

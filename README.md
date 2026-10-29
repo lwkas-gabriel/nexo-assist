@@ -42,18 +42,26 @@ LLM_MODEL=claude-haiku-5-5
 
 Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
 
-| App             | Variável            | Para quê                                                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------ |
-| api             | `PORT`              | Porta HTTP da api                                                                    |
-| api             | `LLM_MODE`          | `mock` (modelo de teste, sem custo) ou `anthropic` (Claude)                          |
-| api             | `ANTHROPIC_API_KEY` | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
-| api             | `LLM_MODEL`         | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
-| tickets-service | `PORT`              | Porta HTTP do serviço de chamados                                                    |
-| tickets-service | `DATABASE_URL`      | Banco SQLite do serviço (`file:./data/tickets.db`)                                   |
-| tickets-service | `SERVICE_TOKEN`     | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`           |
-| web             | `API_PROXY_TARGET`  | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                 |
+| App             | Variável                | Para quê                                                                             |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| api             | `PORT`                  | Porta HTTP da api                                                                    |
+| api             | `LLM_MODE`              | `mock` (modelo de teste, sem custo) ou `anthropic` (Claude)                          |
+| api             | `ANTHROPIC_API_KEY`     | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
+| api             | `LLM_MODEL`             | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
+| api             | `TICKETS_SERVICE_URL`   | Endereço do serviço de chamados                                                      |
+| api             | `TICKETS_SERVICE_TOKEN` | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`     |
+| tickets-service | `PORT`                  | Porta HTTP do serviço de chamados                                                    |
+| tickets-service | `DATABASE_URL`          | Banco SQLite do serviço (`file:./data/tickets.db`)                                   |
+| tickets-service | `SERVICE_TOKEN`         | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`           |
+| tickets-service | `FAILURE_RATE`          | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável  |
+| tickets-service | `SEED_ON_START`         | `true` recria os dados de demonstração a cada inicialização (deploy)                 |
+| web             | `API_PROXY_TARGET`      | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                 |
 
 Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o Claude nem gera custo, qualquer que seja o seu `.env`.
+
+### Sistema de chamados instável (simulado)
+
+O PRD diz que o sistema de chamados é legado e às vezes fica indisponível por alguns segundos. O `tickets-service` simula isso com `FAILURE_RATE` (10% por padrão): metade das falhas acontece antes de processar e metade **depois de gravar**, quando a resposta se perde. A api tenta de novo até 3 vezes, com espera crescente, e toda escrita leva uma chave de idempotência: repetir a operação devolve o resultado original em vez de criar um chamado duplicado.
 
 ### Dados de demonstração
 
