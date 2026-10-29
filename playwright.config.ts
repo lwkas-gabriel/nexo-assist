@@ -2,13 +2,20 @@ import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
 
+/**
+ * Os testes sobem servidores próprios, em portas separadas do `pnpm dev` e sempre com o modelo
+ * falso (LLM_MODE=mock): rodar os testes nunca chama o Claude de verdade nem gera custo.
+ */
+const E2E_API_PORT = "3100";
+const E2E_WEB_PORT = "5174";
+
 export default defineConfig({
   testDir: "e2e",
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   reporter: isCI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: `http://localhost:${E2E_WEB_PORT}`,
     trace: "retain-on-failure",
   },
   // Fluxos validados no desktop do protótipo e num celular (ver docs/FRONTEND.md 10.6).
@@ -19,10 +26,20 @@ export default defineConfig({
     },
     { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
-  webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:5173",
-    reuseExistingServer: !isCI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: "pnpm --filter @nexo/api start",
+      env: { PORT: E2E_API_PORT, LLM_MODE: "mock" },
+      url: `http://localhost:${E2E_API_PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: `pnpm --filter @nexo/web exec vite --port ${E2E_WEB_PORT} --strictPort`,
+      env: { API_PROXY_TARGET: `http://localhost:${E2E_API_PORT}` },
+      url: `http://localhost:${E2E_WEB_PORT}`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+  ],
 });
