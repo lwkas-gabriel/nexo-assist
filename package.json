@@ -7,6 +7,10 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "setup:env": "node scripts/setup-env.ts",
+    "dev": "pnpm --recursive --parallel run dev",
+    "typecheck": "tsc --noEmit && pnpm --recursive run typecheck",
+    "build": "pnpm typecheck && pnpm --filter @nexo/web run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
