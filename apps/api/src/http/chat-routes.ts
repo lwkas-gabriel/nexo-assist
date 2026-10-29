@@ -1,10 +1,11 @@
-import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
 import { createUIMessageStreamResponse, safeValidateUIMessages } from "ai";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
+import type { Container } from "../container.ts";
+import { clientIp } from "./client-ip.ts";
 
 /** Limites de entrada: protegem custo e memória contra abuso (RT10, RT13). */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -34,7 +35,14 @@ function invalidRequest(message: string) {
   return { error: { code: "INVALID_REQUEST", message } };
 }
 
-export function createChatRoutes({ mastra }: { mastra: Mastra }) {
+const RATE_LIMITED = {
+  error: {
+    code: "RATE_LIMITED",
+    message: "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
+  },
+};
+
+export function createChatRoutes({ mastra, chatLimits }: Container) {
   const routes = new Hono();
 
   routes.post(
@@ -44,6 +52,13 @@ export function createChatRoutes({ mastra }: { mastra: Mastra }) {
       onError: (c) => c.json(invalidRequest("Mensagem grande demais."), 413),
     }),
     async (c) => {
+      // Conta antes de validar: requisições inválidas em massa também são abuso.
+      const withinLimits =
+        chatLimits.perClient.tryConsume(clientIp(c)) && chatLimits.global.tryConsume("global");
+      if (!withinLimits) {
+        return c.json(RATE_LIMITED, 429);
+      }
+
       const body: unknown = await c.req.json().catch(() => null);
 
       const limits = chatRequestSchema.safeParse(body);

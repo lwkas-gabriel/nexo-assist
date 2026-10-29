@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 import { createContainer } from "../container.ts";
+import { systemClock } from "../ports/clock.ts";
+import { createRateLimiter } from "./rate-limiter.ts";
 
 const app = createApp(createContainer({ LLM_MODE: "mock" }));
 
@@ -59,5 +61,26 @@ describe("POST /api/chat", () => {
     });
 
     expect(response.status).toBe(400);
+  });
+
+  it("bloqueia com 429 quem passa do limite de mensagens", async () => {
+    const strictLimiter = createRateLimiter({ limit: 1, windowMs: 60_000, clock: systemClock });
+    const container = createContainer({ LLM_MODE: "mock" });
+    const limitedApp = createApp({
+      ...container,
+      chatLimits: { ...container.chatLimits, perClient: strictLimiter },
+    });
+    const request = () =>
+      limitedApp.request("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [userMessage("oi")] }),
+      });
+
+    expect((await request()).status).toBe(200);
+    const blocked = await request();
+
+    expect(blocked.status).toBe(429);
+    expect(await blocked.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 });
