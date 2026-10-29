@@ -41,6 +41,18 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 
 _Contas de demonstração (funcionários e analista): serão listadas aqui com o seed de dados (T07)._
 
+### Qualidade e CI
+
+A cada push e pull request para `develop` e `main`, o GitHub Actions ([ci.yml](.github/workflows/ci.yml)) roda três verificações em paralelo:
+
+- **Qualidade:** tipos, lint, formatação, testes unitários e build.
+- **E2E:** fluxos no navegador, em desktop e celular.
+- **Segurança:** varredura de segredos em todo o histórico (gitleaks) e auditoria de dependências (`pnpm audit`, falha em vulnerabilidade alta ou crítica).
+
+As actions são fixadas pelo hash do commit, e o workflow só tem permissão de leitura.
+
+Localmente, um hook de pre-commit (ativado sozinho no `pnpm install`) roda o gitleaks antes de cada commit, se ele estiver instalado. É opcional, porque o CI faz a mesma varredura: `winget install Gitleaks.Gitleaks` (Windows) ou `brew install gitleaks` (macOS).
+
 ## Estrutura do projeto
 
 ```
