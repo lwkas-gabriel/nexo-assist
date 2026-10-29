@@ -2,9 +2,9 @@
 
 Agent de atendimento do service desk de TI da Nexo. O funcionário descreve o problema com as próprias palavras, e o agent consulta os chamados dele, busca na central de ajuda, abre ou atualiza chamados e chama um analista quando precisa. Do outro lado, o analista acompanha e assume conversas num console.
 
-> **Status:** em desenvolvimento. Esta é a base do projeto (tarefa T01); as funcionalidades entram tarefa a tarefa, conforme o [plano](docs/PLAN.md).
+> **Status:** em desenvolvimento. Já funciona um esqueleto ponta a ponta (chat → agent → central de ajuda, com streaming); as demais funcionalidades entram tarefa a tarefa, conforme o [plano](docs/PLAN.md).
 >
-> **Deploy:** _link será adicionado após a tarefa T02b._
+> **Deploy:** _link será adicionado quando o deploy no Railway estiver no ar (ver [Deploy](#deploy))._
 
 ## Como rodar
 
@@ -17,6 +17,14 @@ pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-ser
 ```
 
 Acesse http://localhost:5173.
+
+Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave e sem custo, com respostas roteirizadas. Para usar o Claude de verdade, edite `apps/api/.env`:
+
+```bash
+LLM_MODE=anthropic
+ANTHROPIC_API_KEY=sua-chave   # console.anthropic.com; nunca commite este valor
+LLM_MODEL=claude-haiku-5-5
+```
 
 > **Windows:** clone o repositório num caminho curto (ex.: `C:\dev\nexo-assist`). Em pastas muito profundas, o pnpm ultrapassa o limite de 260 caracteres de caminho do Windows e falha com "O sistema não pode encontrar o caminho especificado". Outra saída é habilitar caminhos longos no Windows.
 
@@ -33,11 +41,16 @@ Acesse http://localhost:5173.
 
 Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
 
-| App             | Variável           | Para quê                                                             |
-| --------------- | ------------------ | -------------------------------------------------------------------- |
-| api             | `PORT`             | Porta HTTP da api                                                    |
-| tickets-service | `PORT`             | Porta HTTP do serviço de chamados                                    |
-| web             | `API_PROXY_TARGET` | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api` |
+| App             | Variável            | Para quê                                                                             |
+| --------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| api             | `PORT`              | Porta HTTP da api                                                                    |
+| api             | `LLM_MODE`          | `mock` (modelo de teste, sem custo) ou `anthropic` (Claude)                          |
+| api             | `ANTHROPIC_API_KEY` | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
+| api             | `LLM_MODEL`         | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
+| tickets-service | `PORT`              | Porta HTTP do serviço de chamados                                                    |
+| web             | `API_PROXY_TARGET`  | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                 |
+
+Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o Claude nem gera custo, qualquer que seja o seu `.env`.
 
 _Contas de demonstração (funcionários e analista): serão listadas aqui com o seed de dados (T07)._
 
@@ -52,6 +65,25 @@ A cada push e pull request para `develop` e `main`, o GitHub Actions ([ci.yml](.
 As actions são fixadas pelo hash do commit, e o workflow só tem permissão de leitura.
 
 Localmente, um hook de pre-commit (ativado sozinho no `pnpm install`) roda o gitleaks antes de cada commit, se ele estiver instalado. É opcional, porque o CI faz a mesma varredura: `winget install Gitleaks.Gitleaks` (Windows) ou `brew install gitleaks` (macOS).
+
+## Deploy
+
+O deploy é no [Railway](https://railway.com), configurado em [railway.json](railway.json):
+
+- **Um serviço Node** constrói o front (`pnpm --filter @nexo/web run build`) e roda a api (`pnpm --filter @nexo/api start`), que entrega o front e a api na mesma origem. O TypeScript roda direto no Node 24, sem etapa de build dos servidores ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)).
+- **Health check** em `/api/health`; reinício automático em caso de falha.
+- **Deploy contínuo a partir da `main`**, que só recebe merge da `develop`.
+
+**Chaves protegidas:** a chave da Anthropic existe só nas variáveis do serviço no Railway (`LLM_MODE=anthropic`, `ANTHROPIC_API_KEY`, `LLM_MODEL`). Nunca está no código nem no front.
+
+**Uso limitado contra abuso e custo inesperado** (o login aceita qualquer senha, por requisito do desafio):
+
+- até 30 mensagens por hora por IP e 500 mensagens por dia no total, respondendo `429` acima disso;
+- mensagens de até 2.000 caracteres e corpo de até 64 KB;
+- esforço de raciocínio baixo no modelo (`effort: low`);
+- limite de gasto configurado no console da Anthropic e no Railway.
+
+_O serviço de chamados (`tickets-service`) entra no deploy quando a api passar a usá-lo._
 
 ## Estrutura do projeto
 
