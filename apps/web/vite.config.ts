@@ -17,8 +17,9 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [react()],
     server: {
-      // Mesma origem no dev, para cookies de sessão funcionarem como em produção.
-      proxy: { "/api": env.API_PROXY_TARGET },
+      // Mesma origem no dev, como em produção: cookies de sessão e a proteção contra CSRF
+      // dependem disso. changeOrigin: false mantém o Host original (a forma curta o reescreve).
+      proxy: { "/api": { target: env.API_PROXY_TARGET, changeOrigin: false } },
     },
   };
 });

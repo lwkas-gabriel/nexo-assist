@@ -66,3 +66,36 @@ body {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+.login {
+  max-width: 400px;
+  margin: 48px auto;
+  padding: 0 16px;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.login__form .login__remember {
+  flex-direction: row;
+  align-items: center;
+}
+
+.login__error,
+.chat__error {
+  color: #c4161d;
+}
+
+.login__demo {
+  margin-top: 24px;
+  font-size: 14px;
+}

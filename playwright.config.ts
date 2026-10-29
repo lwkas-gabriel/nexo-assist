@@ -50,6 +50,9 @@ export default defineConfig({
       env: {
         PORT: E2E_API_PORT,
         LLM_MODE: "mock",
+        DATABASE_URL: ":memory:",
+        COOKIE_SECURE: "false",
+        SEED_ON_START: "false",
         TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
         TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
       },
