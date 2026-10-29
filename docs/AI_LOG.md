@@ -147,3 +147,10 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 ### 28. T03: vocabulário do domínio e campos obrigatórios
 - **IA gerou:** tipos, categorias, prioridades, afetados e status como listas `as const` (sem `enum`, conforme o ADR-0004), com rótulos em português num lugar só; leitura do número do chamado escrito de vários jeitos ("inc 20311"); e a validação do rascunho campo a campo, que devolve **a lista ordenada do que falta**, base para o agent perguntar só o necessário.
 - **Decisão da IA, registrada como suposição A23:** a opção "Não sei" do protótipo não é um valor de "afetados"; o agent faz uma pergunta mais concreta e, se preciso, assume "só eu", explicando no rascunho que o funcionário confere.
+
+### 29. T04: prazos em horário útil
+- **IA gerou:** calendário de horário útil configurável (fuso, abertura e fechamento), só com `Intl` (sem biblioteca de datas), e os prazos por prioridade com a situação de vencimento.
+- **Cuidados que vieram da revisão adversarial:** cálculo no fuso de Brasília mesmo com o servidor em UTC (R02), com teste explícito disso; prazo contado da última atualização da equipe de TI (A17).
+- **Decisão da IA:** o Brasil não tem horário de verão hoje, mas o código não presume isso; um teste num fuso com horário de verão prova que a virada é tratada.
+- **Suposição nova A24:** "N dias úteis" = N × 10 h de expediente.
+- **Correções durante a tarefa:** um tipo frouxo (`string` no lugar dos campos do `Intl`) pego pelo typecheck, e uma variável descartada num teste pega pelo lint; o teste foi reescrito de forma mais legível em vez de afrouxar a regra.
