@@ -1,4 +1,4 @@
-import type { Clock } from "../ports/clock.ts";
+import type { Clock } from "@nexo/shared/domain";
 
 type Window = { startedAt: number; count: number };
 

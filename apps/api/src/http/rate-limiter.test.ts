@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Clock } from "../ports/clock.ts";
+import type { Clock } from "@nexo/shared/domain";
 import { createRateLimiter } from "./rate-limiter.ts";
 
 function createFakeClock(start = 0) {

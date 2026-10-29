@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 import { createContainer } from "../container.ts";
-import { systemClock } from "../ports/clock.ts";
+import { systemClock } from "@nexo/shared/domain";
 import { createRateLimiter } from "./rate-limiter.ts";
 
 const app = createApp(createContainer({ LLM_MODE: "mock" }));

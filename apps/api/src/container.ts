@@ -4,7 +4,7 @@ import { createMarkdownKnowledgeBase } from "./adapters/markdown-knowledge-base.
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import type { LlmConfig } from "./config.ts";
 import { createRateLimiter, type RateLimiter } from "./http/rate-limiter.ts";
-import { systemClock, type Clock } from "./ports/clock.ts";
+import { systemClock, type Clock } from "@nexo/shared/domain";
 
 /** Pasta com os artigos da central de ajuda, versionados com o código. */
 const KNOWLEDGE_DIRECTORY = join(import.meta.dirname, "..", "knowledge");
