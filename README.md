@@ -12,7 +12,8 @@ Agent de atendimento do service desk de TI da Nexo. O funcionário descreve o pr
 
 ```bash
 pnpm install       # instala as dependências
-pnpm setup:env     # cria o .env de cada app a partir do .env.example
+pnpm setup:env     # cria (ou completa) o .env de cada app e gera os segredos locais
+pnpm db:seed       # cria os bancos e grava os dados de demonstração
 pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-service (:3001)
 ```
 
@@ -48,11 +49,17 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 | api             | `ANTHROPIC_API_KEY` | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
 | api             | `LLM_MODEL`         | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
 | tickets-service | `PORT`              | Porta HTTP do serviço de chamados                                                    |
+| tickets-service | `DATABASE_URL`      | Banco SQLite do serviço (`file:./data/tickets.db`)                                   |
+| tickets-service | `SERVICE_TOKEN`     | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`           |
 | web             | `API_PROXY_TARGET`  | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                 |
 
 Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o Claude nem gera custo, qualquer que seja o seu `.env`.
 
-_Contas de demonstração (funcionários e analista): serão listadas aqui com o seed de dados (T07)._
+### Dados de demonstração
+
+O `pnpm db:seed` recria os chamados de exemplo (Anexo B) com datas relativas ao momento em que roda, então os cenários do protótipo valem em qualquer dia: a Ana Souza tem 3 chamados abertos (um deles vencido), um resolvido há 4 dias (ainda reabrível) e chamados antigos. Rodar de novo apaga os chamados criados durante os testes.
+
+_O login com as contas de demonstração entra na tarefa T10._
 
 ### Qualidade e CI
 

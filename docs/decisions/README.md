@@ -13,3 +13,4 @@ Para mudar uma decisão, escreva um ADR novo que substitui o anterior e marque o
 | [0006](0006-turno-em-duas-etapas.md) | Turno em duas etapas + ações determinísticas para cliques | Aceita |
 | [0007](0007-sessoes-de-chat.md) | Sessão de 30 mensagens com herança de contexto | Aceita |
 | [0008](0008-modelo-claude-haiku.md) | Claude Haiku como modelo do agent | Aceita, a validar na T11 |
+| [0009](0009-migracoes-em-sql-puro.md) | Migrações em SQL puro, Drizzle só para consultas | Aceita |

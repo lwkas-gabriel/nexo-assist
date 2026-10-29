@@ -159,3 +159,11 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **T05:** matriz de prioridade como tabela no código (RN11 + fronteiras da A06), devolvendo também a justificativa legível ("RN11: somente você + compromisso hoje → Alta") para o registro de decisão. Um teste de propriedade garante que mais gente afetada nunca baixa a prioridade.
 - **T06:** reabertura (RN06) decidida 100% em código. Para duplicidade (RN05), a IA dividiu a responsabilidade: o código aponta candidatos com a ação aplicável (atualizar se aberto, reabrir se resolvido há até 7 dias) e o agent confirma com o funcionário, porque semelhança de palavras sozinha erraria nos dois sentidos.
 - **Refatoração:** a normalização de texto saiu da central de ajuda para o domínio compartilhado, em vez de ser duplicada.
+
+### 31. T07: o serviço de chamados
+- **Decisão da IA (ADR-0009):** o gerador de migrações do Drizzle traria `tsx` e `esbuild` de volta (com scripts de instalação, que já derrubaram o CI). As migrações passaram a ser SQL escrito à mão, aplicadas por um executor pequeno e testado; o Drizzle ficou só para as consultas tipadas, com um teste que pega divergência entre o SQL e o schema.
+- **Privacidade na consulta:** toda busca filtra pelo dono; chamado de outra pessoa responde "não encontrado", sem revelar que existe.
+- **Segredo sem atrito e sem código:** o `pnpm setup:env` passou a gerar localmente o token compartilhado entre api e tickets-service (o mesmo valor nos dois `.env`) e a completar `.env` existentes quando surgem variáveis novas, sem sobrescrever nada.
+- **Dados de demonstração** com datas relativas (R08), e testes que verificam os cenários do protótipo (vencido, em dia, reabrível) usando as próprias regras do domínio, numa segunda e num sábado.
+- **Reuso:** o relógio injetável e a normalização de texto foram para o domínio compartilhado; erros tipados, contratos HTTP e usuários de demonstração também ficaram em `packages/shared`.
+- **Correções durante a tarefa:** o lint pegou uma conversão de valor do banco que podia virar "[object Object]"; a IA trocou um método só para testes que tinha colocado no serviço de produção por um ajuste direto no banco do teste; um heredoc do shell falhou com um apóstrofo no texto, e os arquivos foram escritos com a ferramenta de arquivos.
