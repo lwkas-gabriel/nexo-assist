@@ -20,6 +20,14 @@ export default defineConfig({
       },
       {
         test: {
+          // Por enquanto só funções puras do front; componentes ganham ambiente de navegador na T17.
+          name: "web",
+          include: ["apps/web/src/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "api",
           include: ["apps/api/src/**/*.test.ts"],
           environment: "node",
