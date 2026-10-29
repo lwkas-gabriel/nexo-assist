@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 em andamento: T01 e T02 concluídas; próxima T02b (esqueleto ponta a ponta + deploy).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 em andamento: T01 e T02 concluídas; T02b com a parte local concluída, aguardando o deploy no Railway.
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -128,7 +128,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 **Fase 2 — Setup**
 - [x] T01 Monorepo (apps/web, apps/api, apps/tickets-service, packages/shared), config Zod por app, TS strict, ESLint, Prettier, Vitest, Playwright, CLAUDE.md (com as convenções de legibilidade da seção 12), AI_LOG.md, esqueleto do README, ADRs iniciais em `docs/decisions/`, scripts cross-platform, `.nvmrc` (RT01, RT07, RT09, RT12, R47) — **concluída** (`47913d2`…`3eb3526`). Desvios: TypeScript fixado na 6.0 e servidores rodando TS nativo no Node 24, sem build (ADR-0004); pastas `domain/` e `contracts/` do shared nascem na T03, junto com o código.
 - [x] T02 CI GitHub Actions (lint, test, build, gitleaks, `pnpm audit`) + hook de pre-commit com gitleaks + configuração de deploy contínuo (RT11, RT13) — **concluída** (`5271242`…`bfe8340`; CI verde no run 40960579079). Desvio: a configuração de deploy contínuo foi para a T02b, que é quando existe algo para publicar (a api servindo o front).
-- [ ] T02b **Esqueleto ponta a ponta + deploy:** login fake → chat → agent com 1 tool → streaming (protocolo de UI do AI SDK) → chip → deploy no Railway; versões do Mastra/AI SDK fixadas (R07, R10, R25)
+- [ ] T02b **Esqueleto ponta a ponta + deploy:** login fake → chat → agent com 1 tool → streaming (protocolo de UI do AI SDK) → chip → deploy no Railway; versões do Mastra/AI SDK fixadas (R07, R10, R25) — **parte local concluída** (`ebd1662`…`49152a2`); **falta:** publicar no Railway (depende da conta do usuário e do merge para a `main`). Desvios: sem "login fake" (a autenticação real é a T10, evitando código descartável); limite de mensagens por IP e teto diário antecipados da T16, porque o deploy é público.
 
 **Fase 3 — Domínio e serviços**
 - [ ] T03 Domínio puro: tipos, categorias, status, campos obrigatórios (RN01–RN03, A12)

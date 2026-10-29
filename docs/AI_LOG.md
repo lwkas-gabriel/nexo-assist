@@ -101,3 +101,36 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 
 ### 19. Deploy contínuo adiado para a T02b (decisão da IA)
 - **Motivo:** ainda não há o que publicar de útil; a api servir o front é parte da T02b. Configurar o Railway agora seria configuração sem verificação.
+
+---
+
+## Fase 2: T02b, esqueleto ponta a ponta (29/10/2026)
+
+### 20. Referência oficial antes de escrever código com Claude
+- **IA carregou** a referência da API da Anthropic antes de codificar. Ela confirmou o id `claude-haiku-5-5` e o preço, e trouxe um fato que mudou a configuração: no Haiku 5.5 o raciocínio vem ligado por padrão (`effort` médio), o que custa tokens e latência. O agent passou a usar `effort: low`.
+- **Desvio consciente da recomendação da referência** (usar o SDK oficial da Anthropic): o PRD prefere Mastra, então o Claude é chamado pelo roteador de modelos do Mastra.
+
+### 21. Documentação do Mastra lida, não presumida
+- **IA leu a documentação atual** do Mastra (agent, tools, request context, integração com `useChat`) antes de escrever, porque a biblioteca muda rápido.
+- **Decisão:** passar o modelo como `{ id, apiKey }`, com a chave vinda do `config.ts`. O formato "string" faria o Mastra ler `ANTHROPIC_API_KEY` sozinho do ambiente, contornando a regra de um único ponto de leitura de env. Bônus: dispensou o pacote `@ai-sdk/anthropic`.
+
+### 22. Política de idade mínima de dependências (achado da IA)
+- **O que aconteceu:** ao instalar `ai@7.0.157` (publicado havia 4 horas), o pnpm abriu exceções automáticas na política de cadeia de suprimentos, que bloqueia versões recém-publicadas.
+- **Correção:** a IA recusou as exceções, usou versões mais antigas, deixou a política explícita (`minimumReleaseAge: 1440`) e regenerou o lockfile. Ao investigar entradas sumidas no lockfile, confirmou que eram restos do esbuild (dependência do tsx removido), não binários necessários.
+
+### 23. Tipos incompatíveis entre Mastra e AI SDK (erro encontrado e corrigido)
+- **O que falhou:** o modelo falso do AI SDK não era aceito pelo Mastra.
+- **Causa:** o Mastra 1.80 embute a especificação `@ai-sdk/provider` 4.0.29; o `ai` instalado usava a 4.0.34.
+- **Correção:** fixar `ai@7.0.143` e `@ai-sdk/react@4.0.147`, as versões que usam a mesma especificação. A IA testou a hipótese antes de aplicar.
+
+### 24. Testes E2E poderiam gerar custo real (achado da IA)
+- **Risco:** os testes reaproveitavam o `pnpm dev` em execução. Com `LLM_MODE=anthropic` no `.env`, rodar os testes chamaria o Claude de verdade.
+- **Correção:** o Playwright sobe servidores próprios, em portas separadas e sempre com o modelo de teste.
+
+### 25. Proteção antes do deploy público (decisão da IA)
+- O login aceita qualquer senha e o deploy é público. A IA antecipou da T16 um limite de 30 mensagens por hora por IP e um teto diário global de 500, além de limites de tamanho de mensagem e cabeçalhos de segurança, todos testados. O IP vem do último item do `X-Forwarded-For`, porque os anteriores podem ser forjados.
+- Um teste prova que o servidor de arquivos estáticos não expõe arquivos fora da pasta do build (path traversal).
+
+### 26. Desvios do plano
+- **Sem "login fake":** a autenticação real é a T10; um login falso seria código descartável.
+- **Só a api no deploy:** o tickets-service entra quando a api passar a usá-lo, evitando custo de um serviço ocioso.
