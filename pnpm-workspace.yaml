@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+
+# pnpm bloqueia scripts de instalação de dependências por segurança; cada exceção é decidida aqui.
+# esbuild: o binário já vem no pacote da plataforma (@esbuild/<so>), o script de instalação é dispensável.
+allowBuilds:
+  esbuild: false
