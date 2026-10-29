@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./config": "./src/config/index.ts",
-    "./domain": "./src/domain/index.ts"
+    "./domain": "./src/domain/index.ts",
+    "./errors": "./src/errors/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
