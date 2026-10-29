@@ -19,6 +19,10 @@ const llmSchema = z.discriminatedUnion("LLM_MODE", [
 const envSchema = z
   .object({
     PORT: z.coerce.number().int().positive(),
+    /** Endereço do serviço de chamados (ex.: http://localhost:3001). */
+    TICKETS_SERVICE_URL: z.url(),
+    /** Segredo compartilhado com o serviço de chamados (gerado pelo pnpm setup:env). */
+    TICKETS_SERVICE_TOKEN: z.string().min(32),
   })
   .and(llmSchema);
 

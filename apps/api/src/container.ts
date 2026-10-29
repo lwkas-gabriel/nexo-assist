@@ -1,10 +1,12 @@
 import { join } from "node:path";
 import type { Mastra } from "@mastra/core/mastra";
+import { systemClock, type Clock } from "@nexo/shared/domain";
+import { createHttpTicketGateway } from "./adapters/http-ticket-gateway.ts";
 import { createMarkdownKnowledgeBase } from "./adapters/markdown-knowledge-base.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import type { LlmConfig } from "./config.ts";
 import { createRateLimiter, type RateLimiter } from "./http/rate-limiter.ts";
-import { systemClock, type Clock } from "@nexo/shared/domain";
+import type { TicketGateway } from "./ports/ticket-gateway.ts";
 
 /** Pasta com os artigos da central de ajuda, versionados com o código. */
 const KNOWLEDGE_DIRECTORY = join(import.meta.dirname, "..", "knowledge");
@@ -26,15 +28,26 @@ export type ChatLimits = {
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
 export type Container = {
   mastra: Mastra;
+  ticketGateway: TicketGateway;
   chatLimits: ChatLimits;
 };
 
-export function createContainer(llm: LlmConfig, clock: Clock = systemClock): Container {
+/** O que o container precisa da config: o modelo e o acesso ao serviço de chamados. */
+export type ContainerConfig = LlmConfig & {
+  TICKETS_SERVICE_URL: string;
+  TICKETS_SERVICE_TOKEN: string;
+};
+
+export function createContainer(config: ContainerConfig, clock: Clock = systemClock): Container {
   const knowledgeBase = createMarkdownKnowledgeBase(KNOWLEDGE_DIRECTORY);
-  const model = createModel(llm);
+  const model = createModel(config);
 
   return {
     mastra: createNexoMastra({ model, knowledgeBase }),
+    ticketGateway: createHttpTicketGateway({
+      baseUrl: config.TICKETS_SERVICE_URL,
+      serviceToken: config.TICKETS_SERVICE_TOKEN,
+    }),
     chatLimits: {
       perClient: createRateLimiter({
         limit: CHAT_REQUESTS_PER_IP_PER_HOUR,

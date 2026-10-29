@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.ts";
-import { createContainer } from "./container.ts";
+import { createTestContainer } from "./test-support.ts";
 
-const container = createContainer({ LLM_MODE: "mock" });
+const container = createTestContainer();
 
 /** Simula um build do front numa pasta temporária. */
 function createFakeWebDist() {

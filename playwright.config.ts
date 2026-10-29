@@ -1,13 +1,17 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
 
 /**
- * Os testes sobem servidores próprios, em portas separadas do `pnpm dev` e sempre com o modelo
+ * Os testes sobem servidores próprios, em portas separadas do `pnpm dev`, sempre com o modelo
  * falso (LLM_MODE=mock): rodar os testes nunca chama o Claude de verdade nem gera custo.
  */
+const E2E_TICKETS_PORT = "3101";
 const E2E_API_PORT = "3100";
 const E2E_WEB_PORT = "5174";
+/** Token gerado a cada execução: nenhum segredo fica escrito na configuração. */
+const E2E_SERVICE_TOKEN = randomBytes(32).toString("hex");
 
 export default defineConfig({
   testDir: "e2e",
@@ -28,8 +32,27 @@ export default defineConfig({
   ],
   webServer: [
     {
+      // Banco em memória com os dados de demonstração e sem falhas simuladas: testes determinísticos.
+      command: "pnpm --filter @nexo/tickets-service start",
+      env: {
+        PORT: E2E_TICKETS_PORT,
+        DATABASE_URL: ":memory:",
+        SERVICE_TOKEN: E2E_SERVICE_TOKEN,
+        FAILURE_RATE: "0",
+        SEED_ON_START: "true",
+      },
+      url: `http://localhost:${E2E_TICKETS_PORT}/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
       command: "pnpm --filter @nexo/api start",
-      env: { PORT: E2E_API_PORT, LLM_MODE: "mock" },
+      env: {
+        PORT: E2E_API_PORT,
+        LLM_MODE: "mock",
+        TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
+        TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
+      },
       url: `http://localhost:${E2E_API_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
