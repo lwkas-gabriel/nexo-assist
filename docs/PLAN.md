@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Próxima: T03 (domínio).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 concluída; próxima T04 (prazos em horário útil).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -114,6 +114,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 | A20 | Mock mostra ✓✓, "digitando…" e "online" | São requisitos ou ilustração? | online por polling, ✓/✓✓ simples; "digitando…" fora do escopo |
 | A21 | "Disponível" do analista | Afeta o roteamento? | Só visual (preferência salva) |
 | A22 | Avaliador precisa saber as contas de demo | Pode exibir na tela de login? | Bloco discreto "Contas de demonstração", rotulado |
+| A23 | Protótipo oferece "Não sei" na pergunta "Quem está sendo afetado?", mas a RN03 exige esse campo | O que fazer quando o funcionário não sabe quem é afetado? | "Não sei" não é um valor válido: o agent faz uma pergunta mais concreta (ex.: "seus colegas também estão sem acesso?"); se continuar sem resposta, assume "só eu" e explica no rascunho, que o funcionário confere antes de confirmar |
 | A14 | Dados do mock (INC-20311 "há 5 dias") divergem do Anexo B ("há 6 dias") | — | Dados do mock são ilustrativos (o próprio PDF diz); seed com datas relativas a "agora" |
 
 ## 6. Matriz de prioridade proposta (RN11, A06)
@@ -131,7 +132,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T02b **Esqueleto ponta a ponta + deploy:** login fake → chat → agent com 1 tool → streaming (protocolo de UI do AI SDK) → chip → deploy no Railway; versões do Mastra/AI SDK fixadas (R07, R10, R25) — **concluída** (`ebd1662`…`ad7ea99`; CI verde; testada manualmente pelo usuário). **Deploy adiado para a T29** por decisão do usuário (custo do Railway e da API); `railway.json` e proteções contra abuso já prontos. Desvios: sem "login fake" (a autenticação real é a T10, evitando código descartável); limite de mensagens por IP e teto diário antecipados da T16, porque o deploy é público.
 
 **Fase 3 — Domínio e serviços**
-- [ ] T03 Domínio puro: tipos, categorias, status, campos obrigatórios (RN01–RN03, A12)
+- [x] T03 Domínio puro: tipos, categorias, status, campos obrigatórios (RN01–RN03, A12) — **concluída** (`a267294`, `7b56f01`). Inclui leitura do número do chamado escrito pelo funcionário e a lista ordenada do que falta no rascunho; nova suposição A23 ("Não sei").
 - [ ] T04 Calendário útil + SLA + vencimento (RN12, RN13, A10)
 - [ ] T05 Matriz de prioridade (RN11, A06)
 - [ ] T06 Reabertura ≤ 7 dias + candidatos a duplicidade (RN05, RN06)
