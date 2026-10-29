@@ -46,6 +46,24 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
   },
   {
+    // Código compartilhado que também roda no navegador: nada de módulos do Node.
+    files: ["packages/shared/src/{domain,contracts,errors,demo,config}/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["node:*"],
+              message: "Este código também roda no navegador; use APIs da plataforma web.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Únicos lugares autorizados a ler process.env.
     files: ["**/config.ts", "*.config.ts", "*.config.js"],
     rules: { "no-restricted-syntax": "off" },
