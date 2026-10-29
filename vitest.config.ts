@@ -11,6 +11,13 @@ export default defineConfig({
           environment: "node",
         },
       },
+      {
+        test: {
+          name: "tickets-service",
+          include: ["apps/tickets-service/src/**/*.test.ts"],
+          environment: "node",
+        },
+      },
     ],
   },
 });
