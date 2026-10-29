@@ -8,7 +8,7 @@ import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
 import type { LlmConfig } from "./config.ts";
-import { createConversationStore } from "./db/conversation-store.ts";
+import { createConversationStore, type ConversationStore } from "./db/conversation-store.ts";
 import { openDatabase, type Database } from "./db/database.ts";
 import { createSessionStore } from "./db/session-store.ts";
 import { createUserStore } from "./db/user-store.ts";
@@ -44,6 +44,7 @@ export type Container = {
   ticketGateway: TicketGateway;
   authService: AuthService;
   chatService: ChatService;
+  conversationStore: ConversationStore;
   chatLimits: ChatLimits;
   loginLimiter: RateLimiter;
 };
@@ -57,6 +58,7 @@ export async function createContainer(
   // As pessoas de demonstração são dados de referência: sempre presentes, sempre atualizadas.
   await userStore.upsertAll(DEMO_USERS);
 
+  const conversationStore = createConversationStore(db);
   const knowledgeBase = createMarkdownKnowledgeBase(KNOWLEDGE_DIRECTORY);
   const mastra = createNexoMastra({ model: createModel(config), knowledgeBase });
 
@@ -68,11 +70,8 @@ export async function createContainer(
       serviceToken: config.TICKETS_SERVICE_TOKEN,
     }),
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
-    chatService: createChatService({
-      mastra,
-      conversationStore: createConversationStore(db),
-      clock,
-    }),
+    chatService: createChatService({ mastra, conversationStore, clock }),
+    conversationStore,
     chatLimits: {
       perUser: createRateLimiter({
         limit: CHAT_MESSAGES_PER_USER_PER_HOUR,

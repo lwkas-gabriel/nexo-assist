@@ -4,10 +4,20 @@ import type { Database } from "./database.ts";
 import {
   conversations,
   messages,
+  users,
+  type ConversationMode,
   type ConversationRow,
   type MessageAuthor,
   type MessageRow,
 } from "./schema.ts";
+
+/** Linha da lista de conversas do console do analista. */
+export type ConsoleConversationSummary = {
+  id: string;
+  mode: ConversationMode;
+  updatedAt: Date;
+  employee: { id: string; name: string; department: string };
+};
 
 export type NewMessage = {
   conversationId: string;
@@ -49,6 +59,21 @@ export function createConversationStore(db: Database) {
         .set({ updatedAt: message.createdAt })
         .where(eq(conversations.id, message.conversationId));
       return row;
+    },
+    /** Conversas em andamento, das mais recentes às mais antigas, com quem está conversando. */
+    async listOpenForConsole(): Promise<ConsoleConversationSummary[]> {
+      const rows = await db
+        .select({
+          id: conversations.id,
+          mode: conversations.mode,
+          updatedAt: conversations.updatedAt,
+          employee: { id: users.id, name: users.name, department: users.department },
+        })
+        .from(conversations)
+        .innerJoin(users, eq(users.id, conversations.employeeId))
+        .where(ne(conversations.mode, "closed"))
+        .orderBy(desc(conversations.updatedAt));
+      return rows;
     },
 
     /** As últimas `limit` mensagens, da mais antiga para a mais nova. */

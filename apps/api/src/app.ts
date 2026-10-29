@@ -6,6 +6,7 @@ import type { Container } from "./container.ts";
 import type { AppEnv } from "./http/app-env.ts";
 import { createAuthRoutes } from "./http/auth-routes.ts";
 import { createChatRoutes } from "./http/chat-routes.ts";
+import { createConsoleRoutes } from "./http/console-routes.ts";
 import { rejectCrossOriginWrites } from "./http/same-origin.ts";
 import { loadSession } from "./http/session.ts";
 
@@ -36,6 +37,7 @@ export function createApp(container: Container, { cookieSecure, webDistDirectory
     }),
   );
   api.route("/chat", createChatRoutes(container));
+  api.route("/console", createConsoleRoutes(container));
   // Rota de api inexistente responde JSON, nunca o HTML do front.
   api.all("*", (c) => c.json(errorBody("NOT_FOUND", "Rota não encontrada."), 404));
 
