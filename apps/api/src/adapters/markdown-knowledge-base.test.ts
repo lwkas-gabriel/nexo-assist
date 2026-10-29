@@ -67,3 +67,19 @@ describe("createMarkdownKnowledgeBase", () => {
     expect(knowledgeBase.search("erro 809 na vpn", 1)[0]?.title).toBe("VPN com erro 809");
   });
 });
+
+describe("artigos versionados da central de ajuda", () => {
+  const knowledgeBase = createMarkdownKnowledgeBase(join(import.meta.dirname, "../../knowledge"));
+  const topTitle = (query: string) => knowledgeBase.search(query, 1)[0]?.title;
+
+  it.each([
+    ["minha senha da rede expirou", "Senha da rede expirada ou bloqueada"],
+    ["outlook do celular parou de sincronizar", "Outlook não sincroniza no celular"],
+    ["como instalo o programa de PDF", "Como instalar ou pedir um software"],
+    ["notebook muito lento depois da atualização do windows", "Computador ou notebook lento"],
+    ["qual a senha do wifi para visitante", "Wi-Fi de visitantes"],
+    ["quero saber das minhas férias", "Assuntos que não são de TI"],
+  ])("'%s' encontra '%s'", (query, expectedTitle) => {
+    expect(topTitle(query)).toBe(expectedTitle);
+  });
+});
