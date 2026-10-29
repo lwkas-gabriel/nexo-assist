@@ -6,3 +6,8 @@ packages:
 # esbuild: o binário já vem no pacote da plataforma (@esbuild/<so>), o script de instalação é dispensável.
 allowBuilds:
   esbuild: false
+
+minimumReleaseAgeExclude:
+  - "@ai-sdk/gateway@4.0.130"
+  - "@ai-sdk/provider-utils@5.0.71"
+  - ai@7.0.157

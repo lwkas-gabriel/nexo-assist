@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
+    "@mastra/ai-sdk": "1.11.2",
+    "@mastra/core": "1.80.0",
     "@nexo/shared": "workspace:*",
+    "ai": "7.0.157",
     "hono": "4.13.14",
     "zod": "4.6.7"
   }
