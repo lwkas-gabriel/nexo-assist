@@ -1,86 +1,139 @@
-import { describe, expect, it } from "vitest";
-import { createApp } from "../app.ts";
-import { createTestContainer } from "../test-support.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { systemClock } from "@nexo/shared/domain";
+import { describe, expect, it } from "vitest";
+import { createContainer } from "../container.ts";
+import { createTestApp, testConfig } from "../test-support.ts";
 import { createRateLimiter } from "./rate-limiter.ts";
 
-const app = createApp(createTestContainer());
+const ANA_EMAIL = "ana.souza@nexo.com.br";
 
-function postChat(body: unknown) {
-  return app.request("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+type ConversationResponse = {
+  conversation: { id: string; mode: string } | null;
+  messages: { role: string; parts: { type: string; text?: string }[] }[];
+};
+
+/** App de teste já com a Ana logada e ajudantes para conversar. */
+async function loggedInAsAna(container?: Awaited<ReturnType<typeof createContainer>>) {
+  const { app, login } = await createTestApp(container);
+  const cookie = await login(ANA_EMAIL);
+
+  const send = (body: unknown) =>
+    app.request("/api/chat/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify(body),
+    });
+  const conversation = async () =>
+    (await (
+      await app.request("/api/chat", { headers: { Cookie: cookie } })
+    ).json()) as ConversationResponse;
+
+  return { app, cookie, send, conversation };
+}
+
+describe("chat do funcionário", () => {
+  it("exige login", async () => {
+    const { app } = await createTestApp();
+
+    const response = await app.request("/api/chat");
+
+    expect(response.status).toBe(401);
   });
-}
 
-function userMessage(text: string) {
-  return { id: "m1", role: "user", parts: [{ type: "text", text }] };
-}
+  it("analista não usa o chat do funcionário", async () => {
+    const { app, login } = await createTestApp();
+    const cookie = await login("rafael.lima@nexo.com.br");
 
-describe("POST /api/chat", () => {
-  it("responde em streaming, mostrando a busca na central de ajuda e a resposta", async () => {
-    const response = await postChat({ messages: [userMessage("VPN com erro 809")] });
+    const response = await app.request("/api/chat", { headers: { Cookie: cookie } });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("antes da primeira mensagem, não há conversa", async () => {
+    const { conversation } = await loggedInAsAna();
+
+    expect(await conversation()).toEqual({ conversation: null, messages: [] });
+  });
+
+  it("responde em streaming e grava a mensagem e a resposta (com as ações do agent)", async () => {
+    const { send, conversation } = await loggedInAsAna();
+
+    const response = await send({ text: "Qual o horário do service desk?" });
+    const stream = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    const stream = await response.text();
     expect(stream).toContain("search_knowledge_base");
-    expect(stream).toContain("VPN com erro 809");
+    const saved = await conversation();
+    expect(saved.conversation).toMatchObject({ mode: "agent" });
+    expect(saved.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(saved.messages[1]?.parts.map((part) => part.type)).toContain(
+      "tool-search_knowledge_base",
+    );
   });
 
-  it("recusa corpo que não é uma conversa", async () => {
-    const response = await postChat({ foo: "bar" });
+  it("RT06: a conversa sobrevive a um reinício da api (mesmo banco, novo processo)", async () => {
+    const databaseUrl = `file:${join(mkdtempSync(join(tmpdir(), "nexo-api-")), "api.db")}`;
+    const config = testConfig({ DATABASE_URL: databaseUrl });
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: { code: "INVALID_REQUEST" } });
+    const before = await loggedInAsAna(await createContainer(config));
+    await (await before.send({ text: "Minha VPN dá erro 809" })).text();
+    const after = await loggedInAsAna(await createContainer(config));
+
+    const saved = await after.conversation();
+    expect(saved.messages).toHaveLength(2);
+    expect(saved.messages[0]?.parts[0]?.text).toBe("Minha VPN dá erro 809");
   });
 
-  it("recusa mensagem longa demais (protege custo)", async () => {
-    const response = await postChat({ messages: [userMessage("a".repeat(2001))] });
+  it("recusa mensagem vazia, longa demais ou JSON malformado com 400", async () => {
+    const { app, cookie, send } = await loggedInAsAna();
 
-    expect(response.status).toBe(400);
-  });
-
-  it("recusa conversa com mensagens demais", async () => {
-    const messages = Array.from({ length: 61 }, (_, index) => ({
-      ...userMessage("oi"),
-      id: `m${index}`,
-    }));
-
-    const response = await postChat({ messages });
-
-    expect(response.status).toBe(400);
-  });
-
-  it("recusa JSON malformado sem derrubar o servidor", async () => {
-    const response = await app.request("/api/chat", {
+    const empty = await send({ text: "   " });
+    const tooLong = await send({ text: "a".repeat(2001) });
+    const malformed = await app.request("/api/chat/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: cookie },
       body: "{ isso não é json",
     });
 
-    expect(response.status).toBe(400);
+    expect([empty.status, tooLong.status, malformed.status]).toEqual([400, 400, 400]);
   });
 
   it("bloqueia com 429 quem passa do limite de mensagens", async () => {
-    const strictLimiter = createRateLimiter({ limit: 1, windowMs: 60_000, clock: systemClock });
-    const container = createTestContainer();
-    const limitedApp = createApp({
-      ...container,
-      chatLimits: { ...container.chatLimits, perClient: strictLimiter },
+    const container = await createContainer(testConfig());
+    container.chatLimits.perUser = createRateLimiter({
+      limit: 1,
+      windowMs: 60_000,
+      clock: systemClock,
     });
-    const request = () =>
-      limitedApp.request("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [userMessage("oi")] }),
-      });
+    const { send } = await loggedInAsAna(container);
 
-    expect((await request()).status).toBe(200);
-    const blocked = await request();
+    await (await send({ text: "oi" })).text();
+    const blocked = await send({ text: "oi de novo" });
 
     expect(blocked.status).toBe(429);
     expect(await blocked.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
+  });
+
+  it("R06: um turno por vez; outra mensagem enquanto o agent responde recebe 'aguarde'", async () => {
+    const container = await createContainer(testConfig());
+    const ana = await container.authService.login({
+      email: ANA_EMAIL,
+      password: "x",
+      remember: false,
+    });
+
+    const firstTurn = await container.chatService.sendMessage(ana.user, "primeira");
+    await expect(container.chatService.sendMessage(ana.user, "segunda")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    // Terminado o primeiro turno, a conversa fica livre de novo.
+    const reader = firstTurn.getReader();
+    while (!(await reader.read()).done) {
+      // lê o stream até o fim: o turno termina
+    }
+    await expect(container.chatService.sendMessage(ana.user, "terceira")).resolves.toBeDefined();
   });
 });

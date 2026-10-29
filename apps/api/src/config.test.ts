@@ -5,6 +5,9 @@ import { loadConfig } from "./config.ts";
 /** Variáveis comuns a todos os casos; o token é aleatório a cada execução. */
 const baseEnv = {
   PORT: "3000",
+  DATABASE_URL: "file:./data/api.db",
+  COOKIE_SECURE: "false",
+  SEED_ON_START: "false",
   TICKETS_SERVICE_URL: "http://localhost:3001",
   TICKETS_SERVICE_TOKEN: randomBytes(32).toString("hex"),
 };
@@ -13,7 +16,7 @@ describe("loadConfig", () => {
   it("no modo mock, sobe sem chave da Anthropic", () => {
     const config = loadConfig({ ...baseEnv, LLM_MODE: "mock" });
 
-    expect(config).toMatchObject({ PORT: 3000, LLM_MODE: "mock" });
+    expect(config).toMatchObject({ PORT: 3000, LLM_MODE: "mock", COOKIE_SECURE: false });
   });
 
   it("no modo anthropic, exige a chave da API", () => {
@@ -47,5 +50,11 @@ describe("loadConfig", () => {
     expect(() =>
       loadConfig({ ...baseEnv, TICKETS_SERVICE_URL: "não é url", LLM_MODE: "mock" }),
     ).toThrowError(/TICKETS_SERVICE_URL/);
+  });
+
+  it("exige COOKIE_SECURE explícito (true ou false), sem valor padrão no código", () => {
+    expect(() => loadConfig({ ...baseEnv, COOKIE_SECURE: "sim", LLM_MODE: "mock" })).toThrowError(
+      /COOKIE_SECURE/,
+    );
   });
 });

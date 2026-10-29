@@ -16,9 +16,17 @@ const llmSchema = z.discriminatedUnion("LLM_MODE", [
   }),
 ]);
 
+const booleanFlag = z.enum(["true", "false"]).transform((value) => value === "true");
+
 const envSchema = z
   .object({
     PORT: z.coerce.number().int().positive(),
+    /** Banco SQLite da api (ex.: file:./data/api.db). */
+    DATABASE_URL: z.string().min(1),
+    /** Cookie de sessão só por HTTPS: true em produção, false no desenvolvimento local (HTTP). */
+    COOKIE_SECURE: booleanFlag,
+    /** Apaga as conversas de demonstração ao iniciar (deploy de demonstração, achado R08). */
+    SEED_ON_START: booleanFlag,
     /** Endereço do serviço de chamados (ex.: http://localhost:3001). */
     TICKETS_SERVICE_URL: z.url(),
     /** Segredo compartilhado com o serviço de chamados (gerado pelo pnpm setup:env). */
