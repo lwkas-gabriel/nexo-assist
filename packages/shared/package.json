@@ -9,7 +9,8 @@
     "./demo": "./src/demo/index.ts",
     "./domain": "./src/domain/index.ts",
     "./errors": "./src/errors/index.ts",
-    "./db": "./src/db/index.ts"
+    "./db": "./src/db/index.ts",
+    "./http": "./src/http/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

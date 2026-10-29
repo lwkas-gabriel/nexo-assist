@@ -47,7 +47,7 @@ export default tseslint.config(
   },
   {
     // Código compartilhado que também roda no navegador: nada de módulos do Node.
-    files: ["packages/shared/src/{domain,contracts,errors,demo,config}/**/*.ts"],
+    files: ["packages/shared/src/{domain,contracts,errors,demo,config,http}/**/*.ts"],
     ignores: ["**/*.test.ts"],
     rules: {
       "no-restricted-imports": [

@@ -8,7 +8,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import type { TicketService } from "../app/ticket-service.ts";
-import { parseInput, readJson } from "./validation.ts";
+import { parseInput, readJson } from "@nexo/shared/http";
 
 const listQuerySchema = z.object({ ownerId: z.string().min(1), filter: ticketFilterSchema });
 

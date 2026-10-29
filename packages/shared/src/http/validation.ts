@@ -1,4 +1,4 @@
-import { AppError } from "@nexo/shared/errors";
+import { AppError } from "../errors/app-error.ts";
 import type { z } from "zod";
 
 /** Valida dados de fora (corpo, query) contra um schema; se inválidos, vira erro 400. */
