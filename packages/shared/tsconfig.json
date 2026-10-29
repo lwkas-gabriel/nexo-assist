@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Só src/db é código de servidor; o lint proíbe módulos do Node no resto (usado pelo navegador).
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

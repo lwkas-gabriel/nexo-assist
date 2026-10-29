@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+# Documentos revisados à mão: tabelas largas ficam mais legíveis sem realinhamento automático
+docs/

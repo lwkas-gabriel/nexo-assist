@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Segurança da cadeia de suprimentos:
+# só instala versões publicadas há pelo menos 1 dia (1440 min). Versões recém-publicadas são o vetor
+# típico de pacotes comprometidos. Não abrir exceções: se uma versão for nova demais, use a anterior.
+minimumReleaseAge: 1440

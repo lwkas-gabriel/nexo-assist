@@ -1,0 +1,37 @@
+{
+  "name": "nexo-assist",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepare": "node scripts/install-git-hooks.ts",
+    "setup:env": "node scripts/setup-env.ts",
+    "db:seed": "pnpm --recursive --if-present run db:seed",
+    "dev": "pnpm --recursive --parallel run dev",
+    "typecheck": "tsc --noEmit && pnpm --recursive run typecheck",
+    "build": "pnpm typecheck && pnpm --filter @nexo/web run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24.19.2",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Procura segredos nos arquivos que estão sendo commitados.
+# A varredura obrigatória é a do CI; aqui ela só antecipa o problema para antes do commit.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner || {
+    echo "Commit bloqueado: possível segredo encontrado. Remova-o e use variáveis de ambiente (veja CLAUDE.md)." >&2
+    exit 1
+  }
+else
+  echo "aviso: gitleaks não instalado; a varredura de segredos acontece só no CI (instalação no README)." >&2
+fi

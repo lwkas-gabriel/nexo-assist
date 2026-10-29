@@ -1,0 +1,22 @@
+{
+  "name": "@nexo/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./config": "./src/config/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./demo": "./src/demo/index.ts",
+    "./domain": "./src/domain/index.ts",
+    "./errors": "./src/errors/index.ts",
+    "./db": "./src/db/index.ts",
+    "./http": "./src/http/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "0.18.0",
+    "zod": "4.6.7"
+  }
+}

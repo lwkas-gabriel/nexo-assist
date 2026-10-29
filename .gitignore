@@ -1,0 +1,31 @@
+# Material do desafio (fornecido pela empresa): mantido só localmente, citado no README e em docs/PLAN.md
+docs/*.pdf
+docs/mock/
+
+# Dependências e builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Ambiente: segredos nunca entram no repositório (só o .env.example)
+.env
+.env.*
+!.env.example
+
+# Bancos SQLite locais
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Testes
+coverage/
+playwright-report/
+test-results/
+
+# Sistema e editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
