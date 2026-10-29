@@ -13,12 +13,14 @@
     "build": "pnpm typecheck && pnpm --filter @nexo/web run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@types/node": "^24.19.2",
     "eslint": "10.13.0",
     "eslint-config-prettier": "10.1.8",
