@@ -42,3 +42,12 @@ export const ticketUpdates = sqliteTable("ticket_updates", {
 
 export type TicketRow = typeof tickets.$inferSelect;
 export type TicketUpdateRow = typeof ticketUpdates.$inferSelect;
+
+export const idempotencyKeys = sqliteTable("idempotency_keys", {
+  key: text("key").primaryKey(),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  status: integer("status").notNull(),
+  body: text("body").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
