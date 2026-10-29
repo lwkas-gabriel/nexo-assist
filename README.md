@@ -45,6 +45,9 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 | App             | Variável                | Para quê                                                                             |
 | --------------- | ----------------------- | ------------------------------------------------------------------------------------ |
 | api             | `PORT`                  | Porta HTTP da api                                                                    |
+| api             | `DATABASE_URL`          | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)           |
+| api             | `COOKIE_SECURE`         | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local           |
+| api             | `SEED_ON_START`         | `true` apaga as conversas de demonstração a cada inicialização (deploy)              |
 | api             | `LLM_MODE`              | `mock` (modelo de teste, sem custo) ou `anthropic` (Claude)                          |
 | api             | `ANTHROPIC_API_KEY`     | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
 | api             | `LLM_MODEL`             | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
@@ -67,7 +70,18 @@ O PRD diz que o sistema de chamados é legado e às vezes fica indisponível por
 
 O `pnpm db:seed` recria os chamados de exemplo (Anexo B) com datas relativas ao momento em que roda, então os cenários do protótipo valem em qualquer dia: a Ana Souza tem 3 chamados abertos (um deles vencido), um resolvido há 4 dias (ainda reabrível) e chamados antigos. Rodar de novo apaga os chamados criados durante os testes.
 
-_O login com as contas de demonstração entra na tarefa T10._
+### Contas de demonstração
+
+Qualquer senha funciona (requisito do desafio). A própria tela de login lista as contas:
+
+| E-mail                                                                                                        | Quem é                                                           |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ana.souza@nexo.com.br`                                                                                       | Ana Souza, funcionária (Financeiro): a dos chamados do protótipo |
+| `bruno.tavares@nexo.com.br`, `carla.mendes@nexo.com.br`, `diego.ramos@nexo.com.br`, `elisa.prado@nexo.com.br` | Outros funcionários                                              |
+| `rafael.lima@nexo.com.br`                                                                                     | Rafael Lima, analista (Suporte N2)                               |
+| `juliana.costa@nexo.com.br`                                                                                   | Juliana Costa, analista (Suporte N1)                             |
+
+As conversas ficam salvas no banco: dá para sair, voltar outro dia e continuar de onde parou.
 
 ### Qualidade e CI
 

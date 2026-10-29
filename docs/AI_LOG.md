@@ -174,3 +174,15 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Decisões:** só tenta de novo o que pode mudar (rede, timeout, 5xx); 404 e 409 viram respostas de negócio para o agent explicar; qualquer outro 4xx é erro nosso e não vaza detalhes. A resposta do serviço é validada pelo contrato compartilhado antes de ser usada.
 - **Segredos nos testes:** os testes e o E2E geram tokens aleatórios a cada execução, em vez de escrever um valor fixo no código.
 - **Desvio:** a latência simulada do plano (`FAILURE_LATENCY_MS`) ficou de fora; o comportamento com timeout é coberto nos testes do gateway.
+
+### 33. T09, T10 e T10b: persistência, login e segurança
+- **Ordem ajustada pela IA:** as T09 e T10 foram feitas juntas, porque a conversa pertence ao funcionário logado; persistir sem login exigiria um "usuário provisório" descartável.
+- **Decisões de segurança:** o banco guarda só o hash do token de sessão; cookie HttpOnly e SameSite=Lax (Secure em produção); mesma mensagem para e-mail desconhecido (R44); escritas de outra origem recusadas (CSRF); limite de tentativas de login; ids de mensagem gerados pelo servidor; e o navegador manda só o texto novo, então o histórico (no banco) não pode ser forjado, fechando a brecha registrada na T02b.
+- **Persistência provada:** um teste grava uma conversa num banco em arquivo, monta outro container com o mesmo arquivo (simula um reinício) e encontra a conversa (RT06); no E2E, a conversa continua depois de recarregar a página (RF11).
+- **Reuso:** o executor de migrações, a abertura do banco e a validação de entrada HTTP passaram para `packages/shared`; uma regra de lint garante que as partes do `shared` usadas pelo navegador não importem módulos do Node.
+
+### 34. Erros da IA corrigidos nesta etapa (registro honesto)
+- **Commit com typecheck falhando:** a IA encadeou o commit depois das verificações sem interromper na falha. Foi corrigido no commit seguinte, e desde então o commit só roda se typecheck, lint e testes passarem.
+- **Duplicação evitada:** a IA chegou a copiar o arquivo de validação HTTP da api para o tickets-service e desfez na mesma hora, movendo-o para o `shared`.
+- **O E2E pegou o que os testes unitários não pegariam:** a forma curta do proxy do Vite reescreve o cabeçalho Host, e a proteção contra CSRF recusava o login no desenvolvimento. A correção mantém o Host original, reproduzindo a mesma origem da produção.
+- **Ferramenta:** heredocs do shell falharam algumas vezes com textos longos; a IA passou a escrever arquivos sempre com a ferramenta de arquivos.

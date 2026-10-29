@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T08 concluídas; próximas T09 e T10 (persistência e login).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T10b concluídas. **Pausa antes da T11** (combinado: decidir Railway e crédito do modelo).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -139,9 +139,9 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T06 Reabertura ≤ 7 dias + candidatos a duplicidade (RN05, RN06) — **concluída**. O código aponta candidatos (com ação "atualizar" ou "reabrir"); quem confirma que é o mesmo problema é o agent, com o funcionário. Normalização de texto movida para o domínio e reutilizada pela central de ajuda.
 - [x] T07 Tickets-service: schema, seed (funcionários, analistas, 5–10 artigos, chamados variados), REST validado por `packages/contracts`, isolamento por dono na query, token de serviço (RF22, RN09, RT05, RT11) — **concluída**. Migrações em SQL puro (ADR-0009); token gerado localmente pelo `pnpm setup:env`; 10 chamados de demonstração com datas relativas, com testes provando os cenários em qualquer dia da semana; 8 artigos na central de ajuda.
 - [x] T08 Injeção de falhas no tickets-service + adapter `TicketGateway` com timeout, retry/backoff e erro tipado `TICKETS_UNAVAILABLE` (RT05, RT09) — **concluída**. Falha simulada antes e depois de gravar; idempotência obrigatória em todo POST; teste prova que falha depois de gravar + retry = um único chamado. Desvio: sem latência simulada (`FAILURE_LATENCY_MS`), o timeout é coberto nos testes do gateway.
-- [ ] T09 API: persistência de conversas, mensagens, estado e traces (RT06, RF11)
-- [ ] T10 API: auth por sessão (cookie seguro), middleware de papel, checagem de Origin, secureHeaders, middleware de erros tipados (RF01, RF02, A07, A15, RT11)
-- [ ] T10b Testes de segurança: funcionário A não acessa chamado/conversa de B; funcionário não acessa console; tickets-service recusa chamada sem token (RN09, RT11)
+- [x] T09 API: persistência de conversas, mensagens, estado e traces (RT06, RF11) — **concluída** junto com a T10 (as conversas pertencem ao funcionário logado). Histórico no banco, o navegador manda só o texto novo; um turno por conversa (R06); teste de reinício (RT06). A coluna `version` existe; o uso dela entra nas trocas de estado da T13.
+- [x] T10 API: auth por sessão (cookie seguro), middleware de papel, checagem de Origin, secureHeaders, middleware de erros tipados (RF01, RF02, A07, A15, RT11) — **concluída**. Login com tela funcional mínima no front (o visual é a T18); limite de tentativas de login; CSRF por checagem de Origin.
+- [x] T10b Testes de segurança: funcionário A não acessa chamado/conversa de B; funcionário não acessa console; tickets-service recusa chamada sem token (RN09, RT11) — **concluída** (`apps/api/src/security.test.ts`). Para testar o acesso ao console, a primeira rota dele (lista de conversas) foi antecipada da T23.
 
 **Fase 3 — Agent**
 - [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10)
