@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "dev": "node --watch --env-file-if-exists=.env src/server.ts",
+    "start": "node --env-file-if-exists=.env src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -12,8 +13,5 @@
     "@nexo/shared": "workspace:*",
     "hono": "4.13.14",
     "zod": "4.6.7"
-  },
-  "devDependencies": {
-    "tsx": "4.23.15"
   }
 }

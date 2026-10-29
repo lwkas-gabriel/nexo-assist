@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { InvalidEnvError, parseEnv } from "./parse-env";
+import { InvalidEnvError, parseEnv } from "./parse-env.ts";
 
 const schema = z.object({
   PORT: z.coerce.number().int().positive(),

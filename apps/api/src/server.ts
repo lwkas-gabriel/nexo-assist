@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app";
-import { loadConfig } from "./config";
+import { createApp } from "./app.ts";
+import { loadConfig } from "./config.ts";
 
 const config = loadConfig();
 const server = serve({ fetch: createApp().fetch, port: config.PORT }, (info) => {

@@ -1,1 +1,1 @@
-export { InvalidEnvError, parseEnv } from "./parse-env";
+export { InvalidEnvError, parseEnv } from "./parse-env.ts";
