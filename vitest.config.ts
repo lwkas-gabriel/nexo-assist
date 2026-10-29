@@ -6,6 +6,13 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: "scripts",
+          include: ["scripts/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "shared",
           include: ["packages/shared/src/**/*.test.ts"],
           environment: "node",
