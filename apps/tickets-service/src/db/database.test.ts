@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { openDatabase } from "./database.ts";
-import { runMigrations } from "./migrate.ts";
+import { runMigrations } from "@nexo/shared/db";
 import { ticketUpdates, tickets } from "./schema.ts";
 import { join } from "node:path";
 

@@ -208,6 +208,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.14)
+      '@libsql/client':
+        specifier: 0.18.0
+        version: 0.18.0
       '@mastra/ai-sdk':
         specifier: 1.11.2
         version: 1.11.2(@mastra/core@1.80.0(ai@7.0.143(zod@4.6.7))(zod@4.6.7))(zod@4.6.7)
@@ -220,6 +223,9 @@ importers:
       ai:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@libsql/client@0.18.0)
       hono:
         specifier: 4.13.14
         version: 4.13.14
@@ -288,6 +294,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@libsql/client':
+        specifier: 0.18.0
+        version: 0.18.0
       zod:
         specifier: 4.6.7
         version: 4.6.7

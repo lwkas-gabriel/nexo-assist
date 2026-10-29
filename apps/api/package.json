@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
+    "@libsql/client": "0.18.0",
     "@mastra/ai-sdk": "1.11.2",
     "@mastra/core": "1.80.0",
     "@nexo/shared": "workspace:*",
     "ai": "7.0.143",
+    "drizzle-orm": "0.45.4",
     "hono": "4.13.14",
     "zod": "4.6.7"
   },

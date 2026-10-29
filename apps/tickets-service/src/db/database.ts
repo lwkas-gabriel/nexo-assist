@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { runMigrations } from "./migrate.ts";
+import { runMigrations } from "@nexo/shared/db";
 import * as schema from "./schema.ts";
 
 const MIGRATIONS_DIRECTORY = join(import.meta.dirname, "..", "..", "migrations");

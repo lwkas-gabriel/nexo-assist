@@ -5,7 +5,7 @@ import type { Client } from "@libsql/client";
 /**
  * Aplica, em ordem, os arquivos migrations/NNNN_nome.sql ainda não aplicados.
  * Cada migração roda numa transação e fica registrada em schema_migrations.
- * SQL escrito à mão: fácil de ler e revisar, sem gerador de migrações (ADR-0009).
+ * SQL escrito à mão: fácil de ler e revisar, sem gerador de migrações (ADR-0009). Usado pela api e pelo serviço de chamados.
  */
 export async function runMigrations(
   client: Client,
