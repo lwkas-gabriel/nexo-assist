@@ -154,3 +154,8 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Decisão da IA:** o Brasil não tem horário de verão hoje, mas o código não presume isso; um teste num fuso com horário de verão prova que a virada é tratada.
 - **Suposição nova A24:** "N dias úteis" = N × 10 h de expediente.
 - **Correções durante a tarefa:** um tipo frouxo (`string` no lugar dos campos do `Intl`) pego pelo typecheck, e uma variável descartada num teste pega pelo lint; o teste foi reescrito de forma mais legível em vez de afrouxar a regra.
+
+### 30. T05 e T06: prioridade, reabertura e duplicidade
+- **T05:** matriz de prioridade como tabela no código (RN11 + fronteiras da A06), devolvendo também a justificativa legível ("RN11: somente você + compromisso hoje → Alta") para o registro de decisão. Um teste de propriedade garante que mais gente afetada nunca baixa a prioridade.
+- **T06:** reabertura (RN06) decidida 100% em código. Para duplicidade (RN05), a IA dividiu a responsabilidade: o código aponta candidatos com a ação aplicável (atualizar se aberto, reabrir se resolvido há até 7 dias) e o agent confirma com o funcionário, porque semelhança de palavras sozinha erraria nos dois sentidos.
+- **Refatoração:** a normalização de texto saiu da central de ajuda para o domínio compartilhado, em vez de ser duplicada.
