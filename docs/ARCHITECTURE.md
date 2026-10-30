@@ -107,7 +107,7 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 ### 11.3 Máquinas de estado (explícitas, testadas, num arquivo cada)
 - **Conversa:** `agent` → `waiting_analyst` (transferência) → `analyst` (assumir) → `agent` (devolver) | `closed` (encerrar). `waiting_analyst` → `agent` (devolver sem assumir). Transição inválida = erro tipado.
 - **Chamado:** `new` → `in_progress` | `waiting_analyst` → `in_service` (analista assumiu) → `resolved` → `reopened` (≤ 7 dias). REQ: `new` → `approved` → `in_progress` → `resolved`. `cancelled` a partir de qualquer estado aberto.
-- **Rascunho:** `pending` → `confirmed` | `cancelled`. Editar mantém `pending` e atualiza `updated_at`. Pelo chat, o servidor só confirma rascunho desta conversa cujo `updated_at` é anterior à mensagem que confirmou (R04): a data da última mudança faz o papel do hash previsto no plano, sem guardar nada a mais. Propor outro rascunho cancela o pendente da conversa.
+- **Rascunho:** `pending` → `confirming` → `confirmed`; `pending` → `cancelled`. Cada transição é um UPDATE condicional ao status esperado, então duas ações simultâneas não passam as duas. Se a escrita no sistema de chamados falha, `confirming` → `confirm_failed`: o chamado pode ter sido criado, então o rascunho congela e só aceita confirmar de novo, com a mesma chave. Pelo chat (R04), só confirma rascunho desta conversa visto antes da mensagem: `shown_at` é gravado quando uma resposta concluída do agent mostra o `D-n`, ou quando o funcionário edita no card. Propor outro rascunho cancela o pendente da conversa.
 - **Sessão:** `active` → `ended` (30 mensagens, 8 h inativa — **exceto** com conversa em `waiting_analyst`/`analyst` — ou encerramento pelo analista).
 
 ### 11.4 Modelo de dados (resumo)
