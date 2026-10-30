@@ -2,6 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from "ai";
 import { fetchConversation } from "./chat-api.ts";
+import { describeChatError } from "./chat-error.ts";
 import { Composer } from "./components/Composer.tsx";
 import { MessageBubble } from "./components/MessageBubble.tsx";
 
@@ -65,7 +66,7 @@ function ChatConversation({ initialMessages }: { initialMessages: UIMessage[] })
 
       {error && (
         <div className="chat__error" role="alert">
-          <p>Não consegui responder agora. Tente novamente em instantes.</p>
+          <p>{describeChatError(error)}</p>
           <button type="button" onClick={() => void regenerate()}>
             Tentar novamente
           </button>

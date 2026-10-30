@@ -8,6 +8,7 @@ import {
   type UIMessage,
   type UIMessageChunk,
 } from "ai";
+import { describeAgentError } from "../agent/agent-errors.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
@@ -84,11 +85,16 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
           agentId: NEXO_AGENT_ID,
           version: "v7",
           params: { messages: history },
+          // O erro original (provedor, stack trace) fica no log; o funcionário vê uma mensagem amigável.
+          onError: (error) => {
+            console.error("Falha do modelo no turno do agent", error);
+            return describeAgentError(error);
+          },
         })) as ReadableStream<UIMessageChunk>;
 
         return createUIMessageStream({
           execute: ({ writer }) => writer.merge(agentStream),
-          onError: () => "Não consegui responder agora. Tente novamente em instantes.",
+          onError: describeAgentError,
           onFinish: async ({ responseMessage }) => {
             try {
               if (responseMessage.parts.length > 0) {
