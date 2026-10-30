@@ -1,5 +1,7 @@
+import { systemClock } from "@nexo/shared/domain";
 import { describe, expect, it } from "vitest";
 import { createFakeTicketGateway, createTestApp, createTestContainer } from "../test-support.ts";
+import { createRateLimiter } from "./rate-limiter.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
 const BRUNO_EMAIL = "bruno.tavares@nexo.com.br";
@@ -123,6 +125,25 @@ describe("rascunho pelo chat e pelos botões do card (RN04)", () => {
     const { ana, request } = await setup();
 
     expect((await request(ana, "POST", "/drafts/qualquer/confirm")).status).toBe(400);
+  });
+
+  it("os botões do rascunho têm limite por funcionário (429)", async () => {
+    const fake = createFakeTicketGateway();
+    const container = await createTestContainer({ ticketGateway: fake.ticketGateway });
+    container.chatLimits.draftActionsPerUser = createRateLimiter({
+      limit: 1,
+      windowMs: 60_000,
+      clock: systemClock,
+    });
+    const { app, login } = await createTestApp(container);
+    const ana = await login(ANA_EMAIL);
+    const cancel = () =>
+      app.request("/api/chat/drafts/D-1/cancel", { method: "POST", headers: { Cookie: ana } });
+
+    await cancel();
+    const blocked = await cancel();
+
+    expect(blocked.status).toBe(429);
   });
 
   it("confirmar vindo de outro site é recusado (CSRF)", async () => {

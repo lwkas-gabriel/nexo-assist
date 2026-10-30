@@ -36,19 +36,21 @@ async function chatChunksWith(model: MockLanguageModelV4): Promise<UIMessageChun
   if (!employee) throw new Error("Ana não está nos dados de demonstração");
 
   const { ticketGateway } = createFakeTicketGateway();
+  const draftService = createDraftService({
+    draftStore: createDraftStore(db),
+    ticketGateway,
+    clock: systemClock,
+  });
   const chatService = createChatService({
     mastra: createNexoMastra({
       model,
       knowledgeBase: { search: () => [] },
       ticketGateway,
-      draftService: createDraftService({
-        draftStore: createDraftStore(db),
-        ticketGateway,
-        clock: systemClock,
-      }),
+      draftService,
       clock: systemClock,
     }),
     conversationStore: createConversationStore(db),
+    draftService,
     clock: systemClock,
   });
 

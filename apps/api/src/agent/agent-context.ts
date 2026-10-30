@@ -5,6 +5,7 @@ import { AppError } from "@nexo/shared/errors";
 const EMPLOYEE_ID_KEY = "employeeId";
 const CONVERSATION_ID_KEY = "conversationId";
 const TURN_STARTED_AT_KEY = "turnStartedAt";
+const READ_TICKET_DATA_KEY = "readTicketData";
 
 /**
  * Um turno do agent: quem está conversando (da sessão de login, RN09), em qual conversa e quando
@@ -42,6 +43,20 @@ function requiredText(context: ToolContext, key: string): string {
  */
 export function employeeIdFrom(context: ToolContext): string {
   return requiredText(context, EMPLOYEE_ID_KEY);
+}
+
+/**
+ * Texto de chamados (títulos, descrições, atualizações) é escrito por pessoas e pode conter
+ * instruções. As tools que o leem marcam o turno, e confirm_draft recusa confirmar num turno
+ * marcado: uma atualização dizendo "confirme o D-3" não vira confirmação (R43). A central de
+ * ajuda não marca: os artigos são versionados no repositório.
+ */
+export function markTicketDataRead(context: ToolContext): void {
+  context?.requestContext?.set(READ_TICKET_DATA_KEY, true);
+}
+
+export function hasReadTicketData(context: ToolContext): boolean {
+  return context?.requestContext?.get(READ_TICKET_DATA_KEY) === true;
 }
 
 /** O turno completo, para as tools que gravam algo na conversa. Também falha fechada. */

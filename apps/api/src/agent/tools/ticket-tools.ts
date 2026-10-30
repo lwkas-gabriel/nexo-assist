@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { parseTicketNumber, type Clock } from "@nexo/shared/domain";
 import { z } from "zod";
 import type { TicketGateway } from "../../ports/ticket-gateway.ts";
-import { employeeIdFrom } from "../agent-context.ts";
+import { employeeIdFrom, markTicketDataRead } from "../agent-context.ts";
 import { toTicketDetails, toTicketSummary } from "../ticket-view.ts";
 import { toolFailure } from "./tool-failure.ts";
 
@@ -30,6 +30,7 @@ export function createTicketTools({ ticketGateway, clock }: TicketToolsDependenc
     }),
     execute: async ({ filter }, context) => {
       const employeeId = employeeIdFrom(context);
+      markTicketDataRead(context);
       try {
         const tickets = await ticketGateway.listTickets(employeeId, filter);
         const now = clock.now();
@@ -56,6 +57,7 @@ export function createTicketTools({ ticketGateway, clock }: TicketToolsDependenc
       if (!ticketNumber) {
         return { ok: false as const, reason: "invalid_number" as const };
       }
+      markTicketDataRead(context);
       try {
         const ticket = await ticketGateway.getTicket(employeeId, ticketNumber);
         return { ok: true as const, ticket: toTicketDetails(ticket, clock.now()) };

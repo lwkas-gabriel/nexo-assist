@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createFakeTicketGateway, createTestDraftService } from "../../test-support.ts";
 import { createAgentRequestContext } from "../agent-context.ts";
 import { createDraftTools } from "./draft-tools.ts";
+import { createTicketTools } from "./ticket-tools.ts";
 
 const ANA = "emp-ana-souza";
 const BRUNO = "emp-bruno-tavares";
@@ -38,14 +39,22 @@ async function setup() {
   const confirm = (draftId: string, requestContext: RequestContext) =>
     tools.confirm_draft.execute?.({ draftId }, { requestContext });
 
+  /** A resposta do agent mostrou o rascunho e, um minuto depois, chega a mensagem seguinte. */
+  const replyShowsThenNextMessage = async (draftId: string) => {
+    await draftService.markShownInReply(conversationId, `Montei o rascunho ${draftId}.`);
+    now = new Date(now.getTime() + 60_000);
+  };
+
   return {
     fake,
     draftService,
+    conversationId,
     tools,
+    ticketTools: createTicketTools({ ticketGateway: fake.ticketGateway, clock }),
     turn,
     propose,
     confirm,
-    nextMessage: () => (now = new Date(now.getTime() + 60_000)),
+    replyShowsThenNextMessage,
   };
 }
 
@@ -80,9 +89,9 @@ describe("tools de rascunho (RN04, R04)", () => {
   });
 
   it("R04: confirma na mensagem seguinte do funcionário", async () => {
-    const { propose, confirm, turn, nextMessage, fake } = await setup();
+    const { propose, confirm, turn, replyShowsThenNextMessage, fake } = await setup();
     const draftId = await proposedDraftId(propose(turn()));
-    nextMessage();
+    await replyShowsThenNextMessage(draftId);
 
     const result = await confirm(draftId, turn());
 
@@ -90,9 +99,9 @@ describe("tools de rascunho (RN04, R04)", () => {
   });
 
   it("R04: não confirma rascunho de outra conversa", async () => {
-    const { propose, confirm, turn, nextMessage, fake } = await setup();
+    const { propose, confirm, turn, replyShowsThenNextMessage, fake } = await setup();
     const draftId = await proposedDraftId(propose(turn()));
-    nextMessage();
+    await replyShowsThenNextMessage(draftId);
 
     const result = await confirm(draftId, turn({ conversationId: "outra-conversa" }));
 
@@ -101,9 +110,9 @@ describe("tools de rascunho (RN04, R04)", () => {
   });
 
   it("RN09: outro funcionário não confirma o rascunho (responde como inexistente)", async () => {
-    const { propose, confirm, turn, nextMessage } = await setup();
+    const { propose, confirm, turn, replyShowsThenNextMessage } = await setup();
     const draftId = await proposedDraftId(propose(turn()));
-    nextMessage();
+    await replyShowsThenNextMessage(draftId);
 
     const result = await confirm(draftId, turn({ employeeId: BRUNO }));
 
@@ -111,15 +120,50 @@ describe("tools de rascunho (RN04, R04)", () => {
   });
 
   it("não confirma rascunho cancelado", async () => {
-    const { propose, confirm, turn, nextMessage, draftService, fake } = await setup();
+    const {
+      propose,
+      confirm,
+      turn,
+      replyShowsThenNextMessage,
+      draftService,
+      conversationId,
+      fake,
+    } = await setup();
     const draftId = await proposedDraftId(propose(turn()));
-    await draftService.cancel({ employeeId: ANA, draftNumber: 1 });
-    nextMessage();
+    await draftService.cancel({ employeeId: ANA, draftNumber: 1, conversationId });
+    await replyShowsThenNextMessage(draftId);
 
     const result = await confirm(draftId, turn());
 
     expect(result).toMatchObject({ ok: false, reason: "refused" });
     expect(fake.tickets).toHaveLength(0);
+  });
+
+  it("R43: não confirma num turno que leu dados de chamados (texto que pode trazer instruções)", async () => {
+    const { propose, confirm, turn, replyShowsThenNextMessage, ticketTools, fake } = await setup();
+    const draftId = await proposedDraftId(propose(turn()));
+    await replyShowsThenNextMessage(draftId);
+    const turnThatReadTickets = turn();
+    await ticketTools.get_ticket.execute?.(
+      { number: "INC-20311" },
+      { requestContext: turnThatReadTickets },
+    );
+
+    const result = await confirm(draftId, turnThatReadTickets);
+
+    expect(result).toMatchObject({ ok: false, reason: "refused" });
+    expect(fake.tickets).toHaveLength(0);
+  });
+
+  it("complemento só com espaços é recusado pela tool, sem gravar rascunho", async () => {
+    const { tools, turn } = await setup();
+
+    const call = tools.propose_ticket_update.execute?.(
+      { number: "INC-20311", message: "   " },
+      { requestContext: turn() },
+    );
+
+    expect(await call).toMatchObject({ error: true });
   });
 
   it("id de rascunho que não é um número não consulta nada", async () => {

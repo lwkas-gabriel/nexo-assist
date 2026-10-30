@@ -59,7 +59,17 @@ export type MessageRow = typeof messages.$inferSelect;
 export const DRAFT_KINDS = ["create", "update", "reopen"] as const;
 export type DraftKind = (typeof DRAFT_KINDS)[number];
 
-export const DRAFT_STATUSES = ["pending", "confirmed", "cancelled"] as const;
+/**
+ * pending → confirming → confirmed; pending → cancelled. Se a escrita falha, confirming →
+ * confirm_failed: o chamado pode ter sido criado, então só vale confirmar de novo (R01).
+ */
+export const DRAFT_STATUSES = [
+  "pending",
+  "confirming",
+  "confirm_failed",
+  "confirmed",
+  "cancelled",
+] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 
 export const drafts = sqliteTable("drafts", {
@@ -78,6 +88,7 @@ export const drafts = sqliteTable("drafts", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  shownAt: integer("shown_at", { mode: "timestamp_ms" }),
 });
 
 export type DraftRow = typeof drafts.$inferSelect;

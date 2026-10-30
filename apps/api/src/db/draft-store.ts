@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { MAX_UPDATE_MESSAGE_CHARS } from "@nexo/shared/contracts";
 import { URGENCY_LEVELS, ticketDraftSchema } from "@nexo/shared/domain";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./database.ts";
 import { drafts, type DraftKind, type DraftRow, type DraftStatus } from "./schema.ts";
@@ -27,17 +27,24 @@ export const ticketUpdateContentSchema = z.object({
 export type TicketUpdateContent = z.infer<typeof ticketUpdateContentSchema>;
 
 /** Rascunho já lido do banco, com o conteúdo validado conforme o tipo. */
-export type Draft = Omit<DraftRow, "content" | "kind"> &
+export type Draft = Omit<DraftRow, "content" | "kind" | "ticketNumber"> &
   (
-    | { kind: "create"; content: NewTicketContent }
-    | { kind: "update" | "reopen"; content: TicketUpdateContent }
+    | { kind: "create"; content: NewTicketContent; ticketNumber: string | null }
+    | { kind: "update" | "reopen"; content: TicketUpdateContent; ticketNumber: string }
   );
 
 function toDraft(row: DraftRow): Draft {
   const raw: unknown = JSON.parse(row.content);
-  return row.kind === "create"
-    ? { ...row, kind: row.kind, content: newTicketContentSchema.parse(raw) }
-    : { ...row, kind: row.kind, content: ticketUpdateContentSchema.parse(raw) };
+  if (row.kind === "create") {
+    return { ...row, kind: row.kind, content: newTicketContentSchema.parse(raw) };
+  }
+  if (!row.ticketNumber) throw new Error(`Rascunho D-${row.number} sem chamado alvo`);
+  return {
+    ...row,
+    kind: row.kind,
+    ticketNumber: row.ticketNumber,
+    content: ticketUpdateContentSchema.parse(raw),
+  };
 }
 
 export type NewDraft = {
@@ -49,9 +56,22 @@ export type NewDraft = {
   | { kind: Exclude<DraftKind, "create">; content: TicketUpdateContent; ticketNumber: string }
 );
 
+/**
+ * As mudanças de status só acontecem se o rascunho ainda estiver no status esperado, num único
+ * UPDATE: duas ações simultâneas (duplo clique, botão e chat juntos) não passam as duas (R01).
+ */
 export function createDraftStore(db: Database) {
-  async function findRow(number: number) {
-    return db.query.drafts.findFirst({ where: eq(drafts.number, number) });
+  async function updateIf(
+    number: number,
+    expected: DraftStatus[],
+    values: Partial<typeof drafts.$inferInsert>,
+  ): Promise<Draft | undefined> {
+    const [row] = await db
+      .update(drafts)
+      .set(values)
+      .where(and(eq(drafts.number, number), inArray(drafts.status, expected)))
+      .returning();
+    return row ? toDraft(row) : undefined;
   }
 
   return {
@@ -76,7 +96,7 @@ export function createDraftStore(db: Database) {
     },
 
     async find(number: number): Promise<Draft | undefined> {
-      const row = await findRow(number);
+      const row = await db.query.drafts.findFirst({ where: eq(drafts.number, number) });
       return row ? toDraft(row) : undefined;
     },
 
@@ -88,34 +108,67 @@ export function createDraftStore(db: Database) {
         .where(and(eq(drafts.conversationId, conversationId), eq(drafts.status, "pending")));
     },
 
-    async updateContent(
-      number: number,
-      content: NewTicketContent,
-      priorityReason: string,
-      now: Date,
-    ): Promise<Draft> {
-      const [row] = await db
+    /** R04: o funcionário viu estes rascunhos pendentes da conversa (a resposta que os mostra terminou). */
+    async markShown(conversationId: string, numbers: number[], now: Date): Promise<void> {
+      if (numbers.length === 0) return;
+      await db
         .update(drafts)
-        .set({ content: JSON.stringify(content), priorityReason, updatedAt: now })
-        .where(eq(drafts.number, number))
-        .returning();
-      if (!row) throw new Error(`Rascunho D-${number} sumiu durante a edição`);
-      return toDraft(row);
+        .set({ shownAt: now })
+        .where(
+          and(
+            eq(drafts.conversationId, conversationId),
+            inArray(drafts.number, numbers),
+            eq(drafts.status, "pending"),
+            isNull(drafts.shownAt),
+          ),
+        );
     },
 
-    async setStatus(
-      number: number,
-      status: Exclude<DraftStatus, "pending">,
-      now: Date,
-      ticketNumber?: string,
-    ): Promise<Draft> {
+    /** Edição pelo card: quem editou viu o resultado, então conta como mostrado agora. */
+    updateContent(number: number, content: NewTicketContent, priorityReason: string, now: Date) {
+      return updateIf(number, ["pending"], {
+        content: JSON.stringify(content),
+        priorityReason,
+        updatedAt: now,
+        shownAt: now,
+      });
+    },
+
+    /**
+     * Reserva o rascunho para executar a confirmação. Aceita pendente, confirmação que falhou
+     * (repetir com a mesma chave) e reserva abandonada antes de `staleBefore` (o processo caiu).
+     */
+    async claimForConfirmation(number: number, now: Date, staleBefore: Date) {
       const [row] = await db
         .update(drafts)
-        .set({ status, ...(ticketNumber ? { ticketNumber } : {}), updatedAt: now })
-        .where(eq(drafts.number, number))
+        .set({ status: "confirming", updatedAt: now })
+        .where(
+          and(
+            eq(drafts.number, number),
+            or(
+              inArray(drafts.status, ["pending", "confirm_failed"]),
+              and(eq(drafts.status, "confirming"), lt(drafts.updatedAt, staleBefore)),
+            ),
+          ),
+        )
         .returning();
-      if (!row) throw new Error(`Rascunho D-${number} sumiu durante a mudança de status`);
-      return toDraft(row);
+      return row ? toDraft(row) : undefined;
+    },
+
+    finishConfirmation(number: number, ticketNumber: string, now: Date) {
+      return updateIf(number, ["confirming"], {
+        status: "confirmed",
+        ticketNumber,
+        updatedAt: now,
+      });
+    },
+
+    failConfirmation(number: number, now: Date) {
+      return updateIf(number, ["confirming"], { status: "confirm_failed", updatedAt: now });
+    },
+
+    cancel(number: number, now: Date) {
+      return updateIf(number, ["pending"], { status: "cancelled", updatedAt: now });
     },
   };
 }

@@ -13,6 +13,7 @@ import { describeAgentError } from "../agent/agent-errors.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
+import type { DraftService } from "./draft-service.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
@@ -20,6 +21,7 @@ const HISTORY_WINDOW = 40;
 type ChatServiceDependencies = {
   mastra: Mastra;
   conversationStore: ConversationStore;
+  draftService: DraftService;
   clock: Clock;
 };
 
@@ -32,7 +34,12 @@ export type ConversationView = {
  * Conversa do funcionário com o agent. O histórico vive no banco (fonte da verdade, RT06):
  * o navegador manda só o texto novo, então não há como forjar mensagens anteriores.
  */
-export function createChatService({ mastra, conversationStore, clock }: ChatServiceDependencies) {
+export function createChatService({
+  mastra,
+  conversationStore,
+  draftService,
+  clock,
+}: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
   const busyConversations = new Set<string>();
 
@@ -117,6 +124,8 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
                   parts: responseMessage.parts,
                   createdAt: clock.now(),
                 });
+                // R04: só o rascunho que a resposta gravada mostra ("D-12") conta como visto.
+                await draftService.markShownInReply(conversation.id, textOf(responseMessage));
               }
             } finally {
               release();
@@ -132,6 +141,10 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
 }
 
 export type ChatService = ReturnType<typeof createChatService>;
+
+function textOf(message: UIMessage): string {
+  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
+}
 
 function toUIMessage(row: MessageRow): UIMessage {
   return {

@@ -3,6 +3,7 @@ import { parseInput, readJson } from "@nexo/shared/http";
 import { createUIMessageStreamResponse } from "ai";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 import type { ChatService } from "../app/chat-service.ts";
 import type { DraftActions } from "../app/draft-actions.ts";
@@ -19,11 +20,15 @@ const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 });
 
-/** Por funcionário, e para todos juntos dentro da cota gratuita do modelo (ADR-0010). */
+/**
+ * Mensagens: por funcionário, e para todos juntos dentro da cota gratuita do modelo (ADR-0010).
+ * Botões do rascunho: não gastam o modelo, mas gravam na conversa e no sistema de chamados.
+ */
 export type ChatLimits = {
   perUser: RateLimiter;
   globalPerMinute: RateLimiter;
   globalPerDay: RateLimiter;
+  draftActionsPerUser: RateLimiter;
 };
 
 type ChatRoutesDependencies = {
@@ -90,6 +95,19 @@ export function createChatRoutes({
   });
 
   // Botões do card de rascunho (RN04, R16): ação determinística, sem chamar o LLM (11.5).
+  routes.use(
+    "/drafts/*",
+    createMiddleware<AppEnv>(async (c, next) => {
+      if (!chatLimits.draftActionsPerUser.tryConsume(currentUser(c, "employee").id)) {
+        throw new AppError(
+          "RATE_LIMITED",
+          "Muitas ações em pouco tempo. Tente novamente mais tarde.",
+        );
+      }
+      await next();
+    }),
+  );
+
   routes.post("/drafts/:id/confirm", async (c) => {
     const draftNumber = parseInput(draftNumberSchema, c.req.param("id"));
     return c.json(await draftActions.confirm(currentUser(c, "employee").id, draftNumber));

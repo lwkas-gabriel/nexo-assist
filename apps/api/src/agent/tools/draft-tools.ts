@@ -10,7 +10,7 @@ import {
 import { MAX_UPDATE_MESSAGE_CHARS } from "@nexo/shared/contracts";
 import { z } from "zod";
 import type { DraftService } from "../../app/draft-service.ts";
-import { agentTurnFrom } from "../agent-context.ts";
+import { agentTurnFrom, hasReadTicketData } from "../agent-context.ts";
 import { toolFailure } from "./tool-failure.ts";
 
 export const PROPOSE_TICKET_DRAFT_TOOL_ID = "propose_ticket_draft";
@@ -89,6 +89,7 @@ export function createDraftTools({ draftService }: { draftService: DraftService 
       number: z.string().min(1).max(40).describe("Número do chamado, ex.: INC-20311"),
       message: z
         .string()
+        .trim()
         .min(1)
         .max(MAX_UPDATE_MESSAGE_CHARS)
         .describe("A informação nova, escrita como o funcionário contaria ao analista"),
@@ -119,13 +120,20 @@ export function createDraftTools({ draftService }: { draftService: DraftService 
       const turn = agentTurnFrom(context);
       const draftNumber = parseDraftId(draftId);
       if (!draftNumber) return { ok: false as const, reason: "not_found" as const };
+      if (hasReadTicketData(context)) {
+        return {
+          ok: false as const,
+          reason: "refused" as const,
+          detail: `Nesta resposta você leu dados de chamados; peça ao funcionário que confirme o rascunho D-${draftNumber} na próxima mensagem.`,
+        };
+      }
       try {
         const { draft, ticket } = await draftService.confirm({
           employeeId: turn.employeeId,
           draftNumber,
           conversationId: turn.conversationId,
-          // R04: o rascunho precisa ter sido mostrado antes da mensagem que confirmou.
-          shownBefore: turn.startedAt,
+          // R04: o rascunho precisa ter sido visto antes da mensagem que confirmou.
+          source: { via: "chat", turnStartedAt: turn.startedAt },
         });
         return {
           ok: true as const,

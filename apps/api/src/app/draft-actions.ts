@@ -50,7 +50,12 @@ export function createDraftActions({
   return {
     async confirm(employeeId: string, draftNumber: number) {
       const conversationId = await currentConversationId(employeeId, draftNumber);
-      const result = await draftService.confirm({ employeeId, draftNumber, conversationId });
+      const result = await draftService.confirm({
+        employeeId,
+        draftNumber,
+        conversationId,
+        source: { via: "button" },
+      });
       await recordInConversation(conversationId, confirmedLine(result.draft));
       return result;
     },
