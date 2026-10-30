@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T11 concluídas; próxima T12 (rascunho e confirmação). Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T12 concluídas; próxima T13 (transferência para analista). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -149,7 +149,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 
 **Fase 3 — Agent**
 - [x] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito (cota já conferida e tetos calibrados, ADR-0010) — **concluída**. Tools list_my_tickets e get_ticket com o funcionário vindo da sessão (falha fechada); prazo e datas calculados pelo domínio; prompt validado com o Gemini real (listar e perguntar qual, prazo vencido, recusa de chamado alheio, redirecionamento para o RH). Revisão adversarial independente: 9 achados (1 importante), todos corrigidos (AI_LOG 40).
-- [ ] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05)
+- [x] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05) — **concluída**. Caso de uso único para tools e botões; confirmação pelo chat validada pelo servidor (R04: rascunho desta conversa, pendente e mostrado antes do turno); chave de idempotência por rascunho (R01); botões confirmar/cancelar/editar sem LLM, registrados na conversa; prompt validado com o Gemini real (AI_LOG 41–42). O card visual do rascunho fica na T19.
 - [ ] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08)
 - [ ] T14 Classificador estruturado (etapa 1) + registro de decisão por turno + confiança ajustada por sinais (RF04, RF05, R05, R09)
 - [ ] T15 Sessões: limite de 30 mensagens, fim por inatividade, resumo e herança de pendências na nova sessão (RF10, RF11, RN14, A05, R03)

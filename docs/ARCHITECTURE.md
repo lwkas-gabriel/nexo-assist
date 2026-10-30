@@ -107,7 +107,7 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 ### 11.3 Máquinas de estado (explícitas, testadas, num arquivo cada)
 - **Conversa:** `agent` → `waiting_analyst` (transferência) → `analyst` (assumir) → `agent` (devolver) | `closed` (encerrar). `waiting_analyst` → `agent` (devolver sem assumir). Transição inválida = erro tipado.
 - **Chamado:** `new` → `in_progress` | `waiting_analyst` → `in_service` (analista assumiu) → `resolved` → `reopened` (≤ 7 dias). REQ: `new` → `approved` → `in_progress` → `resolved`. `cancelled` a partir de qualquer estado aberto.
-- **Rascunho:** `pending` → `confirmed` | `cancelled` | `edited` (volta a `pending` com novo hash).
+- **Rascunho:** `pending` → `confirmed` | `cancelled`. Editar mantém `pending` e atualiza `updated_at`. Pelo chat, o servidor só confirma rascunho desta conversa cujo `updated_at` é anterior à mensagem que confirmou (R04): a data da última mudança faz o papel do hash previsto no plano, sem guardar nada a mais. Propor outro rascunho cancela o pendente da conversa.
 - **Sessão:** `active` → `ended` (30 mensagens, 8 h inativa — **exceto** com conversa em `waiting_analyst`/`analyst` — ou encerramento pelo analista).
 
 ### 11.4 Modelo de dados (resumo)

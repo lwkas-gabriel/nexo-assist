@@ -235,3 +235,18 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   9. O CLAUDE.md e a arquitetura se contradiziam sobre o agent usar portas; a regra foi alinhada.
 - **Lição:** o revisor sem contexto pegou um problema de comportamento do agent (afirmar uma atualização que não existiu) que os testes da própria implementação não pegavam, porque o caso "TI nunca respondeu" não estava coberto.
 - **Observação registrada:** o prazo do chamado da Carla venceria em 02/11 (Finados), porque feriados são ignorados por decisão (A10). Fica como exemplo concreto dessa limitação para o README.
+
+---
+
+## T12: rascunho, confirmação e complemento de chamados (30/10/2026)
+
+### 41. T12: o agent propõe, o funcionário confirma, o código garante
+- **IA gerou:** a tabela `drafts` e um caso de uso único (`draft-service`) usado tanto pelas tools do agent quanto pelos botões do card. Propor nunca cria nada: a resposta diz o que falta (RN03, com os nomes que o agent usa para perguntar), aponta chamados parecidos antes de criar outro (RN05) ou devolve o rascunho com a prioridade **calculada pela matriz** (RN11), nunca escolhida pelo modelo. Complementar um chamado resolvido há até 7 dias o reabre (RN06).
+- **R04 implementado como regra do servidor:** o turno do agent leva a conversa e a hora em que a mensagem do funcionário chegou. `confirm_draft` só aceita um rascunho desta conversa, pendente e que já existia, sem mudanças, antes dessa mensagem. Na prática, o agent não consegue propor e confirmar na mesma resposta, nem confirmar o rascunho de outra conversa, mesmo que o modelo tente.
+- **Idempotência ponta a ponta (R01):** cada rascunho tem uma chave aleatória usada na escrita no tickets-service. Confirmar duas vezes, ou o botão e o texto ao mesmo tempo, não duplica o chamado. O seed do tickets-service passou a apagar as chaves antigas, que apontariam para chamados apagados.
+- **Botões sem LLM (11.5):** confirmar, cancelar e editar pelo card são rotas determinísticas, válidas só na conversa aberta do funcionário. Cada ação vira uma linha de sistema na conversa, para o agent saber no turno seguinte o que mudou. Editar recalcula a prioridade; a prioridade em si não é editável (R16).
+- **Erro pego pelos testes:** o schema de entrada exigia a prioridade, que o agent nem manda. Os testes do caso de uso falharam todos de uma vez, e a correção separou o schema do que o agent extrai do schema do que fica gravado.
+
+### 42. Validação com o Gemini real (T12)
+- **3 conversas, cerca de 12 chamadas da cota gratuita:** abriu o chamado da VPN da tela 2 com prioridade Alta (só eu + reunião hoje) e só criou depois do "pode criar"; recusou criar outro chamado "crítico" a pedido, explicando que a prioridade vem das regras; complementou o INC-20311 achando o chamado pela descrição ("o do notebook lento") e só enviou depois da confirmação; abriu uma requisição de acesso com prioridade Baixa.
+- **Ajuste feito com base no modelo real:** depois de confirmar, o modelo disse "até as 12:00 de hoje" para uma previsão de 02/11 (outro dia). O resultado de `confirm_draft` passou a trazer a previsão explícita, o prompt manda repetir data e hora como vieram, e o rascunho confirmado guarda o prazo da hora da confirmação. Também passou a explicar a prioridade sem o código da regra ("RN11"), que é jargão para o funcionário.
