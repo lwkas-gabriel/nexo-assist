@@ -8,6 +8,7 @@ import {
   type UIMessage,
   type UIMessageChunk,
 } from "ai";
+import { createAgentRequestContext } from "../agent/agent-context.ts";
 import { describeAgentError } from "../agent/agent-errors.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
@@ -84,7 +85,8 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
           mastra,
           agentId: NEXO_AGENT_ID,
           version: "v7",
-          params: { messages: history },
+          // O funcionário vem da sessão: as tools só consultam os chamados dele (RN09).
+          params: { messages: history, requestContext: createAgentRequestContext(employee.id) },
           // O erro original (provedor, stack trace) fica no log; o funcionário vê uma mensagem amigável.
           onError: (error) => {
             console.error("Falha do modelo no turno do agent", error);

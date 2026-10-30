@@ -1,11 +1,14 @@
 import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import { Mastra } from "@mastra/core/mastra";
+import type { Clock } from "@nexo/shared/domain";
 import type { LlmConfig } from "../config.ts";
 import type { KnowledgeBase } from "../ports/knowledge-base.ts";
+import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { NEXO_INSTRUCTIONS } from "./instructions.ts";
 import { createMockModel } from "./mock-model.ts";
 import { createSearchKnowledgeBaseTool } from "./tools/search-knowledge-base.ts";
+import { createTicketTools } from "./tools/ticket-tools.ts";
 
 export const NEXO_AGENT_ID = "nexo-assist";
 
@@ -26,19 +29,29 @@ export function createModel(llm: LlmConfig): MastraModelConfig {
   return { id: `google/${llm.LLM_MODEL}` as const, apiKey: llm.GEMINI_API_KEY };
 }
 
-type NexoAgentDependencies = {
+export type NexoAgentDependencies = {
   model: MastraModelConfig;
   knowledgeBase: KnowledgeBase;
+  ticketGateway: TicketGateway;
+  clock: Clock;
 };
 
-export function createNexoAgent({ model, knowledgeBase }: NexoAgentDependencies) {
+export function createNexoAgent({
+  model,
+  knowledgeBase,
+  ticketGateway,
+  clock,
+}: NexoAgentDependencies) {
   return new Agent({
     id: NEXO_AGENT_ID,
     name: "Nexo Assist",
     instructions: NEXO_INSTRUCTIONS,
     model,
     maxRetries: MODEL_MAX_RETRIES,
-    tools: { search_knowledge_base: createSearchKnowledgeBaseTool(knowledgeBase) },
+    tools: {
+      search_knowledge_base: createSearchKnowledgeBaseTool(knowledgeBase),
+      ...createTicketTools({ ticketGateway, clock }),
+    },
     defaultOptions: {
       // Raciocínio baixo: chat de service desk não precisa de raciocínio longo; menos tokens
       // por chamada rende mais dentro da cota gratuita e responde mais rápido (ADR-0010).

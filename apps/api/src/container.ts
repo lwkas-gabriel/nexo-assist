@@ -50,10 +50,17 @@ export type Container = {
   loginLimiter: RateLimiter;
 };
 
+/** Peças que os testes podem trocar por versões controladas (relógio fixo, sistema de chamados falso). */
+export type ContainerOverrides = {
+  clock?: Clock;
+  ticketGateway?: TicketGateway;
+};
+
 export async function createContainer(
   config: ContainerConfig,
-  clock: Clock = systemClock,
+  overrides: ContainerOverrides = {},
 ): Promise<Container> {
+  const clock = overrides.clock ?? systemClock;
   const { db } = await openDatabase(config.DATABASE_URL);
   const userStore = createUserStore(db);
   // As pessoas de demonstração são dados de referência: sempre presentes, sempre atualizadas.
@@ -61,15 +68,23 @@ export async function createContainer(
 
   const conversationStore = createConversationStore(db);
   const knowledgeBase = createMarkdownKnowledgeBase(KNOWLEDGE_DIRECTORY);
-  const mastra = createNexoMastra({ model: createModel(config), knowledgeBase });
+  const ticketGateway =
+    overrides.ticketGateway ??
+    createHttpTicketGateway({
+      baseUrl: config.TICKETS_SERVICE_URL,
+      serviceToken: config.TICKETS_SERVICE_TOKEN,
+    });
+  const mastra = createNexoMastra({
+    model: createModel(config),
+    knowledgeBase,
+    ticketGateway,
+    clock,
+  });
 
   return {
     db,
     mastra,
-    ticketGateway: createHttpTicketGateway({
-      baseUrl: config.TICKETS_SERVICE_URL,
-      serviceToken: config.TICKETS_SERVICE_TOKEN,
-    }),
+    ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
     chatService: createChatService({ mastra, conversationStore, clock }),
     conversationStore,

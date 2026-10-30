@@ -7,14 +7,17 @@ import type {
 } from "@ai-sdk/provider";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { z } from "zod";
 import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "./tools/search-knowledge-base.ts";
+import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tools.ts";
 
 /**
- * Modelo falso e previsível, usado com LLM_MODE=mock (testes E2E e CI): sem custo e sem chave.
+ * Modelo falso e previsível, usado com LLM_MODE=mock (testes e CI): sem chave e sem chamadas externas.
  *
- * Roteiro:
- * 1. Mensagem do funcionário → chama search_knowledge_base com o texto dela.
- * 2. Resultado da busca → responde citando o primeiro artigo encontrado.
+ * Roteiro, imitando o que o modelo real faz:
+ * 1. Mensagem do funcionário → escolhe a tool pelo texto:
+ *    número de chamado → get_ticket; "chamado"/"status" → list_my_tickets; o resto → central de ajuda.
+ * 2. Resultado da tool → responde com base nele.
  *
  * Implementa as duas formas de chamada (com e sem streaming) a partir do mesmo roteiro.
  */
@@ -38,7 +41,11 @@ export function createMockModel() {
   });
 }
 
-type Step = { kind: "search"; query: string } | { kind: "answer"; text: string };
+const TEST_MODEL_NOTE = "(resposta do modelo de teste)";
+
+type Step =
+  | { kind: "call"; toolName: string; input: Record<string, unknown> }
+  | { kind: "answer"; text: string };
 
 const NO_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
@@ -47,39 +54,51 @@ const NO_USAGE: LanguageModelV4Usage = {
 
 const TOOL_CALL_ID = "mock-call-1";
 const TEXT_ID = "mock-text-1";
+const TICKET_NUMBER_IN_TEXT = /\b(INC|REQ)[\s_-]?\d{5}\b/i;
 
 function nextStep(prompt: LanguageModelV4Prompt): Step {
   const lastMessage = prompt.at(-1);
   if (lastMessage?.role === "tool") {
     return { kind: "answer", text: answerFromToolResult(lastMessage.content) };
   }
-  return { kind: "search", query: lastUserText(prompt) };
+  return chooseTool(lastUserText(prompt));
+}
+
+function chooseTool(userText: string): Step {
+  const ticketNumber = TICKET_NUMBER_IN_TEXT.exec(userText)?.[0];
+  if (ticketNumber) {
+    return { kind: "call", toolName: GET_TICKET_TOOL_ID, input: { number: ticketNumber } };
+  }
+  if (/chamado|status/i.test(userText)) {
+    return { kind: "call", toolName: LIST_MY_TICKETS_TOOL_ID, input: { filter: "open" } };
+  }
+  return { kind: "call", toolName: SEARCH_KNOWLEDGE_BASE_TOOL_ID, input: { query: userText } };
 }
 
 function toContent(step: Step): LanguageModelV4Content {
-  return step.kind === "search"
+  return step.kind === "call"
     ? {
         type: "tool-call",
         toolCallId: TOOL_CALL_ID,
-        toolName: SEARCH_KNOWLEDGE_BASE_TOOL_ID,
-        input: JSON.stringify({ query: step.query }),
+        toolName: step.toolName,
+        input: JSON.stringify(step.input),
       }
     : { type: "text", text: step.text };
 }
 
 function finishReasonOf(step: Step): LanguageModelV4FinishReason {
-  return { unified: step.kind === "search" ? "tool-calls" : "stop", raw: undefined };
+  return { unified: step.kind === "call" ? "tool-calls" : "stop", raw: undefined };
 }
 
 function toStreamParts(step: Step): LanguageModelV4StreamPart[] {
   const body: LanguageModelV4StreamPart[] =
-    step.kind === "search"
+    step.kind === "call"
       ? [
           {
             type: "tool-call",
             toolCallId: TOOL_CALL_ID,
-            toolName: SEARCH_KNOWLEDGE_BASE_TOOL_ID,
-            input: JSON.stringify({ query: step.query }),
+            toolName: step.toolName,
+            input: JSON.stringify(step.input),
           },
         ]
       : [
@@ -104,15 +123,77 @@ function lastUserText(prompt: LanguageModelV4Prompt): string {
     .trim();
 }
 
+/** Resultado de tool como o AI SDK o entrega ao modelo: o valor JSON fica em `output.value`. */
+const toolResultSchema = z.object({
+  type: z.literal("tool-result"),
+  toolName: z.string(),
+  output: z.object({ value: z.unknown() }),
+});
+
+const ticketSchema = z.object({
+  number: z.string(),
+  title: z.string(),
+  status: z.string(),
+  deadline: z.object({ isOverdue: z.boolean(), rule: z.string() }).nullable(),
+  daysWithoutTeamUpdate: z.number(),
+});
+const listResultSchema = z.object({ ok: z.literal(true), tickets: z.array(ticketSchema) });
+const getResultSchema = z.object({ ok: z.literal(true), ticket: ticketSchema });
+const failureSchema = z.object({ ok: z.literal(false), reason: z.string() });
+/** Como o prompt manda responder a cada falha das tools de chamados. */
+const FAILURE_ANSWERS: Record<string, string> = {
+  not_found: "Não encontrei esse chamado entre os seus.",
+  tickets_unavailable:
+    "O sistema de chamados está instável no momento; tente de novo em instantes.",
+  invalid_number: "Pode confirmar o número no formato INC-12345 ou REQ-12345?",
+  default: "Não consegui consultar seus chamados agora.",
+};
+
+const searchResultSchema = z.object({ articles: z.array(z.object({ title: z.string() })) });
+
 function answerFromToolResult(content: unknown): string {
-  const title = firstArticleTitle(content);
-  return title
-    ? `Encontrei na central de ajuda o artigo "${title}". (resposta do modelo de teste)`
-    : "Não encontrei um artigo sobre isso na central de ajuda. (resposta do modelo de teste)";
+  const result = z
+    .array(z.unknown())
+    .catch([])
+    .parse(content)
+    .map((part) => toolResultSchema.safeParse(part))
+    .find((parsed) => parsed.success);
+  if (!result?.success) return `Não consegui ler o resultado. ${TEST_MODEL_NOTE}`;
+  const { toolName, output } = result.data;
+
+  const failure = failureSchema.safeParse(output.value);
+  if (failure.success)
+    return `${FAILURE_ANSWERS[failure.data.reason] ?? FAILURE_ANSWERS.default} ${TEST_MODEL_NOTE}`;
+
+  if (toolName === LIST_MY_TICKETS_TOOL_ID) return answerTicketList(output.value);
+  if (toolName === GET_TICKET_TOOL_ID) return answerTicket(output.value);
+  return answerArticleSearch(output.value);
 }
 
-/** Lê o título do primeiro artigo no resultado da tool, sem depender do formato exato. */
-function firstArticleTitle(content: unknown): string | undefined {
-  const match = /"title":"([^"]+)"/.exec(JSON.stringify(content));
-  return match?.[1];
+function answerTicketList(value: unknown): string {
+  const parsed = listResultSchema.safeParse(value);
+  if (!parsed.success || parsed.data.tickets.length === 0) {
+    return `Você não tem chamados abertos. ${TEST_MODEL_NOTE}`;
+  }
+  const lines = parsed.data.tickets.map(
+    (ticket) => `${ticket.number} · ${ticket.title} (${ticket.status})`,
+  );
+  return `Você tem ${lines.length} chamados abertos: ${lines.join("; ")}. ${TEST_MODEL_NOTE}`;
+}
+
+function answerTicket(value: unknown): string {
+  const parsed = getResultSchema.safeParse(value);
+  if (!parsed.success) return `Não encontrei esse chamado. ${TEST_MODEL_NOTE}`;
+  const { number, status, deadline, daysWithoutTeamUpdate } = parsed.data.ticket;
+  const overdue = deadline?.isOverdue
+    ? ` Está sem atualização há ${daysWithoutTeamUpdate} dias, acima do prazo de ${deadline.rule}.`
+    : "";
+  return `O chamado ${number} está ${status.toLowerCase()}.${overdue} ${TEST_MODEL_NOTE}`;
+}
+
+function answerArticleSearch(value: unknown): string {
+  const title = searchResultSchema.safeParse(value).data?.articles[0]?.title;
+  return title
+    ? `Encontrei na central de ajuda o artigo "${title}". ${TEST_MODEL_NOTE}`
+    : `Não encontrei um artigo sobre isso na central de ajuda. ${TEST_MODEL_NOTE}`;
 }
