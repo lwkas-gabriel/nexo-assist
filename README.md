@@ -19,13 +19,15 @@ pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-ser
 
 Acesse http://localhost:5173.
 
-Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave e sem custo, com respostas roteirizadas. Para usar o Claude de verdade, edite `apps/api/.env`:
+Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave, com respostas roteirizadas. Para usar o modelo de verdade, o **Gemini no plano gratuito** (sem cartão e sem custo), crie uma chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e edite `apps/api/.env`:
 
 ```bash
-LLM_MODE=anthropic
-ANTHROPIC_API_KEY=sua-chave   # console.anthropic.com; nunca commite este valor
-LLM_MODEL=claude-haiku-5-5
+LLM_MODE=gemini
+GEMINI_API_KEY=sua-chave   # nunca commite este valor
+LLM_MODEL=gemini-3.5-flash-lite
 ```
+
+No plano gratuito há cota por minuto e por dia; quando ela acaba, o chat mostra um aviso e volta a funcionar depois. O Google pode usar o conteúdo do plano gratuito para melhorar os produtos dele, o que é aceitável aqui porque os dados são fictícios ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)).
 
 > **Windows:** clone o repositório num caminho curto (ex.: `C:\dev\nexo-assist`). Em pastas muito profundas, o pnpm ultrapassa o limite de 260 caracteres de caminho do Windows e falha com "O sistema não pode encontrar o caminho especificado". Outra saída é habilitar caminhos longos no Windows.
 
@@ -42,25 +44,25 @@ LLM_MODEL=claude-haiku-5-5
 
 Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
 
-| App             | Variável                | Para quê                                                                             |
-| --------------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| api             | `PORT`                  | Porta HTTP da api                                                                    |
-| api             | `DATABASE_URL`          | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)           |
-| api             | `COOKIE_SECURE`         | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local           |
-| api             | `SEED_ON_START`         | `true` apaga as conversas de demonstração a cada inicialização (deploy)              |
-| api             | `LLM_MODE`              | `mock` (modelo de teste, sem custo) ou `anthropic` (Claude)                          |
-| api             | `ANTHROPIC_API_KEY`     | Chave da API da Anthropic. Obrigatória só com `LLM_MODE=anthropic`                   |
-| api             | `LLM_MODEL`             | Id do modelo do Claude (`claude-haiku-5-5`). Obrigatória só com `LLM_MODE=anthropic` |
-| api             | `TICKETS_SERVICE_URL`   | Endereço do serviço de chamados                                                      |
-| api             | `TICKETS_SERVICE_TOKEN` | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`     |
-| tickets-service | `PORT`                  | Porta HTTP do serviço de chamados                                                    |
-| tickets-service | `DATABASE_URL`          | Banco SQLite do serviço (`file:./data/tickets.db`)                                   |
-| tickets-service | `SERVICE_TOKEN`         | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`           |
-| tickets-service | `FAILURE_RATE`          | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável  |
-| tickets-service | `SEED_ON_START`         | `true` recria os dados de demonstração a cada inicialização (deploy)                 |
-| web             | `API_PROXY_TARGET`      | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                 |
+| App             | Variável                | Para quê                                                                               |
+| --------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| api             | `PORT`                  | Porta HTTP da api                                                                      |
+| api             | `DATABASE_URL`          | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)             |
+| api             | `COOKIE_SECURE`         | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local             |
+| api             | `SEED_ON_START`         | `true` apaga as conversas de demonstração a cada inicialização (deploy)                |
+| api             | `LLM_MODE`              | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)             |
+| api             | `GEMINI_API_KEY`        | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`               |
+| api             | `LLM_MODEL`             | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini` |
+| api             | `TICKETS_SERVICE_URL`   | Endereço do serviço de chamados                                                        |
+| api             | `TICKETS_SERVICE_TOKEN` | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`       |
+| tickets-service | `PORT`                  | Porta HTTP do serviço de chamados                                                      |
+| tickets-service | `DATABASE_URL`          | Banco SQLite do serviço (`file:./data/tickets.db`)                                     |
+| tickets-service | `SERVICE_TOKEN`         | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`             |
+| tickets-service | `FAILURE_RATE`          | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável    |
+| tickets-service | `SEED_ON_START`         | `true` recria os dados de demonstração a cada inicialização (deploy)                   |
+| web             | `API_PROXY_TARGET`      | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                   |
 
-Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o Claude nem gera custo, qualquer que seja o seu `.env`.
+Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o modelo real nem gasta a cota gratuita, qualquer que seja o seu `.env`.
 
 ### Sistema de chamados instável (simulado)
 
@@ -103,14 +105,15 @@ O deploy é no [Railway](https://railway.com), configurado em [railway.json](rai
 - **Health check** em `/api/health`; reinício automático em caso de falha.
 - **Deploy contínuo a partir da `main`**, que só recebe merge da `develop`.
 
-**Chaves protegidas:** a chave da Anthropic existe só nas variáveis do serviço no Railway (`LLM_MODE=anthropic`, `ANTHROPIC_API_KEY`, `LLM_MODEL`). Nunca está no código nem no front.
+**Chaves protegidas:** a chave do Gemini existe só nas variáveis do serviço no Railway (`LLM_MODE=gemini`, `GEMINI_API_KEY`, `LLM_MODEL`). Nunca está no código nem no front.
 
-**Uso limitado contra abuso e custo inesperado** (o login aceita qualquer senha, por requisito do desafio):
+**Uso limitado contra abuso** (o login aceita qualquer senha, por requisito do desafio). Com o Gemini no plano gratuito não há gasto possível; os limites protegem a cota gratuita:
 
-- até 30 mensagens por hora por IP e 500 mensagens por dia no total, respondendo `429` acima disso;
-- mensagens de até 2.000 caracteres e corpo de até 64 KB;
-- esforço de raciocínio baixo no modelo (`effort: low`);
-- limite de gasto configurado no console da Anthropic e no Railway.
+- até 30 mensagens por hora por funcionário e 150 mensagens por dia no total, respondendo `429` acima disso;
+- até 20 tentativas de login por minuto por IP;
+- mensagens de até 2.000 caracteres e corpo de até 16 KB;
+- raciocínio baixo no modelo (`thinkingLevel: low`), para gastar menos cota por mensagem;
+- erros do modelo nunca chegam crus ao navegador: o funcionário vê uma mensagem amigável, e a cota esgotada vira um aviso claro.
 
 _O serviço de chamados (`tickets-service`) entra no deploy quando a api passar a usá-lo._
 
@@ -134,7 +137,7 @@ Cada decisão tem um registro curto com contexto, alternativas descartadas e con
 - **Transparência em todo turno** ([ADR-0006](docs/decisions/0006-turno-em-duas-etapas.md)): um classificador registra o que foi entendido, com confiança e justificativa, antes de o agent agir.
 - **TypeScript nativo no Node 24** ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)): os servidores rodam direto do código-fonte, sem etapa de build.
 - **SQLite e Railway** ([ADR-0003](docs/decisions/0003-sqlite-e-railway.md)): persistência sem Docker localmente e deploy com disco persistente.
-- **Claude Haiku** ([ADR-0008](docs/decisions/0008-modelo-claude-haiku.md)): rápido e barato, bom em tool use.
+- **Gemini no plano gratuito** ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)): custo zero para um desafio sem orçamento, com tools e saída estruturada. Substituiu o Claude Haiku, a escolha inicial ([ADR-0008](docs/decisions/0008-modelo-claude-haiku.md)), que exigiria crédito pago.
 
 _Seções a completar ao longo do desenvolvimento: como o agent decide, como a qualidade das decisões foi garantida, segurança, trade-offs e custo por conversa._
 

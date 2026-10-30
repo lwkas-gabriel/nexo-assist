@@ -15,7 +15,11 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 
 ### Decisões tomadas com o usuário
 - **Stack:** React + Vite (web) · Hono + Mastra (api) · tickets-service separado · SQLite. **Deploy no Railway.**
-- **LLM:** Anthropic, Claude Haiku (`claude-haiku-5-5`) via `@ai-sdk/anthropic` no Mastra. Conferir id/preço atuais na documentação na T11.
+- **LLM:** **Gemini no plano gratuito do Google** (`gemini-3.5-flash-lite`, configurável), pelo roteador de modelos do Mastra ([ADR-0010](decisions/0010-gemini-plano-gratuito.md)). Troca feita em 30/10/2026, substituindo o Claude Haiku ([ADR-0008](decisions/0008-modelo-claude-haiku.md)):
+  - **Por quê:** é um desafio técnico, sem orçamento; o dono do projeto decidiu não gastar nada com o modelo. O PRD aceita qualquer provedor, e o plano gratuito do Gemini não exige cartão e suporta tools e saída estruturada.
+  - **O que mudou:** só a config (`LLM_MODE=gemini`, `GEMINI_API_KEY`, `LLM_MODEL`) e a criação do modelo; o agent, as tools e o modo `mock` não mudaram. O teto diário caiu de 500 para 150 mensagens, para caber na cota gratuita.
+  - **Cuidados:** no plano gratuito, o Google pode usar o conteúdo para melhorar os produtos dele (aceitável, porque os dados são fictícios); há cota por minuto e por dia, e a cota esgotada vira um aviso claro ao funcionário.
+  - **Achado na troca:** o erro bruto do provedor (mensagem e stack trace) chegava ao navegador; foi corrigido para qualquer provedor.
 - **Prazo:** sem prazo fixo → plano completo (T01–T29), incluindo "Meu perfil" e avaliação roteirizada.
 - **Branches:** trabalho sempre na `develop`, nunca direto na `main`. A `main` só recebe merge da `develop` (via PR) quando você decidir. O CI roda em push/PR para `develop` e `main`; o deploy contínuo do Railway sai da `main`, então a produção só muda quando você promover a `develop`. Também vira regra no CLAUDE.md.
 - **Segredos:** nenhuma chave ou variável de ambiente exposta no código (detalhes em 5.2). Vira regra no CLAUDE.md, com verificação no CI (gitleaks + lint).
@@ -105,7 +109,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 | A10 | Feriados no cálculo de dias úteis | Considerar feriados? | Ignorar feriados (documentado) |
 | A11 | Números da tela de login (8 s, 72%, 6 analistas) | Reais ou ilustrativos? | Calcular a partir do banco quando barato; senão marcar como ilustrativo |
 | A12 | "Aprovado" (REQ-10442) conta como aberto? Mock lista como aberto | Lista de status? | Abertos: Novo, Em andamento, Aguardando analista, Aprovado, Em atendimento (quando o analista assume, tela 5), Reaberto. Fechados: Resolvido, Cancelado. Transições em 11.3 |
-| A13 | Deploy público + "qualquer senha" = qualquer um gasta tokens | Ok expor assim? | Rate limit por usuário/IP + teto diário global + limite de gasto no provedor |
+| A13 | Deploy público + "qualquer senha" = qualquer um gasta tokens | Ok expor assim? | Rate limit por usuário/IP + teto diário global; com o Gemini no plano gratuito (ADR-0010), não há gasto possível: o pior caso é a cota acabar e o funcionário ver um aviso |
 | A15 | RN09 diz que só quem abriu vê o chamado, mas o console mostra ao analista os chamados do funcionário | Analistas são exceção à RN09? | Sim: a RN09 vale entre funcionários; papel `analyst` vê chamados de quem está no console, e o acesso fica registrado |
 | A16 | Duplicidade entre funcionários diferentes (pane coletiva) | Verificar duplicidade fora do próprio funcionário? | Só entre chamados do próprio funcionário; pane coletiva → impacto equipe/empresa → Crítica → transferência (R14) |
 | A17 | O que conta como "atualização" que zera o prazo | Complemento do funcionário zera o SLA? | Não: conta a última atualização da equipe de TI, ou a abertura (R15) |
@@ -144,7 +148,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T10b Testes de segurança: funcionário A não acessa chamado/conversa de B; funcionário não acessa console; tickets-service recusa chamada sem token (RN09, RT11) — **concluída** (`apps/api/src/security.test.ts`). Para testar o acesso ao console, a primeira rota dele (lista de conversas) foi antecipada da T23.
 
 **Fase 3 — Agent**
-- [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10)
+- [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito; conferir no AI Studio a cota real do projeto e recalibrar o teto diário (ADR-0010)
 - [ ] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05)
 - [ ] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08)
 - [ ] T14 Classificador estruturado (etapa 1) + registro de decisão por turno + confiança ajustada por sinais (RF04, RF05, R05, R09)
@@ -170,7 +174,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [ ] T28 E2E Playwright: (1) abrir chamado com rascunho e confirmação; (2) transferência → analista assume → devolve (LLM mockado no E2E)
 
 **Fase 4**
-- [ ] T29 Revisão final do README + seção de IA a partir do AI_LOG.md + **deploy no Railway** (adiado da T02b: projeto, variáveis, domínio, limite de gasto e link no README) com o Claude Haiku
+- [ ] T29 Revisão final do README + seção de IA a partir do AI_LOG.md + **deploy no Railway** (adiado da T02b: projeto, variáveis, domínio e link no README) com o Gemini no plano gratuito
 
 ## 7.1 README (em português), foco em **como rodar** e **principais decisões**
 O esqueleto nasce na T01 e é atualizado a cada tarefa que mude como rodar ou alguma decisão. Assim ele nunca fica para o fim.
@@ -179,7 +183,7 @@ O esqueleto nasce na T01 e é atualizado a cada tarefa que mude como rodar ou al
 3. **Principais decisões, com o porquê de cada uma:**
    - Arquitetura: web / api+agent / tickets-service, com diagrama simples.
    - Por que Vite + Hono, por que SQLite e por que Railway.
-   - Por que Claude Haiku: latência e custo por conversa.
+   - Por que Gemini no plano gratuito: custo zero, tools e saída estruturada; e as limitações de cota e de uso dos dados (ADR-0010).
    - Como o agent decide: o LLM interpreta e o código garante as regras (confirmação, pausa e privacidade garantidas pela estrutura).
    - Como funciona a transparência (registro de decisão e confiança).
    - Como garanti a qualidade das decisões: testes de regra, avaliação roteirizada e E2E.

@@ -186,3 +186,19 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Duplicação evitada:** a IA chegou a copiar o arquivo de validação HTTP da api para o tickets-service e desfez na mesma hora, movendo-o para o `shared`.
 - **O E2E pegou o que os testes unitários não pegariam:** a forma curta do proxy do Vite reescreve o cabeçalho Host, e a proteção contra CSRF recusava o login no desenvolvimento. A correção mantém o Host original, reproduzindo a mesma origem da produção.
 - **Ferramenta:** heredocs do shell falharam algumas vezes com textos longos; a IA passou a escrever arquivos sempre com a ferramenta de arquivos.
+
+---
+
+## Troca de provedor: Claude Haiku → Gemini no plano gratuito (30/10/2026)
+
+### 35. Decisão do usuário: custo zero
+- **Usuário decidiu** não gastar nada com o modelo ("é um desafio, não vejo necessidade de gastar") e pediu a troca para o plano gratuito do Gemini, com o mapeamento do impacto antes e a troca documentada no plano.
+- **IA mapeou primeiro:** a troca só tocava a config, a criação do modelo, o `.env.example` e os testes da config; o agent, as tools e o modo de teste não mudavam. O resto era documentação (ADR, plano, README).
+- **IA pesquisou antes de escolher:** pela documentação oficial, o Google recomenda o 3.8 Flash e o 3.5 Flash-Lite para projetos novos, ambos com tools e saída estruturada. Os limites exatos do plano gratuito não estão na documentação (são vistos por projeto no AI Studio); uma fonte de terceiros, **não verificada**, indica cerca de 20 requisições por dia no 3.8 Flash e 500 no Flash-Lite. Como um agent faz de 2 a 3 chamadas por mensagem, a IA escolheu o **3.5 Flash-Lite** como padrão (configurável) e baixou o teto diário de 500 para 150 mensagens. Tudo isso, incluindo o que não foi verificado, está no ADR-0010.
+- **IA provou a rota sem gastar:** chamou o Gemini com uma chave propositalmente inválida para confirmar que o Mastra encaminha o modelo ao Google, mesmo sem conhecer o 3.5 Flash-Lite no registro interno dele.
+
+### 36. Achado de segurança durante a troca
+- **O mesmo teste revelou** que, quando o modelo falha, o erro bruto do provedor (mensagem e stack trace com caminhos do servidor) chegava ao navegador. O problema valia para qualquer provedor, inclusive o Claude.
+- **Correção:** o detalhe vai só para o log do servidor; o funcionário vê uma mensagem amigável; a cota esgotada (429, inclusive depois das novas tentativas, quando o AI SDK embrulha o erro num `RetryError`) vira um aviso claro. Um teste com um modelo que falha prova que nada vaza.
+- **Ajuste ligado à cota:** o modelo passou a ter só uma nova tentativa (o padrão do AI SDK eram duas, cerca de 6 s de espera), para o aviso de cota esgotada não demorar.
+- **Correção de documentação aproveitada:** o README ainda dizia "30 mensagens por hora por IP" e "corpo de até 64 KB", desatualizados desde a T10.

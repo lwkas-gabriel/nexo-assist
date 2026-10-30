@@ -12,5 +12,6 @@ Para mudar uma decisão, escreva um ADR novo que substitui o anterior e marque o
 | [0005](0005-llm-interpreta-codigo-garante.md) | O LLM interpreta, o código garante as regras | Aceita |
 | [0006](0006-turno-em-duas-etapas.md) | Turno em duas etapas + ações determinísticas para cliques | Aceita |
 | [0007](0007-sessoes-de-chat.md) | Sessão de 30 mensagens com herança de contexto | Aceita |
-| [0008](0008-modelo-claude-haiku.md) | Claude Haiku como modelo do agent | Aceita, a validar na T11 |
+| [0008](0008-modelo-claude-haiku.md) | Claude Haiku como modelo do agent | Substituída pelo ADR-0010 |
 | [0009](0009-migracoes-em-sql-puro.md) | Migrações em SQL puro, Drizzle só para consultas | Aceita |
+| [0010](0010-gemini-plano-gratuito.md) | Gemini no plano gratuito como modelo do agent | Aceita |
