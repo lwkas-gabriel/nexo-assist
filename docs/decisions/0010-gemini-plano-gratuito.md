@@ -14,12 +14,16 @@ O Google oferece um plano gratuito da API do Gemini, sem cartão, com modelos qu
   - A outra recomendação, o `gemini-3.8-flash`, é mais capaz, mas no plano gratuito tem uma cota diária bem menor. Um agent usa de 2 a 3 chamadas por mensagem, então ele se esgotaria rápido.
 - **Raciocínio baixo** (`thinkingLevel: "low"`): menos tokens por chamada e respostas mais rápidas.
 - **Uma única nova tentativa do modelo** (`maxRetries: 1`): cobre uma falha passageira sem atrasar demais o aviso quando a cota por minuto acaba.
-- **Teto de 150 mensagens por dia na api** (era 500), para caber na cota gratuita diária, que é por projeto do Google.
+- **Tetos globais de mensagens calibrados pela cota real**, somando todos os usuários. A cota gratuita do `gemini-3.5-flash-lite` no projeto, conferida no AI Studio em 30/10/2026, é de **15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia**. Como cada mensagem usa até 3 chamadas ao modelo (busca, resposta e, a partir da T14, o classificador):
+  - **5 mensagens por minuto** (15 ÷ 3);
+  - **150 mensagens por dia** (500 ÷ 3 ≈ 166, com folga). Antes da troca, o teto diário era 500.
+
+  Os dois valores ficam no `.env` (`CHAT_MESSAGES_PER_MINUTE` e `CHAT_MESSAGES_PER_DAY`), porque dependem da cota da conta, e não de uma regra do produto. A api recusa o excesso antes de chamar o modelo, sem gastar cota à toa.
 - **Cota esgotada (HTTP 429)** vira um aviso claro ao funcionário ("o assistente atingiu o limite de uso..."), nunca o erro bruto do provedor.
 - **Nada muda no agent em si:** o modo `mock` continua igual, e o CI e os testes E2E seguem sem chamar o modelo real.
 
 ## O que não está verificado
-- **Limites exatos do plano gratuito por modelo:** a documentação oficial manda consultá-los no AI Studio, por projeto (a cota diária reinicia à meia-noite, horário do Pacífico). Uma fonte de terceiros, não verificada, indica cerca de 500 requisições por dia no Flash-Lite e 20 no 3.8 Flash. O teto de 150 mensagens por dia parte dessa estimativa e deve ser ajustado quando o limite real do projeto for conferido.
+- **Cota do `gemini-3.8-flash`:** não foi conferida no AI Studio. Uma fonte de terceiros, não verificada, indica cerca de 20 requisições por dia. A cota do Flash-Lite, que é o modelo em uso, foi conferida (ver acima). A cota diária reinicia à meia-noite, no horário do Pacífico.
 - **Qualidade das decisões do agent com o Flash-Lite:** será medida na T11 e na avaliação roteirizada da T27. Se ficar aquém, a troca de modelo é só a variável `LLM_MODEL`.
 
 ## Alternativas descartadas

@@ -27,7 +27,7 @@ GEMINI_API_KEY=sua-chave   # nunca commite este valor
 LLM_MODEL=gemini-3.5-flash-lite
 ```
 
-No plano gratuito há cota por minuto e por dia; quando ela acaba, o chat mostra um aviso e volta a funcionar depois. O Google pode usar o conteúdo do plano gratuito para melhorar os produtos dele, o que é aceitável aqui porque os dados são fictícios ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)).
+No plano gratuito há cota por minuto e por dia (no `gemini-3.5-flash-lite`: 15 requisições por minuto e 500 por dia); quando ela acaba, o chat mostra um aviso e volta a funcionar depois. O Google pode usar o conteúdo do plano gratuito para melhorar os produtos dele, o que é aceitável aqui porque os dados são fictícios ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)).
 
 > **Windows:** clone o repositório num caminho curto (ex.: `C:\dev\nexo-assist`). Em pastas muito profundas, o pnpm ultrapassa o limite de 260 caracteres de caminho do Windows e falha com "O sistema não pode encontrar o caminho especificado". Outra saída é habilitar caminhos longos no Windows.
 
@@ -44,23 +44,25 @@ No plano gratuito há cota por minuto e por dia; quando ela acaba, o chat mostra
 
 Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
 
-| App             | Variável                | Para quê                                                                               |
-| --------------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| api             | `PORT`                  | Porta HTTP da api                                                                      |
-| api             | `DATABASE_URL`          | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)             |
-| api             | `COOKIE_SECURE`         | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local             |
-| api             | `SEED_ON_START`         | `true` apaga as conversas de demonstração a cada inicialização (deploy)                |
-| api             | `LLM_MODE`              | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)             |
-| api             | `GEMINI_API_KEY`        | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`               |
-| api             | `LLM_MODEL`             | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini` |
-| api             | `TICKETS_SERVICE_URL`   | Endereço do serviço de chamados                                                        |
-| api             | `TICKETS_SERVICE_TOKEN` | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`       |
-| tickets-service | `PORT`                  | Porta HTTP do serviço de chamados                                                      |
-| tickets-service | `DATABASE_URL`          | Banco SQLite do serviço (`file:./data/tickets.db`)                                     |
-| tickets-service | `SERVICE_TOKEN`         | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`             |
-| tickets-service | `FAILURE_RATE`          | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável    |
-| tickets-service | `SEED_ON_START`         | `true` recria os dados de demonstração a cada inicialização (deploy)                   |
-| web             | `API_PROXY_TARGET`      | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                   |
+| App             | Variável                   | Para quê                                                                                     |
+| --------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
+| api             | `PORT`                     | Porta HTTP da api                                                                            |
+| api             | `DATABASE_URL`             | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)                   |
+| api             | `COOKIE_SECURE`            | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local                   |
+| api             | `SEED_ON_START`            | `true` apaga as conversas de demonstração a cada inicialização (deploy)                      |
+| api             | `LLM_MODE`                 | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)                   |
+| api             | `GEMINI_API_KEY`           | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`                     |
+| api             | `LLM_MODEL`                | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`       |
+| api             | `CHAT_MESSAGES_PER_MINUTE` | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (5 no plano gratuito) |
+| api             | `CHAT_MESSAGES_PER_DAY`    | Teto global de mensagens ao agent por dia, dentro da cota do modelo (150 no plano gratuito)  |
+| api             | `TICKETS_SERVICE_URL`      | Endereço do serviço de chamados                                                              |
+| api             | `TICKETS_SERVICE_TOKEN`    | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`             |
+| tickets-service | `PORT`                     | Porta HTTP do serviço de chamados                                                            |
+| tickets-service | `DATABASE_URL`             | Banco SQLite do serviço (`file:./data/tickets.db`)                                           |
+| tickets-service | `SERVICE_TOKEN`            | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`                   |
+| tickets-service | `FAILURE_RATE`             | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável          |
+| tickets-service | `SEED_ON_START`            | `true` recria os dados de demonstração a cada inicialização (deploy)                         |
+| web             | `API_PROXY_TARGET`         | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                         |
 
 Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o modelo real nem gasta a cota gratuita, qualquer que seja o seu `.env`.
 
@@ -109,7 +111,7 @@ O deploy é no [Railway](https://railway.com), configurado em [railway.json](rai
 
 **Uso limitado contra abuso** (o login aceita qualquer senha, por requisito do desafio). Com o Gemini no plano gratuito não há gasto possível; os limites protegem a cota gratuita:
 
-- até 30 mensagens por hora por funcionário e 150 mensagens por dia no total, respondendo `429` acima disso;
+- até 30 mensagens por hora por funcionário e, somando todos, 5 por minuto e 150 por dia, respondendo `429` acima disso. Os tetos globais saem da cota gratuita do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 3 chamadas ao modelo por mensagem);
 - até 20 tentativas de login por minuto por IP;
 - mensagens de até 2.000 caracteres e corpo de até 16 KB;
 - raciocínio baixo no modelo (`thinkingLevel: low`), para gastar menos cota por mensagem;

@@ -202,3 +202,8 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Correção:** o detalhe vai só para o log do servidor; o funcionário vê uma mensagem amigável; a cota esgotada (429, inclusive depois das novas tentativas, quando o AI SDK embrulha o erro num `RetryError`) vira um aviso claro. Um teste com um modelo que falha prova que nada vaza.
 - **Ajuste ligado à cota:** o modelo passou a ter só uma nova tentativa (o padrão do AI SDK eram duas, cerca de 6 s de espera), para o aviso de cota esgotada não demorar.
 - **Correção de documentação aproveitada:** o README ainda dizia "30 mensagens por hora por IP" e "corpo de até 64 KB", desatualizados desde a T10.
+
+### 37. Cota real conferida e limites calibrados
+- **Usuário conferiu no AI Studio** a cota gratuita do `gemini-3.5-flash-lite` no projeto: 15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia. Os contadores já mostravam uma requisição, confirmando que a chave dele funcionou.
+- **Ajuste da IA:** o teto diário de 150 mensagens estava certo, mas o limite por minuto era o mais apertado, e nada no projeto o respeitava. Entrou um teto global de 5 mensagens por minuto (15 ÷ 3 chamadas por mensagem), para a api recusar antes de gastar cota.
+- **Decisão de desenho:** os dois tetos globais passaram para o `.env`, porque dependem da cota da conta, e não de uma regra do produto. Isso também evita que os testes E2E em paralelo esbarrem no limite, já que eles usam tetos altos. O limite de 30 mensagens por hora por funcionário continua no código, como regra do produto.

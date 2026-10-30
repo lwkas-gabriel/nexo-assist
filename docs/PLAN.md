@@ -17,7 +17,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - **Stack:** React + Vite (web) · Hono + Mastra (api) · tickets-service separado · SQLite. **Deploy no Railway.**
 - **LLM:** **Gemini no plano gratuito do Google** (`gemini-3.5-flash-lite`, configurável), pelo roteador de modelos do Mastra ([ADR-0010](decisions/0010-gemini-plano-gratuito.md)). Troca feita em 30/10/2026, substituindo o Claude Haiku ([ADR-0008](decisions/0008-modelo-claude-haiku.md)):
   - **Por quê:** é um desafio técnico, sem orçamento; o dono do projeto decidiu não gastar nada com o modelo. O PRD aceita qualquer provedor, e o plano gratuito do Gemini não exige cartão e suporta tools e saída estruturada.
-  - **O que mudou:** só a config (`LLM_MODE=gemini`, `GEMINI_API_KEY`, `LLM_MODEL`) e a criação do modelo; o agent, as tools e o modo `mock` não mudaram. O teto diário caiu de 500 para 150 mensagens, para caber na cota gratuita.
+  - **O que mudou:** só a config (`LLM_MODE=gemini`, `GEMINI_API_KEY`, `LLM_MODEL`) e a criação do modelo; o agent, as tools e o modo `mock` não mudaram. Os tetos globais de mensagens passaram para o `.env`, calibrados pela cota gratuita conferida no AI Studio (15 req/min e 500 req/dia): 5 mensagens por minuto e 150 por dia.
   - **Cuidados:** no plano gratuito, o Google pode usar o conteúdo para melhorar os produtos dele (aceitável, porque os dados são fictícios); há cota por minuto e por dia, e a cota esgotada vira um aviso claro ao funcionário.
   - **Achado na troca:** o erro bruto do provedor (mensagem e stack trace) chegava ao navegador; foi corrigido para qualquer provedor.
 - **Prazo:** sem prazo fixo → plano completo (T01–T29), incluindo "Meu perfil" e avaliação roteirizada.
@@ -148,7 +148,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T10b Testes de segurança: funcionário A não acessa chamado/conversa de B; funcionário não acessa console; tickets-service recusa chamada sem token (RN09, RT11) — **concluída** (`apps/api/src/security.test.ts`). Para testar o acesso ao console, a primeira rota dele (lista de conversas) foi antecipada da T23.
 
 **Fase 3 — Agent**
-- [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito; conferir no AI Studio a cota real do projeto e recalibrar o teto diário (ADR-0010)
+- [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito (cota já conferida e tetos calibrados, ADR-0010)
 - [ ] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05)
 - [ ] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08)
 - [ ] T14 Classificador estruturado (etapa 1) + registro de decisão por turno + confiança ajustada por sinais (RF04, RF05, R05, R09)
