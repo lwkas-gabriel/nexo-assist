@@ -10,6 +10,8 @@ const baseEnv = {
   SEED_ON_START: "false",
   TICKETS_SERVICE_URL: "http://localhost:3001",
   TICKETS_SERVICE_TOKEN: randomBytes(32).toString("hex"),
+  CHAT_MESSAGES_PER_MINUTE: "5",
+  CHAT_MESSAGES_PER_DAY: "150",
 };
 
 describe("loadConfig", () => {

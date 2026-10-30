@@ -13,6 +13,9 @@ export function testConfig(overrides: Partial<ContainerConfig> = {}): ContainerC
     DATABASE_URL: ":memory:",
     TICKETS_SERVICE_URL: "http://tickets.invalid",
     TICKETS_SERVICE_TOKEN: randomBytes(32).toString("hex"),
+    // Altos o bastante para não interferir; os limites têm testes próprios.
+    CHAT_MESSAGES_PER_MINUTE: 1000,
+    CHAT_MESSAGES_PER_DAY: 1000,
     ...overrides,
   } as ContainerConfig;
 }

@@ -55,6 +55,9 @@ export default defineConfig({
         SEED_ON_START: "false",
         TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
         TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
+        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo.
+        CHAT_MESSAGES_PER_MINUTE: "1000",
+        CHAT_MESSAGES_PER_DAY: "1000",
       },
       url: `http://localhost:${E2E_API_PORT}/api/health`,
       reuseExistingServer: false,

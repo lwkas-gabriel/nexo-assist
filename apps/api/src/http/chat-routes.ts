@@ -18,9 +18,11 @@ const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 });
 
+/** Por funcionário, e para todos juntos dentro da cota gratuita do modelo (ADR-0010). */
 export type ChatLimits = {
   perUser: RateLimiter;
-  global: RateLimiter;
+  globalPerMinute: RateLimiter;
+  globalPerDay: RateLimiter;
 };
 
 type ChatRoutesDependencies = {
@@ -47,7 +49,11 @@ export function createChatRoutes({ chatService, chatLimits }: ChatRoutesDependen
     async (c) => {
       const employee = currentUser(c, "employee");
       // Conta antes de validar: requisições inválidas em massa também são abuso.
-      if (!chatLimits.perUser.tryConsume(employee.id) || !chatLimits.global.tryConsume("global")) {
+      const withinLimits =
+        chatLimits.perUser.tryConsume(employee.id) &&
+        chatLimits.globalPerMinute.tryConsume("global") &&
+        chatLimits.globalPerDay.tryConsume("global");
+      if (!withinLimits) {
         throw new AppError(
           "RATE_LIMITED",
           "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",

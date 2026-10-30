@@ -20,15 +20,13 @@ import type { TicketGateway } from "./ports/ticket-gateway.ts";
 const KNOWLEDGE_DIRECTORY = join(import.meta.dirname, "..", "knowledge");
 
 /**
- * Proteção de custo do deploy público: o login aceita qualquer senha (requisito do desafio).
- * O teto diário vale para todos juntos.
+ * Proteção do deploy público: o login aceita qualquer senha (requisito do desafio).
+ * Os tetos globais de mensagens vêm da config (dependem da cota do provedor).
  */
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
-// Cabe na cota gratuita do Gemini por projeto e por dia: cada mensagem usa de 2 a 3 chamadas (ADR-0010).
-const CHAT_MESSAGES_PER_DAY = 150;
 const LOGINS_PER_IP_PER_MINUTE = 20;
 
 /** O que o container precisa da config: banco, modelo e acesso ao serviço de chamados. */
@@ -36,6 +34,8 @@ export type ContainerConfig = LlmConfig & {
   DATABASE_URL: string;
   TICKETS_SERVICE_URL: string;
   TICKETS_SERVICE_TOKEN: string;
+  CHAT_MESSAGES_PER_MINUTE: number;
+  CHAT_MESSAGES_PER_DAY: number;
 };
 
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
@@ -79,7 +79,16 @@ export async function createContainer(
         windowMs: HOUR_MS,
         clock,
       }),
-      global: createRateLimiter({ limit: CHAT_MESSAGES_PER_DAY, windowMs: DAY_MS, clock }),
+      globalPerMinute: createRateLimiter({
+        limit: config.CHAT_MESSAGES_PER_MINUTE,
+        windowMs: MINUTE_MS,
+        clock,
+      }),
+      globalPerDay: createRateLimiter({
+        limit: config.CHAT_MESSAGES_PER_DAY,
+        windowMs: DAY_MS,
+        clock,
+      }),
     },
     loginLimiter: createRateLimiter({
       limit: LOGINS_PER_IP_PER_MINUTE,

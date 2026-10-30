@@ -116,6 +116,22 @@ describe("chat do funcionário", () => {
     expect(await blocked.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 
+  it("ADR-0010: o teto por minuto vale para todos juntos (protege a cota do modelo)", async () => {
+    const container = await createContainer(testConfig({ CHAT_MESSAGES_PER_MINUTE: 1 }));
+    const { app, login } = await createTestApp(container);
+    const sendAs = async (email: string, text: string) =>
+      app.request("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: await login(email) },
+        body: JSON.stringify({ text }),
+      });
+
+    await (await sendAs(ANA_EMAIL, "oi")).text();
+    const otherEmployee = await sendAs("bruno.tavares@nexo.com.br", "oi");
+
+    expect(otherEmployee.status).toBe(429);
+  });
+
   it("R06: um turno por vez; outra mensagem enquanto o agent responde recebe 'aguarde'", async () => {
     const container = await createContainer(testConfig());
     const ana = await container.authService.login({
