@@ -171,6 +171,38 @@ describe("idempotência (R01)", () => {
 
     expect(response.status).toBe(409);
   });
+
+  it("R01: duas escritas simultâneas com a mesma chave criam um único chamado", async () => {
+    const { post, countAnaTickets } = await createTestApp();
+    const key = randomUUID();
+
+    const responses = await Promise.all([
+      post("/tickets", { ownerId: ANA, draft }, key),
+      post("/tickets", { ownerId: ANA, draft }, key),
+    ]);
+
+    // Uma executa; a outra recebe a resposta guardada ou 503 (ainda em andamento, o retry resolve).
+    expect(responses.map((response) => response.status).sort()).toEqual(
+      expect.arrayContaining([201]),
+    );
+    expect(responses.every((response) => [201, 503].includes(response.status))).toBe(true);
+    expect(await countAnaTickets()).toBe(1);
+  });
+
+  it("recusa a mesma chave com outro conteúdo, em vez de devolver o resultado antigo", async () => {
+    const { post, countAnaTickets } = await createTestApp();
+    const key = randomUUID();
+    await post("/tickets", { ownerId: ANA, draft }, key);
+
+    const changed = await post(
+      "/tickets",
+      { ownerId: ANA, draft: { ...draft, title: "Outro título" } },
+      key,
+    );
+
+    expect(changed.status).toBe(409);
+    expect(await countAnaTickets()).toBe(1);
+  });
 });
 
 describe("legado instável (simulação de falhas)", () => {

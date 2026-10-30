@@ -47,7 +47,9 @@ export const idempotencyKeys = sqliteTable("idempotency_keys", {
   key: text("key").primaryKey(),
   method: text("method").notNull(),
   path: text("path").notNull(),
+  /** 0 enquanto a escrita está em andamento; depois, o status HTTP da resposta guardada. */
   status: integer("status").notNull(),
   body: text("body").notNull(),
+  requestHash: text("request_hash"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
