@@ -3,7 +3,7 @@
  *
  * Versão mínima do esqueleto (T02b): responde dúvidas pela central de ajuda.
  * As regras completas do service desk (Anexo A) entram na T11.
- * O texto é fixo (sem data, nome ou id) para o prompt caching funcionar.
+ * O texto é fixo (sem data, nome ou id) para o cache de prompt do provedor aproveitar o prefixo repetido.
  */
 export const NEXO_INSTRUCTIONS = `Você é o Nexo Assist, o assistente do service desk de TI da Nexo.
 

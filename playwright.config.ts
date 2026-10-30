@@ -5,7 +5,7 @@ const isCI = Boolean(process.env.CI);
 
 /**
  * Os testes sobem servidores próprios, em portas separadas do `pnpm dev`, sempre com o modelo
- * falso (LLM_MODE=mock): rodar os testes nunca chama o Claude de verdade nem gera custo.
+ * falso (LLM_MODE=mock): rodar os testes nunca chama o modelo real nem gasta a cota gratuita.
  */
 const E2E_TICKETS_PORT = "3101";
 const E2E_API_PORT = "3100";

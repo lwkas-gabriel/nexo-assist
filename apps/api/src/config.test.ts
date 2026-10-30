@@ -13,31 +13,31 @@ const baseEnv = {
 };
 
 describe("loadConfig", () => {
-  it("no modo mock, sobe sem chave da Anthropic", () => {
+  it("no modo mock, sobe sem chave do Gemini", () => {
     const config = loadConfig({ ...baseEnv, LLM_MODE: "mock" });
 
     expect(config).toMatchObject({ PORT: 3000, LLM_MODE: "mock", COOKIE_SECURE: false });
   });
 
-  it("no modo anthropic, exige a chave da API", () => {
+  it("no modo gemini, exige a chave da API", () => {
     expect(() =>
-      loadConfig({ ...baseEnv, LLM_MODE: "anthropic", LLM_MODEL: "claude-haiku-5-5" }),
-    ).toThrowError(/ANTHROPIC_API_KEY/);
+      loadConfig({ ...baseEnv, LLM_MODE: "gemini", LLM_MODEL: "gemini-3.5-flash-lite" }),
+    ).toThrowError(/GEMINI_API_KEY/);
   });
 
-  it("no modo anthropic, rejeita chave vazia (como vem do .env.example)", () => {
+  it("no modo gemini, rejeita chave vazia (como vem do .env.example)", () => {
     expect(() =>
       loadConfig({
         ...baseEnv,
-        LLM_MODE: "anthropic",
-        ANTHROPIC_API_KEY: "",
-        LLM_MODEL: "claude-haiku-5-5",
+        LLM_MODE: "gemini",
+        GEMINI_API_KEY: "",
+        LLM_MODEL: "gemini-3.5-flash-lite",
       }),
-    ).toThrowError(/ANTHROPIC_API_KEY/);
+    ).toThrowError(/GEMINI_API_KEY/);
   });
 
-  it("rejeita modo desconhecido", () => {
-    expect(() => loadConfig({ ...baseEnv, LLM_MODE: "openai" })).toThrowError(/LLM_MODE/);
+  it("rejeita modo desconhecido (inclusive o anterior, anthropic)", () => {
+    expect(() => loadConfig({ ...baseEnv, LLM_MODE: "anthropic" })).toThrowError(/LLM_MODE/);
   });
 
   it("exige o token do serviço de chamados", () => {

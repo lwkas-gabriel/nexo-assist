@@ -27,7 +27,8 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
-const CHAT_MESSAGES_PER_DAY = 500;
+// Cabe na cota gratuita do Gemini por projeto e por dia: cada mensagem usa de 2 a 3 chamadas (ADR-0010).
+const CHAT_MESSAGES_PER_DAY = 150;
 const LOGINS_PER_IP_PER_MINUTE = 20;
 
 /** O que o container precisa da config: banco, modelo e acesso ao serviço de chamados. */
