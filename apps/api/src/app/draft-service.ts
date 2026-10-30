@@ -266,8 +266,9 @@ function missingFields(input: NewTicketInput): string[] {
 }
 
 /**
- * Rascunho como o agent e o card da tela mostram. O prazo da primeira resposta é calculado na hora
- * da exibição: se a confirmação vier depois, o valor mostrado acompanha (R35).
+ * Rascunho como o agent e o card da tela mostram. Enquanto pendente, o prazo da primeira resposta
+ * é calculado na hora da exibição: se a confirmação vier depois, o valor acompanha (R35). Depois de
+ * confirmado, fica o prazo da hora da confirmação, quando o chamado passou a existir.
  */
 export function toDraftView(draft: Draft, now: Date) {
   const base = {
@@ -282,6 +283,7 @@ export function toDraftView(draft: Draft, now: Date) {
   }
 
   const { title, description, type, category, affected, priority } = draft.content;
+  const deadlineFrom = draft.status === "pending" ? now : draft.updatedAt;
   return {
     ...base,
     ticket: {
@@ -293,7 +295,7 @@ export function toDraftView(draft: Draft, now: Date) {
       priority: TICKET_PRIORITY_LABELS[priority],
       priorityReason: draft.priorityReason,
       slaRule: SLA_LABELS[priority],
-      firstResponseBy: formatBrasiliaDateTime(computeDeadline(priority, now)),
+      firstResponseBy: formatBrasiliaDateTime(computeDeadline(priority, deadlineFrom)),
     },
   };
 }

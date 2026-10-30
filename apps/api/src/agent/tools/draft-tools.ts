@@ -129,8 +129,13 @@ export function createDraftTools({ draftService }: { draftService: DraftService 
         });
         return {
           ok: true as const,
+          ticket: {
+            number: ticket.number,
+            title: ticket.title,
+            // Só chamado novo tem previsão própria; o complemento segue o prazo do chamado.
+            firstResponseBy: "ticket" in draft ? draft.ticket.firstResponseBy : null,
+          },
           draft,
-          ticket: { number: ticket.number, title: ticket.title },
         };
       } catch (error) {
         return toolFailure(error);

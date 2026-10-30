@@ -316,6 +316,18 @@ describe("editar e cancelar (R16)", () => {
     expect(fake.tickets).toHaveLength(0);
   });
 
+  it("R35: depois de confirmado, o prazo fica o da hora da confirmação", async () => {
+    const { proposeVpn, service, advanceMinutes } = await setup([]);
+    const number = proposedDraftNumber(await proposeVpn());
+    advanceMinutes(20);
+    await service.confirm({ employeeId: ANA, draftNumber: number });
+
+    advanceMinutes(60);
+    const later = await service.view({ employeeId: ANA, draftNumber: number });
+
+    expect(later).toMatchObject({ ticket: { firstResponseBy: "27/10, 14:03" } });
+  });
+
   it("R35: o prazo mostrado acompanha a hora em que o rascunho é exibido", async () => {
     const { proposeVpn, service, advanceMinutes } = await setup([]);
     const number = proposedDraftNumber(await proposeVpn());
