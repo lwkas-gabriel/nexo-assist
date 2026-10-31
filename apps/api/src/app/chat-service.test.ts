@@ -1,20 +1,10 @@
-import { DEMO_USERS } from "@nexo/shared/demo";
-import { systemClock } from "@nexo/shared/domain";
 import { APICallError, type UIMessageChunk } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { GENERIC_AGENT_ERROR_MESSAGE, QUOTA_EXCEEDED_MESSAGE } from "../agent/agent-errors.ts";
-import { createNexoMastra } from "../agent/nexo-agent.ts";
-import { createConversationStore } from "../db/conversation-store.ts";
-import { openDatabase } from "../db/database.ts";
 import type { MessageRow } from "../db/schema.ts";
-import { createDraftStore } from "../db/draft-store.ts";
-import { createHandoffStore } from "../db/handoff-store.ts";
-import { createUserStore } from "../db/user-store.ts";
-import { createFakeTicketGateway } from "../test-support.ts";
-import { createDraftService } from "./draft-service.ts";
-import { createHandoffService } from "./handoff-service.ts";
-import { createChatService, toAgentHistoryMessage } from "./chat-service.ts";
+import { createTestContainer } from "../test-support.ts";
+import { toAgentHistoryMessage } from "./chat-service.ts";
 
 /** Modelo que sempre falha como o provedor falharia (chave inválida, cota esgotada...). */
 function failingModel(statusCode: number, message: string) {
@@ -32,37 +22,11 @@ function failingModel(statusCode: number, message: string) {
 }
 
 async function chatChunksWith(model: MockLanguageModelV4): Promise<UIMessageChunk[]> {
-  const { db } = await openDatabase(":memory:");
-  const userStore = createUserStore(db);
-  await userStore.upsertAll(DEMO_USERS);
-  const employee = await userStore.findById("emp-ana-souza");
-  if (!employee) throw new Error("Ana não está nos dados de demonstração");
-
-  const { ticketGateway } = createFakeTicketGateway();
-  const draftService = createDraftService({
-    draftStore: createDraftStore(db),
-    ticketGateway,
-    clock: systemClock,
-  });
-  const conversationStore = createConversationStore(db);
-  const chatService = createChatService({
-    mastra: createNexoMastra({
-      model,
-      knowledgeBase: { search: () => [] },
-      ticketGateway,
-      draftService,
-      handoffService: createHandoffService({
-        conversationStore,
-        handoffStore: createHandoffStore(db),
-        ticketGateway,
-        clock: systemClock,
-      }),
-      conversationStore,
-      clock: systemClock,
-    }),
-    conversationStore,
-    draftService,
-    clock: systemClock,
+  const { chatService, authService } = await createTestContainer({ model });
+  const { user: employee } = await authService.login({
+    email: "ana.souza@nexo.com.br",
+    password: "x",
+    remember: false,
   });
 
   const stream = await chatService.sendMessage(employee, "Minha VPN dá erro 809");

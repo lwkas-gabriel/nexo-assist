@@ -1,6 +1,6 @@
 import type { UserRole } from "@nexo/shared/demo";
 import type { HandoffReason, SupportLevel } from "@nexo/shared/domain";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Espelho tipado das tabelas criadas em migrations/*.sql (fonte da verdade do schema, ADR-0009).
@@ -110,3 +110,19 @@ export const handoffs = sqliteTable("handoffs", {
 });
 
 export type HandoffRow = typeof handoffs.$inferSelect;
+
+export const decisionTraces = sqliteTable("decision_traces", {
+  messageId: text("message_id")
+    .primaryKey()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  trace: text("trace").notNull(),
+  finalConfidence: real("final_confidence").notNull(),
+  classifierTokens: integer("classifier_tokens"),
+  latencyMs: integer("latency_ms").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type DecisionTraceRow = typeof decisionTraces.$inferSelect;

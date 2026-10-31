@@ -10,19 +10,31 @@ import {
 } from "ai";
 import { createAgentRequestContext } from "../agent/agent-context.ts";
 import { describeAgentError } from "../agent/agent-errors.ts";
+import {
+  INTENT_LABELS,
+  type ClassificationResult,
+  type Classifier,
+  type TranscriptLine,
+} from "../agent/classifier.ts";
+import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
+import type { DecisionService } from "./decision-service.ts";
 import type { DraftService } from "./draft-service.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
+/** Quantas mensagens anteriores o classificador vê: só o bastante para entender a nova. */
+const CLASSIFIER_CONTEXT = 6;
 
 type ChatServiceDependencies = {
   mastra: Mastra;
   conversationStore: ConversationStore;
   draftService: DraftService;
+  classifier: Classifier;
+  decisionService: DecisionService;
   clock: Clock;
 };
 
@@ -39,6 +51,8 @@ export function createChatService({
   mastra,
   conversationStore,
   draftService,
+  classifier,
+  decisionService,
   clock,
 }: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
@@ -63,6 +77,15 @@ export function createChatService({
     return result.data;
   }
 
+  /** O registro de decisão não pode derrubar a resposta, que já chegou ao funcionário. */
+  async function recordDecision(outcome: Parameters<DecisionService["record"]>[0]) {
+    try {
+      await decisionService.record(outcome);
+    } catch (error) {
+      console.error("Falha ao gravar o registro de decisão do turno", error);
+    }
+  }
+
   return {
     /** Se a próxima mensagem vai para o agent (e gasta o modelo) ou fica para o analista (RN08). */
     async agentWillReply(employee: UserRow): Promise<boolean> {
@@ -71,12 +94,20 @@ export function createChatService({
       return !conversation || agentMayReply(conversation.mode);
     },
 
+    /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, messages: [] };
+      const messages = await loadHistory(conversation.id, toUIMessage);
+      const decisions = await decisionService.forMessages(messages.map((message) => message.id));
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
-        messages: await loadHistory(conversation.id, toUIMessage),
+        messages: messages.map((message) => {
+          const decision = decisions.get(message.id);
+          return decision
+            ? { ...message, metadata: { ...authorMetadata(message), decision } }
+            : message;
+        }),
       };
     },
 
@@ -104,6 +135,12 @@ export function createChatService({
 
       try {
         const turnStartedAt = clock.now();
+        // Etapa 1 (R05): o classificador vê a mensagem nova e um pouco do que veio antes.
+        const previous = await conversationStore.listRecentMessages(
+          conversation.id,
+          CLASSIFIER_CONTEXT,
+        );
+        const classification = await classifier.classify(previous.map(toTranscriptLine), text);
         await conversationStore.appendMessage({
           conversationId: conversation.id,
           author: "employee",
@@ -121,6 +158,8 @@ export function createChatService({
           // O início do turno separa o rascunho que ele já viu do que o agent acabou de propor (R04).
           params: {
             messages: history,
+            // Etapa 2: o agent recebe a classificação como contexto do sistema, não da conversa.
+            system: describeClassification(classification),
             requestContext: createAgentRequestContext({
               employeeId: employee.id,
               conversationId: conversation.id,
@@ -141,7 +180,7 @@ export function createChatService({
           onFinish: async ({ responseMessage }) => {
             try {
               if (responseMessage.parts.length > 0) {
-                await conversationStore.appendMessage({
+                const saved = await conversationStore.appendMessage({
                   conversationId: conversation.id,
                   author: "agent",
                   authorId: null,
@@ -150,6 +189,14 @@ export function createChatService({
                 });
                 // R04: só o rascunho que a resposta gravada mostra ("D-12") conta como visto.
                 await draftService.markShownInReply(conversation.id, textOf(responseMessage));
+                await recordDecision({
+                  employeeId: employee.id,
+                  conversationId: conversation.id,
+                  messageId: saved.id,
+                  response: responseMessage,
+                  classification,
+                  startedAt: turnStartedAt,
+                });
               }
             } finally {
               release();
@@ -165,6 +212,29 @@ export function createChatService({
 }
 
 export type ChatService = ReturnType<typeof createChatService>;
+
+const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {
+  employee: "Funcionário",
+  agent: "Nexo Assist",
+  analyst: "Analista",
+  system: "Sistema",
+};
+
+function toTranscriptLine(row: MessageRow): TranscriptLine {
+  return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row)) };
+}
+
+/** A classificação da etapa 1 como o agent a recebe (R05). */
+function describeClassification({ classification }: ClassificationResult): string {
+  const level = classification.confidence < LOW_CONFIDENCE_THRESHOLD ? "baixa" : "alta";
+  return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; entendido: "${classification.understood}"; confiança ${level} (${classification.confidence}).`;
+}
+
+function authorMetadata(message: UIMessage): Record<string, unknown> {
+  return typeof message.metadata === "object" && message.metadata !== null
+    ? { ...message.metadata }
+    : {};
+}
 
 function textOf(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");

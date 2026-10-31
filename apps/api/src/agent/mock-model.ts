@@ -148,7 +148,8 @@ function isClassifierCall(prompt: LanguageModelV4Prompt): boolean {
   );
 }
 
-const VAGUE_IN_TEXT = /\b(não sei explicar|sei lá|alguma coisa estranha|não sei o que)\b/i;
+// Sem \b: em JavaScript, letras acentuadas ("lá") não contam como letra para o \b.
+const VAGUE_IN_TEXT = /(não sei explicar|sei lá|alguma coisa estranha|não sei o que)/i;
 
 /** Classificação roteirizada da mensagem nova (a última linha do prompt do classificador). */
 function classify(prompt: string): Classification {

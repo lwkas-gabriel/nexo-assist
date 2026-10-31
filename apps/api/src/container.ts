@@ -1,18 +1,22 @@
 import { join } from "node:path";
+import type { MastraModelConfig } from "@mastra/core/llm";
 import type { Mastra } from "@mastra/core/mastra";
 import { DEMO_USERS } from "@nexo/shared/demo";
 import { systemClock, type Clock } from "@nexo/shared/domain";
 import { createHttpTicketGateway } from "./adapters/http-ticket-gateway.ts";
 import { createMarkdownKnowledgeBase } from "./adapters/markdown-knowledge-base.ts";
+import { createClassifier } from "./agent/classifier.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createDecisionService } from "./app/decision-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
 import { createDraftService } from "./app/draft-service.ts";
 import { createHandoffService } from "./app/handoff-service.ts";
 import type { LlmConfig } from "./config.ts";
 import { createConversationStore, type ConversationStore } from "./db/conversation-store.ts";
 import { openDatabase, type Database } from "./db/database.ts";
+import { createDecisionStore } from "./db/decision-store.ts";
 import { createDraftStore } from "./db/draft-store.ts";
 import { createHandoffStore } from "./db/handoff-store.ts";
 import { createSessionStore } from "./db/session-store.ts";
@@ -58,10 +62,14 @@ export type Container = {
   loginLimiter: RateLimiter;
 };
 
-/** Peças que os testes podem trocar por versões controladas (relógio fixo, sistema de chamados falso). */
+/**
+ * Peças que os testes podem trocar por versões controladas (relógio fixo, sistema de chamados
+ * falso, modelo que falha).
+ */
 export type ContainerOverrides = {
   clock?: Clock;
   ticketGateway?: TicketGateway;
+  model?: MastraModelConfig;
 };
 
 export async function createContainer(
@@ -82,6 +90,7 @@ export async function createContainer(
       baseUrl: config.TICKETS_SERVICE_URL,
       serviceToken: config.TICKETS_SERVICE_TOKEN,
     });
+  const model = overrides.model ?? createModel(config);
   const draftService = createDraftService({
     draftStore: createDraftStore(db),
     ticketGateway,
@@ -94,7 +103,7 @@ export async function createContainer(
     clock,
   });
   const mastra = createNexoMastra({
-    model: createModel(config),
+    model,
     knowledgeBase,
     ticketGateway,
     draftService,
@@ -108,7 +117,19 @@ export async function createContainer(
     mastra,
     ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
-    chatService: createChatService({ mastra, conversationStore, draftService, clock }),
+    chatService: createChatService({
+      mastra,
+      conversationStore,
+      draftService,
+      // Etapa 1 do turno (R05): o mesmo modelo, numa chamada curta e com saída estruturada.
+      classifier: createClassifier(model),
+      decisionService: createDecisionService({
+        decisionStore: createDecisionStore(db),
+        handoffService,
+        clock,
+      }),
+      clock,
+    }),
     draftActions: createDraftActions({ draftService, handoffService, conversationStore, clock }),
     conversationStore,
     chatLimits: {
