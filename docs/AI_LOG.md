@@ -590,5 +590,5 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - a seleção não passava pela sessão: agora a mantém viva, recomeça a vencida e, no limite, aponta o botão do analista em vez de pedir um "sim" que seria recusado;
   - `toolCallId` repetido ao escolher o mesmo chamado duas vezes;
   - tabela de endpoints desatualizada; expressão `&&`/`||` com `await` reescrita; exports sem uso removidos.
-- **Validado com o Gemini real** (uma seleção e uma mensagem): o modelo aceitou no histórico a parte `get_ticket` montada pelo código e respondeu usando o chamado escolhido. No primeiro try, a seleção deu 503 (o sistema de chamados ainda subia, com a falha simulada de 10%) e a conversa ficou sem nada pela metade, como o teste prevê.
+- **Validado com o Gemini real** (uma seleção e uma mensagem): o modelo aceitou no histórico a parte `get_ticket` montada pelo código e respondeu usando o chamado escolhido. Na primeira tentativa, a seleção deu 503 (o sistema de chamados ainda subia, com a falha simulada de 10%) e a conversa ficou sem nada pela metade, como o teste prevê.
 - **Lição:** o `sendMessage` já tinha a releitura da conversa depois de uma espera; o caminho novo copiou o resto e esqueceu essa parte. Ao criar um caminho paralelo a um existente, vale listar as proteções do original uma a uma.
