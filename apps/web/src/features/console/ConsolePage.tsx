@@ -25,6 +25,8 @@ import { TicketHistoryPanel } from "./components/TicketHistoryPanel.tsx";
 const POLL_MS = 3000;
 /** Os chamados mudam devagar: sem polling curto, só a cada meio minuto. */
 const TICKETS_POLL_MS = 30_000;
+/** A busca espera a pessoa parar de digitar, em vez de uma consulta por tecla (RT10). */
+const SEARCH_DEBOUNCE_MS = 300;
 const MINUTE_MS = 60_000;
 
 /** O relógio da tela, a cada minuto: "contato em N min" e as horas da lista (R36). */
@@ -37,6 +39,22 @@ function useNow(): Date {
   return now;
 }
 
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+/**
+ * O painel da direita: "auto" são os chamados que abrem sozinhos ao escolher uma conversa, só
+ * como coluna do desktop; "tickets" foi pedido por quem usa (botão); "decision" é o detalhe de
+ * uma resposta (R28).
+ */
+type Panel = "auto" | "tickets" | "decision" | null;
+
 type ConsolePageProps = { user: CurrentUser; isLoggingOut: boolean; onLogout: () => void };
 
 /**
@@ -46,20 +64,23 @@ type ConsolePageProps = { user: CurrentUser; isLoggingOut: boolean; onLogout: ()
 export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
+  const isDesktop = breakpoint === "desktop";
   const now = useNow();
   const [filter, setFilter] = useState<ConsoleFilter>("all");
   const [query, setQuery] = useState("");
+  const searchedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // O painel da direita mostra os chamados ou o detalhe da decisão. "auto": os chamados abertos
-  // por padrão, que só valem como coluna do desktop; abaixo disso, a gaveta só abre a pedido.
-  const [panel, setPanel] = useState<"auto" | "tickets" | "decision" | null>(null);
+  const [panel, setPanel] = useState<Panel>(null);
   const [decisionId, setDecisionId] = useState<string | null>(null);
-  const decisionOpenerRef = useRef<HTMLElement | null>(null);
   const decisionPanelId = useId();
+  // Para onde o foco volta depois que o painel ou a coluna mudam (10.7): aplicado num efeito,
+  // depois de o React montar o que mudou, para nada o roubar em seguida.
+  const pendingFocusRef = useRef<HTMLElement | string | null>(null);
+  const decisionOpenerRef = useRef<HTMLElement | null>(null);
 
   const list = useQuery({
-    queryKey: ["console", "list", filter, query],
-    queryFn: () => fetchConsoleList(filter, query),
+    queryKey: ["console", "list", filter, searchedQuery],
+    queryFn: () => fetchConsoleList(filter, searchedQuery),
     refetchInterval: POLL_MS,
     placeholderData: (previous) => previous,
   });
@@ -76,15 +97,38 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     refetchInterval: TICKETS_POLL_MS,
   });
 
+  const decisionMessage = conversation.data?.messages.find((message) => message.id === decisionId);
+  const decision = decisionMessage ? decisionOf(decisionMessage) : undefined;
+  // A resposta do detalhe saiu da janela da conversa: o painel volta aos chamados.
+  const effectivePanel: Panel = panel === "decision" && !decision ? "auto" : panel;
+  const panelOpen =
+    effectivePanel === "tickets" ||
+    effectivePanel === "decision" ||
+    (effectivePanel === "auto" && isDesktop);
+
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (target === null) return;
+    pendingFocusRef.current = null;
+    const element =
+      typeof target === "string"
+        ? document.querySelector<HTMLElement>(`[data-conversation-id="${target}"]`)
+        : target;
+    element?.focus();
+  });
+
   const selectConversation = (id: string) => {
     setSelectedId(id);
     setDecisionId(null);
     setPanel("auto");
   };
-  const decisionMessage = conversation.data?.messages.find((message) => message.id === decisionId);
-  const decision = decisionMessage ? decisionOf(decisionMessage) : undefined;
+  const backToList = () => {
+    pendingFocusRef.current = selectedId;
+    setSelectedId(null);
+  };
   const toggleDecision = (messageId: string, opener: HTMLElement) => {
-    if (panel === "decision" && decisionId === messageId) {
+    if (effectivePanel === "decision" && decisionId === messageId) {
+      pendingFocusRef.current = opener;
       setPanel("auto");
       return;
     }
@@ -93,9 +137,12 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     setPanel("decision");
   };
   const closePanel = () => {
-    const wasDecision = panel === "decision";
-    setPanel(wasDecision ? "auto" : null);
-    if (wasDecision) decisionOpenerRef.current?.focus();
+    if (effectivePanel === "decision") {
+      pendingFocusRef.current = decisionOpenerRef.current;
+      setPanel("auto");
+      return;
+    }
+    setPanel(null);
   };
   const firstName = conversation.data?.conversation.employee.name.split(" ")[0] ?? "";
   const showList = !isMobile || selectedId === null;
@@ -175,13 +222,15 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
             </div>
           ) : conversation.data ? (
             <ConsoleConversationView
+              key={selectedId}
               data={conversation.data}
               now={now}
-              onBack={isMobile ? () => setSelectedId(null) : undefined}
-              onOpenTickets={breakpoint === "desktop" ? undefined : () => setPanel("tickets")}
+              onBack={isMobile ? backToList : undefined}
+              onOpenTickets={panelOpen ? undefined : () => setPanel("tickets")}
               onOpenDecision={toggleDecision}
-              openDecisionId={panel === "decision" ? decisionId : null}
+              openDecisionId={effectivePanel === "decision" ? decisionId : null}
               decisionPanelId={decisionPanelId}
+              focusTitleOnOpen={isMobile}
             />
           ) : conversation.isError ? (
             <div
@@ -206,20 +255,25 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
           )}
           {selectedId !== null && (
             <SidePanel
-              key={panel === "decision" ? `decision-${decisionId ?? ""}` : "tickets"}
-              id={decisionPanelId}
-              title={panel === "decision" ? "Detalhe da decisão" : `Chamados de ${firstName}`}
-              open={
-                panel === "tickets" ||
-                (panel === "auto" && breakpoint === "desktop") ||
-                (panel === "decision" && decision !== undefined)
+              // Uma conversa nova (ou outra resposta) é um painel novo: nada sobra da anterior.
+              key={
+                effectivePanel === "decision"
+                  ? `decision-${decisionId ?? ""}`
+                  : `tickets-${selectedId}`
               }
+              id={decisionPanelId}
+              title={
+                effectivePanel === "decision" ? "Detalhe da decisão" : `Chamados de ${firstName}`
+              }
+              open={panelOpen}
+              // Os chamados que abrem sozinhos não tiram o foco de quem escolheu a conversa.
+              focusOnOpen={effectivePanel !== "auto"}
               onClose={closePanel}
               inlineFrom="desktop"
               mobileMode="fullscreen"
               widthClass="w-[340px]"
             >
-              {panel === "decision" && decision ? (
+              {effectivePanel === "decision" && decision ? (
                 <DecisionPanel decision={decision} />
               ) : (
                 <TicketHistoryPanel

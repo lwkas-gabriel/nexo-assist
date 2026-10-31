@@ -8,6 +8,11 @@ type SidePanelProps = {
   title: string;
   /** Id do painel, para o botão que o abre apontar para ele (`aria-controls`). */
   id?: string;
+  /**
+   * Como coluna, se o foco vai para o painel ao abrir (padrão). Falso quando o painel abre
+   * sozinho, sem pedido de quem usa (os chamados do console ao escolher uma conversa).
+   */
+  focusOnOpen?: boolean;
   open: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -39,6 +44,7 @@ const INLINE_FROM: Record<NonNullable<SidePanelProps["inlineFrom"]>, Breakpoint[
 export function SidePanel({
   title,
   id,
+  focusOnOpen = true,
   open,
   onClose,
   children,
@@ -55,6 +61,7 @@ export function SidePanel({
     return (
       <InlinePanel
         id={id}
+        focusOnOpen={focusOnOpen}
         title={title}
         titleId={titleId}
         onClose={onClose}
@@ -113,6 +120,7 @@ function PanelHeader({
  */
 function InlinePanel({
   id,
+  focusOnOpen,
   title,
   titleId,
   onClose,
@@ -120,6 +128,7 @@ function InlinePanel({
   children,
 }: {
   id: string | undefined;
+  focusOnOpen: boolean;
   title: string;
   titleId: string;
   onClose: () => void;
@@ -128,7 +137,9 @@ function InlinePanel({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    closeRef.current?.focus();
+    if (focusOnOpen) closeRef.current?.focus();
+    // Só ao montar: renderizações do pai não mexem no foco.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

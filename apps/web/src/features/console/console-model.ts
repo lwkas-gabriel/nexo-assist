@@ -8,8 +8,9 @@ import type { ConsoleConversationState } from "./console-api.ts";
 
 const MINUTE_MS = 60_000;
 
-/** "contato em 25 min", "contato em 2 h", ou "contato vencido". */
-export function describeContactDue(responseDueAt: string, now: Date): string {
+/** "contato em 25 min", "contato em 2 h", "contato vencido" ou, sem prazo gravado, "sem prazo". */
+export function describeContactDue(responseDueAt: string | null, now: Date): string {
+  if (responseDueAt === null) return "sem prazo";
   const minutes = Math.ceil((new Date(responseDueAt).getTime() - now.getTime()) / MINUTE_MS);
   if (minutes <= 0) return "contato vencido";
   if (minutes < 60) return `contato em ${minutes} min`;
@@ -54,6 +55,34 @@ const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
 });
+
+/**
+ * O estado no topo da conversa, como no protótipo: quem espera vê "Aguardando atendente" (sem a
+ * contagem, que mudaria a cada minuto numa região viva); os outros estados, como na lista.
+ */
+export function headerTag(
+  state: ConsoleConversationState,
+  now: Date,
+): { label: string; tone: Tone } {
+  return state.kind === "waiting"
+    ? { label: "Aguardando atendente", tone: "warning" }
+    : stateTag(state, now);
+}
+
+const dayLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "long",
+});
+
+/** O divisor de dia da conversa (10.4): "Hoje", "Ontem" ou "29 de outubro". */
+export function dayLabel(iso: string, now: Date): string {
+  const date = new Date(iso);
+  const day = (value: Date) => dayFormatter.format(value);
+  if (day(date) === day(now)) return "Hoje";
+  if (day(date) === day(new Date(now.getTime() - 24 * 60 * MINUTE_MS))) return "Ontem";
+  return dayLabelFormatter.format(date);
+}
 
 /** Hora da lista, como no protótipo: "agora", "10:05" hoje, "ontem" ou "29/10". */
 export function listTime(iso: string, now: Date): string {

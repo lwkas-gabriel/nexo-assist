@@ -1,4 +1,5 @@
 import { Check, CheckCheck, Search } from "lucide-react";
+import { useState } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
 import { cx } from "../../../ui/cx.ts";
@@ -46,11 +47,7 @@ export function ConversationList(props: ConversationListProps) {
           <h1 id="console-list-title" className="flex-1 text-xl font-bold text-ink">
             Conversas
           </h1>
-          {/* A21: "Disponível" é só visual; não muda o roteamento. */}
-          <span className="flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-[5px] text-[12.5px] font-semibold text-success-text">
-            <span aria-hidden className="size-[7px] rounded-full bg-success" />
-            Disponível
-          </span>
+          <AvailabilityToggle />
         </div>
         <label className="flex h-9 items-center gap-2.5 rounded-full bg-desk px-3">
           <Search aria-hidden size={15} className="text-ink-3" />
@@ -63,7 +60,7 @@ export function ConversationList(props: ConversationListProps) {
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink outline-hidden placeholder:text-ink-3"
           />
         </label>
-        <div role="radiogroup" aria-label="Filtro das conversas" className="flex flex-wrap gap-1">
+        <div role="group" aria-label="Filtro das conversas" className="flex flex-wrap gap-1">
           {CONSOLE_FILTERS.map((option) => {
             const isActive = option === filter;
             const count = data?.counts[option];
@@ -71,8 +68,7 @@ export function ConversationList(props: ConversationListProps) {
               <button
                 key={option}
                 type="button"
-                role="radio"
-                aria-checked={isActive}
+                aria-pressed={isActive}
                 aria-label={
                   option === "all" || count === undefined
                     ? FILTER_LABELS[option]
@@ -155,9 +151,11 @@ function ConversationItem({
       type="button"
       onClick={onSelect}
       aria-current={isSelected ? "true" : undefined}
+      data-conversation-id={item.id}
+      // 10.7: as etiquetas coloridas ficam sobre paper; o selecionado ganha contorno, não fundo.
       className={cx(
         "flex w-full gap-3 rounded-xl p-2.5 text-left",
-        isSelected ? "bg-desk" : "hover:bg-desk/60",
+        isSelected ? "bg-paper ring-2 ring-primary-soft" : "hover:bg-desk/60",
       )}
     >
       <span className="relative flex h-fit shrink-0">
@@ -221,5 +219,39 @@ export function SeenTicks({ seen }: { seen: boolean }) {
     <CheckCheck size={15} className="shrink-0 text-primary" aria-label="vista" />
   ) : (
     <Check size={15} className="shrink-0 text-ink-3" aria-label="entregue" />
+  );
+}
+
+const AVAILABILITY_KEY = "nexo.console.disponivel";
+
+/**
+ * A21: "Disponível" é só visual (não muda o roteamento) e fica salvo neste navegador. Guardar no
+ * perfil do analista é da tela "Meu perfil" (T25).
+ */
+function AvailabilityToggle() {
+  const [isAvailable, setIsAvailable] = useState(
+    () => localStorage.getItem(AVAILABILITY_KEY) !== "false",
+  );
+  const toggle = () => {
+    const next = !isAvailable;
+    localStorage.setItem(AVAILABILITY_KEY, String(next));
+    setIsAvailable(next);
+  };
+  return (
+    <button
+      type="button"
+      aria-pressed={isAvailable}
+      onClick={toggle}
+      className={cx(
+        "flex items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[12.5px] font-semibold",
+        isAvailable ? "bg-success-soft text-success-text" : "bg-desk text-ink-3",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cx("size-[7px] rounded-full", isAvailable ? "bg-success" : "bg-ink-3")}
+      />
+      {isAvailable ? "Disponível" : "Ausente"}
+    </button>
   );
 }

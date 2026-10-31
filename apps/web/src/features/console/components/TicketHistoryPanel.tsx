@@ -109,9 +109,10 @@ function CurrentTicket({ ticket }: { ticket: TicketSummaryView }) {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 text-[12.5px] font-medium text-ink-3">{ticket.number}</span>
+          {/* 10.7: a etiqueta colorida ganha fundo paper próprio sobre o card em desk. */}
           <span
             className={cx(
-              "flex items-center gap-1.5 text-[12.5px] font-semibold",
+              "flex items-center gap-1.5 rounded-full bg-paper px-2 py-0.5 text-[12.5px] font-semibold",
               TONE_TEXT_CLASSES[tone],
             )}
           >

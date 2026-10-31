@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import { sampleDecision } from "../chat/decision.fixture.ts";
-import { onTimeTicket, overdueTicket } from "../chat/ticket.fixture.ts";
+import { agentWithTool, onTimeTicket, overdueTicket } from "../chat/ticket.fixture.ts";
 import type { ConsoleConversation, ConsoleList, ConsoleTickets } from "./console-api.ts";
 import { ConsolePage } from "./ConsolePage.tsx";
 
@@ -90,6 +90,7 @@ const CONVERSATION: ConsoleConversation = {
       parts: [{ type: "text", text: "Você tem 3 chamados abertos." }],
     },
   ],
+  drafts: [],
 };
 
 const TICKETS: ConsoleTickets = {
@@ -100,7 +101,7 @@ const TICKETS: ConsoleTickets = {
   others: [onTimeTicket],
 };
 
-function stubConsole() {
+function stubConsole(conversation: ConsoleConversation = CONVERSATION) {
   const paths: string[] = [];
   vi.stubGlobal("fetch", (input: string) => {
     paths.push(input);
@@ -108,7 +109,7 @@ function stubConsole() {
       ? LIST
       : input.endsWith("/tickets")
         ? TICKETS
-        : CONVERSATION;
+        : conversation;
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   });
   return paths;
@@ -135,8 +136,10 @@ describe("console do analista (tela 4)", () => {
     const list = await screen.findByRole("list", { name: "Conversas" });
     expect(within(list).getByText("Transferida · INC-20311")).toBeDefined();
     expect(within(list).getByText("Agent atendendo")).toBeDefined();
-    expect(within(list).getByText("2")).toBeDefined();
-    expect(screen.getByRole("radio", { name: "Para você, 1 conversa" })).toBeDefined();
+    expect(
+      within(list).getByText((_, element) => element?.textContent === "2 não lidas"),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Para você, 1 conversa" })).toBeDefined();
   });
 
   it("filtro e busca vão para a api", async () => {
@@ -144,10 +147,12 @@ describe("console do analista (tela 4)", () => {
     renderConsole();
     await screen.findByRole("list", { name: "Conversas" });
 
-    await userEvent.click(screen.getByRole("radio", { name: /Para você/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Para você/ }));
     await userEvent.type(screen.getByLabelText("Pesquisar conversa ou chamado"), "ana");
 
-    expect(paths).toContain("/api/console/conversations?filter=for_you&q=ana");
+    // Uma consulta só, depois que a pessoa parou de digitar (não uma por tecla).
+    await waitFor(() => expect(paths).toContain("/api/console/conversations?filter=for_you&q=ana"));
+    expect(paths).not.toContain("/api/console/conversations?filter=for_you&q=a");
   });
 
   it("RF19, RF21: abrir a conversa mostra o resumo da transferência e os chamados ao lado", async () => {
@@ -206,5 +211,74 @@ describe("console do analista (tela 4)", () => {
     const log = await screen.findByRole("log", { name: "Conversa com Ana Souza" });
     expect(within(log).getAllByText("Nexo Assist")).toHaveLength(1);
     expect(within(log).getByText("IA")).toBeDefined();
+  });
+
+  describe("foco e painel (10.7)", () => {
+    it("escolher a conversa no desktop não tira o foco da lista", async () => {
+      stubConsole();
+      renderConsole();
+
+      const item = await screen.findByRole("button", { name: /Ana Souza/ });
+      await userEvent.click(item);
+      await screen.findByRole("complementary", { name: "Chamados de Ana" });
+
+      expect(document.activeElement).toBe(item);
+    });
+
+    it("fechar os chamados no desktop deixa um botão para reabrir", async () => {
+      stubConsole();
+      renderConsole();
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+      await userEvent.click(await screen.findByRole("button", { name: "Fechar Chamados de Ana" }));
+      await userEvent.click(screen.getByRole("button", { name: "Chamados de Ana Souza" }));
+
+      expect(screen.getByRole("complementary", { name: "Chamados de Ana" })).toBeDefined();
+    });
+
+    it("fechar o detalhe da decisão devolve o foco ao botão que o abriu", async () => {
+      stubConsole();
+      renderConsole();
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+      const details = await screen.findByRole("button", { name: "detalhes da decisão" });
+      await userEvent.click(details);
+
+      await userEvent.click(screen.getByRole("button", { name: "Fechar Detalhe da decisão" }));
+
+      await waitFor(() => expect(document.activeElement).toBe(details));
+      expect(screen.getByRole("complementary", { name: "Chamados de Ana" })).toBeDefined();
+    });
+
+    it("celular: abrir a conversa leva o foco ao título; voltar, ao item de onde veio", async () => {
+      setViewportWidth(390);
+      stubConsole();
+      renderConsole();
+
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Ana Souza" })),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Voltar para as conversas" }));
+
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: /Ana Souza/ })),
+      );
+    });
+  });
+
+  it("RF19: o analista vê os cards que o funcionário viu, só como registro", async () => {
+    stubConsole({
+      ...CONVERSATION,
+      messages: [
+        agentWithTool("m-3", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+      ],
+    });
+    renderConsole();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+    const log = await screen.findByRole("log", { name: "Conversa com Ana Souza" });
+    expect(within(log).getByRole("region", { name: "Chamado INC-20311" })).toBeDefined();
+    expect(within(log).queryByRole("button", { name: "Não, obrigado" })).toBeNull();
   });
 });

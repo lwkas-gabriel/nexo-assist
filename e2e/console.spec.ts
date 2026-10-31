@@ -24,7 +24,7 @@ test("analista encontra a conversa transferida e lê o porquê", async ({ browse
   const analystContext = await browser.newContext({ baseURL });
   const analyst = await analystContext.newPage();
   await loginAs(analyst, "rafael.lima@nexo.com.br");
-  await analyst.getByRole("radio", { name: /^Para você/ }).click();
+  await analyst.getByRole("button", { name: /^Para você/ }).click();
   await analyst.getByRole("button", { name: /Isabela Martins/ }).click();
 
   await expect(analyst.getByRole("heading", { name: "Isabela Martins" })).toBeVisible();

@@ -1,11 +1,11 @@
+import { CONSOLE_FILTERS, type ConsoleFilter } from "@nexo/shared/contracts";
 import type { ConversationMode } from "@nexo/shared/domain";
 import type { UIMessage } from "ai";
 import { apiRequest } from "../../lib/api-client.ts";
-import type { AnalystView } from "../chat/chat-api.ts";
+import type { AnalystView, DraftView } from "../chat/chat-api.ts";
 import type { TicketSummaryView } from "../chat/ticket-model.ts";
 
-export const CONSOLE_FILTERS = ["all", "for_you", "with_agent", "mine"] as const;
-export type ConsoleFilter = (typeof CONSOLE_FILTERS)[number];
+export { CONSOLE_FILTERS, type ConsoleFilter };
 
 /** Estado da conversa, como a etiqueta da lista e o topo da conversa mostram (tela 4). */
 export type ConsoleConversationState =
@@ -13,7 +13,8 @@ export type ConsoleConversationState =
       kind: "waiting";
       reason: string;
       ticketNumber: string | null;
-      responseDueAt: string;
+      /** Null se a transferência não chegou a ser gravada. */
+      responseDueAt: string | null;
       confidence: number | null;
     }
   | { kind: "analyst"; byMe: boolean; analyst: AnalystView | null }
@@ -57,6 +58,8 @@ export type ConsoleConversation = {
     } | null;
   };
   messages: UIMessage[];
+  /** Os rascunhos da conversa, no estado atual: os cards que o funcionário viu (RF19). */
+  drafts: DraftView[];
 };
 
 export type ConsoleTickets = {
