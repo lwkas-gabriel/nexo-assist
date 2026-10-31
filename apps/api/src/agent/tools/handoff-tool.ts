@@ -1,13 +1,11 @@
 import { createTool } from "@mastra/core/tools";
 import { HANDOFF_REASONS } from "@nexo/shared/domain";
 import { z } from "zod";
-import type { HandoffService } from "../../app/handoff-service.ts";
+import { HANDOFF_SUMMARY_FIELD_MAX_CHARS, type HandoffService } from "../../app/handoff-service.ts";
 import { agentTurnFrom } from "../agent-context.ts";
 import { toolFailure } from "./tool-failure.ts";
 
 export const HANDOFF_TO_ANALYST_TOOL_ID = "handoff_to_analyst";
-
-const SUMMARY_MAX_CHARS = 600;
 
 /**
  * Transfere a conversa para um analista (RF16, RN07). O agent escreve o resumo (R17); o nível de
@@ -28,13 +26,13 @@ export function createHandoffTool({ handoffService }: { handoffService: HandoffS
         .string()
         .trim()
         .min(1)
-        .max(SUMMARY_MAX_CHARS)
+        .max(HANDOFF_SUMMARY_FIELD_MAX_CHARS)
         .describe("O problema, como o analista precisa entender sem reler a conversa"),
       attempted: z
         .string()
         .trim()
         .min(1)
-        .max(SUMMARY_MAX_CHARS)
+        .max(HANDOFF_SUMMARY_FIELD_MAX_CHARS)
         .describe("O que já foi tentado ou consultado (artigos, chamados), ou 'nada ainda'"),
       ticketNumber: z
         .string()

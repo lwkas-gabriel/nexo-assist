@@ -4,6 +4,7 @@ import { Mastra } from "@mastra/core/mastra";
 import type { Clock } from "@nexo/shared/domain";
 import type { DraftService } from "../app/draft-service.ts";
 import type { HandoffService } from "../app/handoff-service.ts";
+import type { ConversationStore } from "../db/conversation-store.ts";
 import type { LlmConfig } from "../config.ts";
 import type { KnowledgeBase } from "../ports/knowledge-base.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
@@ -39,6 +40,7 @@ export type NexoAgentDependencies = {
   ticketGateway: TicketGateway;
   draftService: DraftService;
   handoffService: HandoffService;
+  conversationStore: ConversationStore;
   clock: Clock;
 };
 
@@ -48,6 +50,7 @@ export function createNexoAgent({
   ticketGateway,
   draftService,
   handoffService,
+  conversationStore,
   clock,
 }: NexoAgentDependencies) {
   return new Agent({
@@ -59,7 +62,7 @@ export function createNexoAgent({
     tools: {
       search_knowledge_base: createSearchKnowledgeBaseTool(knowledgeBase),
       ...createTicketTools({ ticketGateway, clock }),
-      ...createDraftTools({ draftService, handoffService }),
+      ...createDraftTools({ draftService, handoffService, conversationStore }),
       [HANDOFF_TO_ANALYST_TOOL_ID]: createHandoffTool({ handoffService }),
     },
     defaultOptions: {

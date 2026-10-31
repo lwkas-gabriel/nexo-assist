@@ -12,6 +12,16 @@ export function createHandoffStore(db: Database) {
       return row;
     },
 
+    async markTicketTransferred(id: string): Promise<HandoffRow> {
+      const [row] = await db
+        .update(handoffs)
+        .set({ ticketTransferred: true })
+        .where(eq(handoffs.id, id))
+        .returning();
+      if (!row) throw new Error(`Transferência ${id} sumiu`);
+      return row;
+    },
+
     /** A transferência mais recente da conversa: o resumo que o analista lê ao abrir o caso. */
     async latestForConversation(conversationId: string): Promise<HandoffRow | undefined> {
       return db.query.handoffs.findFirst({

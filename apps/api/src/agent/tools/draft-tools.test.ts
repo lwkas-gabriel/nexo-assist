@@ -23,11 +23,9 @@ async function setup() {
   let now = new Date("2026-10-27T12:43:00Z");
   const clock = { now: () => now };
   const fake = createFakeTicketGateway();
-  const { draftService, handoffService, conversationId } = await createTestAgentServices(
-    fake.ticketGateway,
-    clock,
-  );
-  const tools = createDraftTools({ draftService, handoffService });
+  const { draftService, handoffService, conversationStore, conversationId } =
+    await createTestAgentServices(fake.ticketGateway, clock);
+  const tools = createDraftTools({ draftService, handoffService, conversationStore });
 
   /** Um turno novo: começa quando chega a mensagem do funcionário. */
   const turn = (overrides: { employeeId?: string; conversationId?: string } = {}) =>
@@ -37,8 +35,9 @@ async function setup() {
       startedAt: now,
       ...overrides,
     });
-  const propose = (requestContext: RequestContext) =>
-    tools.propose_ticket_draft.execute?.(vpnDraft, { requestContext });
+  type DraftInput = Parameters<NonNullable<typeof tools.propose_ticket_draft.execute>>[0];
+  const propose = (requestContext: RequestContext, draft: DraftInput = vpnDraft) =>
+    tools.propose_ticket_draft.execute?.(draft, { requestContext });
   const confirm = (draftId: string, requestContext: RequestContext) =>
     tools.confirm_draft.execute?.({ draftId }, { requestContext });
 
@@ -51,6 +50,8 @@ async function setup() {
   return {
     fake,
     draftService,
+    handoffService,
+    conversationStore,
     conversationId,
     tools,
     ticketTools: createTicketTools({ ticketGateway: fake.ticketGateway, clock }),
@@ -195,5 +196,51 @@ describe("tools de rascunho (RN04, R04)", () => {
       question: "Quem está sendo afetado?",
       options: ["Só eu", "Minha equipe"],
     });
+  });
+
+  it("A04: confirmar pelo chat um chamado crítico transfere a conversa para o N2", async () => {
+    const { propose, confirm, turn, replyShowsThenNextMessage, conversationStore, conversationId } =
+      await setup();
+    // A equipe toda parada: Crítica pela matriz (RN11).
+    const draftId = await proposedDraftId(
+      propose(turn(), { ...vpnDraft, affected: "my_team", urgency: "blocked" }),
+    );
+    await replyShowsThenNextMessage(draftId);
+
+    const result = await confirm(draftId, turn());
+
+    expect(result).toMatchObject({
+      ok: true,
+      handoff: { supportLevel: "N2", reason: "caso crítico" },
+      escalationFailed: false,
+    });
+    expect(await conversationStore.findById(conversationId)).toMatchObject({
+      mode: "waiting_analyst",
+    });
+  });
+
+  it("RN08: depois da transferência, no mesmo turno, as tools não propõem nem confirmam", async () => {
+    const {
+      propose,
+      confirm,
+      turn,
+      replyShowsThenNextMessage,
+      handoffService,
+      conversationId,
+      fake,
+    } = await setup();
+    const draftId = await proposedDraftId(propose(turn()));
+    await replyShowsThenNextMessage(draftId);
+    const sameTurn = turn();
+    await handoffService.handoff({
+      employeeId: ANA,
+      conversationId,
+      reason: "employee_request",
+      summary: { problem: "VPN", attempted: "nada ainda" },
+    });
+
+    expect(await confirm(draftId, sameTurn)).toMatchObject({ ok: false, reason: "refused" });
+    expect(await propose(sameTurn)).toMatchObject({ ok: false, reason: "refused" });
+    expect(fake.tickets).toHaveLength(0);
   });
 });

@@ -22,10 +22,14 @@ export function MessageBubble({ message }: { message: UIMessage }) {
   }
 
   const isAgent = message.role === "assistant";
+  // Mensagem de analista também vem como "assistant": o autor diz quem falou de fato.
+  const isAnalyst = authorOf(message) === "analyst";
   return (
     <li className={isAgent ? "message message--agent" : "message message--employee"}>
-      {isAgent && <span className="message__sender">Nexo Assist</span>}
-      {isAgent && <ActionChips message={message} />}
+      {isAgent && (
+        <span className="message__sender">{isAnalyst ? "Analista de TI" : "Nexo Assist"}</span>
+      )}
+      {isAgent && !isAnalyst && <ActionChips message={message} />}
       {text && <p className="message__text">{text}</p>}
     </li>
   );

@@ -9,8 +9,10 @@ import {
 } from "@nexo/shared/domain";
 import { MAX_UPDATE_MESSAGE_CHARS } from "@nexo/shared/contracts";
 import { z } from "zod";
+import { agentMayReply } from "../../app/conversation-state.ts";
 import type { DraftService } from "../../app/draft-service.ts";
 import type { HandoffService } from "../../app/handoff-service.ts";
+import type { ConversationStore } from "../../db/conversation-store.ts";
 import { agentTurnFrom, hasReadTicketData } from "../agent-context.ts";
 import { toolFailure } from "./tool-failure.ts";
 
@@ -18,6 +20,13 @@ export const PROPOSE_TICKET_DRAFT_TOOL_ID = "propose_ticket_draft";
 export const PROPOSE_TICKET_UPDATE_TOOL_ID = "propose_ticket_update";
 export const CONFIRM_DRAFT_TOOL_ID = "confirm_draft";
 export const ASK_WITH_OPTIONS_TOOL_ID = "ask_with_options";
+
+const CONVERSATION_WITH_ANALYST = {
+  ok: false as const,
+  reason: "refused" as const,
+  detail:
+    "A conversa já foi transferida para um analista: não faça mais nada nela, só avise o funcionário.",
+};
 
 /** "D-12", "d12" ou "12" → 12. O agent repete o id que a tool de proposta devolveu. */
 const DRAFT_ID_PATTERN = /^\s*(?:D[\s-]?)?(\d{1,9})\s*$/i;
@@ -34,10 +43,22 @@ function parseDraftId(text: string): number | undefined {
 export function createDraftTools({
   draftService,
   handoffService,
+  conversationStore,
 }: {
   draftService: DraftService;
   handoffService: HandoffService;
+  conversationStore: ConversationStore;
 }) {
+  /**
+   * RN08 dentro do turno: se a conversa foi transferida no meio dele (pelo próprio agent ou pelo
+   * botão de um chamado crítico), o agent não propõe nem confirma mais nada nela.
+   */
+  async function conversationLeftAgent(conversationId: string): Promise<boolean> {
+    const conversation = await conversationStore.findById(conversationId);
+    // Conversa que não existe segue adiante: o caso de uso responde "não encontrado".
+    return conversation !== undefined && !agentMayReply(conversation.mode);
+  }
+
   const proposeTicketDraft = createTool({
     id: PROPOSE_TICKET_DRAFT_TOOL_ID,
     description:
@@ -75,6 +96,7 @@ export function createDraftTools({
     }),
     execute: async ({ duplicatesReviewed, ...input }, context) => {
       const turn = agentTurnFrom(context);
+      if (await conversationLeftAgent(turn.conversationId)) return CONVERSATION_WITH_ANALYST;
       try {
         return await draftService.proposeNewTicket({
           employeeId: turn.employeeId,
@@ -103,6 +125,7 @@ export function createDraftTools({
     }),
     execute: async ({ number, message }, context) => {
       const turn = agentTurnFrom(context);
+      if (await conversationLeftAgent(turn.conversationId)) return CONVERSATION_WITH_ANALYST;
       try {
         return await draftService.proposeTicketUpdate({
           employeeId: turn.employeeId,
@@ -127,6 +150,7 @@ export function createDraftTools({
       const turn = agentTurnFrom(context);
       const draftNumber = parseDraftId(draftId);
       if (!draftNumber) return { ok: false as const, reason: "not_found" as const };
+      if (await conversationLeftAgent(turn.conversationId)) return CONVERSATION_WITH_ANALYST;
       if (hasReadTicketData(context)) {
         return {
           ok: false as const,
@@ -142,15 +166,17 @@ export function createDraftTools({
           // R04: o rascunho precisa ter sido visto antes da mensagem que confirmou.
           source: { via: "chat", turnStartedAt: turn.startedAt },
         });
-        // A04: chamado crítico vai direto para o N2; o agent só avisa.
-        const handoff = await handoffService.escalateIfCritical({
+        // A04: chamado crítico vai direto para o N2; o agent só avisa. Uma falha aqui não
+        // desfaz a confirmação: o chamado já existe.
+        const escalation = await handoffService.escalateNewCriticalTicket({
           employeeId: turn.employeeId,
           conversationId: turn.conversationId,
+          draft,
           ticket,
         });
         return {
           ok: true as const,
-          handoff,
+          ...escalation,
           ticket: {
             number: ticket.number,
             title: ticket.title,

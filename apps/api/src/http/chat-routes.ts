@@ -21,13 +21,15 @@ const sendMessageSchema = z.object({
 });
 
 /**
- * Mensagens: por funcionário, e para todos juntos dentro da cota gratuita do modelo (ADR-0010).
- * Botões do rascunho: não gastam o modelo, mas gravam na conversa e no sistema de chamados.
+ * Mensagens para o agent: por funcionário, e para todos juntos dentro da cota gratuita do modelo
+ * (ADR-0010). Mensagens para o analista não gastam o modelo: têm só um limite por funcionário, para
+ * não consumir a cota de todos (R42). Botões do rascunho: gravam na conversa e no sistema de chamados.
  */
 export type ChatLimits = {
   perUser: RateLimiter;
   globalPerMinute: RateLimiter;
   globalPerDay: RateLimiter;
+  toAnalystPerUser: RateLimiter;
   draftActionsPerUser: RateLimiter;
 };
 
@@ -78,10 +80,11 @@ export function createChatRoutes({
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
     // Conta antes de validar: requisições inválidas em massa também são abuso.
-    const withinLimits =
-      chatLimits.perUser.tryConsume(employee.id) &&
-      chatLimits.globalPerMinute.tryConsume("global") &&
-      chatLimits.globalPerDay.tryConsume("global");
+    const withinLimits = (await chatService.agentWillReply(employee))
+      ? chatLimits.perUser.tryConsume(employee.id) &&
+        chatLimits.globalPerMinute.tryConsume("global") &&
+        chatLimits.globalPerDay.tryConsume("global")
+      : chatLimits.toAnalystPerUser.tryConsume(employee.id);
     if (!withinLimits) {
       throw new AppError(
         "RATE_LIMITED",

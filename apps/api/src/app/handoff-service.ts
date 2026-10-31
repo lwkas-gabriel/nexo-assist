@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { TicketDto } from "@nexo/shared/contracts";
+import { MAX_UPDATE_MESSAGE_CHARS, type TicketDto } from "@nexo/shared/contracts";
 import {
   HANDOFF_REASON_LABELS,
   formatBrasiliaDateTime,
@@ -7,8 +7,10 @@ import {
   isOpenStatus,
   parseTicketNumber,
   supportLevelFor,
+  verifiedHandoffReason,
   type Clock,
   type HandoffReason,
+  type HandoffTicket,
 } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { ConversationStore } from "../db/conversation-store.ts";
@@ -16,6 +18,7 @@ import type { HandoffStore } from "../db/handoff-store.ts";
 import type { HandoffRow } from "../db/schema.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { nextMode } from "./conversation-state.ts";
+import type { DraftView } from "./draft-service.ts";
 import { slaStatusOfTicket } from "./ticket-sla.ts";
 
 type HandoffServiceDependencies = {
@@ -28,6 +31,9 @@ type HandoffServiceDependencies = {
 /** R17: o resumo que o analista lê. O agent escreve; o motivo vem separado, de uma lista fixa. */
 export type HandoffSummary = { problem: string; attempted: string };
 
+/** Mesmo limite dos campos do resumo na tool: resumo, não cópia da conversa. */
+export const HANDOFF_SUMMARY_FIELD_MAX_CHARS = 600;
+
 export type HandoffRequest = {
   employeeId: string;
   conversationId: string;
@@ -36,10 +42,17 @@ export type HandoffRequest = {
   ticketNumber?: string;
 };
 
+/** O chamado ligado, como foi possível descobrir. */
+type LinkedTicket =
+  | { status: "none" }
+  | { status: "found"; ticket: TicketDto }
+  /** O sistema de chamados não respondeu: o número fica registrado, sem prioridade nem prazo. */
+  | { status: "unavailable"; number: string };
+
 /**
  * Transferência para analista (RF16, RN07). O agent decide transferir e escreve o resumo; o código
- * calcula o nível (A03) e o prazo (A02), muda o estado da conversa (o agent pausa, RN08) e marca o
- * chamado ligado como aguardando analista.
+ * confere o motivo, calcula o nível (A03) e o prazo (A02), muda o estado da conversa (o agent pausa,
+ * RN08) e marca o chamado ligado como aguardando analista.
  */
 export function createHandoffService({
   conversationStore,
@@ -47,41 +60,37 @@ export function createHandoffService({
   ticketGateway,
   clock,
 }: HandoffServiceDependencies) {
-  /** O chamado ligado, se existir e for do funcionário. Uma falha aqui não impede a transferência. */
-  async function linkedTicket(employeeId: string, ticketNumber: string | undefined) {
+  /** O chamado ligado, se for do funcionário. Uma falha aqui não impede a transferência. */
+  async function linkedTicket(employeeId: string, ticketNumber?: string): Promise<LinkedTicket> {
     const number = ticketNumber ? parseTicketNumber(ticketNumber) : undefined;
-    if (!number) return undefined;
+    if (!number) return { status: "none" };
     try {
-      return await ticketGateway.getTicket(employeeId, number);
+      return { status: "found", ticket: await ticketGateway.getTicket(employeeId, number) };
     } catch (error) {
-      if (!(error instanceof AppError)) throw error;
-      return undefined;
+      // De outra pessoa ou inexistente: não liga nada (RN09).
+      if (error instanceof AppError && error.code === "NOT_FOUND") return { status: "none" };
+      console.error(`Transferência sem consultar o chamado ${number}`, error);
+      return { status: "unavailable", number };
     }
   }
 
   /**
-   * Marca o chamado como aguardando analista, com o resumo. Se o sistema de chamados estiver fora,
-   * a conversa vai para o analista mesmo assim: falar com uma pessoa importa mais (o resultado avisa).
+   * Marca o chamado como aguardando analista, com o resumo. Qualquer falha fica no log: a conversa
+   * já está com os analistas e o resumo já foi gravado, então nada aqui desfaz a transferência.
    */
-  async function transferTicket(
-    employeeId: string,
-    ticket: TicketDto | undefined,
-    handoffId: string,
-    summaryText: string,
-  ): Promise<boolean> {
-    if (!ticket || !isOpenStatus(ticket.status)) return false;
+  async function transferTicket(employeeId: string, ticket: TicketDto, row: HandoffRow) {
+    if (!isOpenStatus(ticket.status)) return row;
     try {
       await ticketGateway.transferTicket(
         employeeId,
         ticket.number,
-        summaryText,
-        `handoff:${handoffId}`,
+        describeSummary(row),
+        `handoff:${row.id}`,
       );
-      return true;
+      return await handoffStore.markTicketTransferred(row.id);
     } catch (error) {
-      if (!(error instanceof AppError)) throw error;
       console.error(`Transferência sem atualizar o chamado ${ticket.number}`, error);
-      return false;
+      return row;
     }
   }
 
@@ -92,8 +101,11 @@ export function createHandoffService({
     }
     const mode = nextMode(conversation.mode, "handoff");
 
-    const ticket = await linkedTicket(request.employeeId, request.ticketNumber);
+    const linked = await linkedTicket(request.employeeId, request.ticketNumber);
     const now = clock.now();
+    const ticketFacts = linked.status === "found" ? handoffTicket(linked.ticket, now) : undefined;
+    const reason = verifiedHandoffReason(request.reason, ticketFacts);
+
     const moved = await conversationStore.changeMode(conversation, {
       mode,
       assignedAnalystId: null,
@@ -101,32 +113,33 @@ export function createHandoffService({
     });
     if (!moved) throw new AppError("CONFLICT", "A conversa mudou de estado; tente de novo.");
 
-    const id = randomUUID();
-    const supportLevel = supportLevelFor(request.reason, ticket && handoffTicket(ticket, now));
-    const summaryText = describeSummary(request.reason, request.summary);
-    const ticketTransferred = await transferTicket(request.employeeId, ticket, id, summaryText);
-    const row = await handoffStore.create({
-      id,
+    // Logo depois da troca de estado, só gravações locais: o resumo e o aviso na conversa.
+    // O sistema de chamados, que pode falhar, fica por último.
+    const created = await handoffStore.create({
+      id: randomUUID(),
       conversationId: conversation.id,
-      reason: request.reason,
-      supportLevel,
+      reason,
+      supportLevel: supportLevelFor(reason, ticketFacts),
       problem: request.summary.problem,
       attempted: request.summary.attempted,
-      ticketNumber: ticket?.number ?? null,
-      ticketTransferred,
-      responseDueAt: handoffResponseDue(ticket?.priority, now),
+      ticketNumber: linkedNumber(linked),
+      ticketTransferred: false,
+      responseDueAt: handoffResponseDue(reason, ticketFacts?.priority, now),
       createdAt: now,
     });
-
-    const view = toHandoffView(row);
     await conversationStore.appendMessage({
       conversationId: conversation.id,
       author: "system",
       authorId: null,
-      parts: [{ type: "text", text: handoffLine(view) }],
+      parts: [{ type: "text", text: handoffLine(created) }],
       createdAt: clock.now(),
     });
-    return view;
+
+    const row =
+      linked.status === "found"
+        ? await transferTicket(request.employeeId, linked.ticket, created)
+        : created;
+    return toHandoffView(row);
   }
 
   return {
@@ -134,26 +147,45 @@ export function createHandoffService({
 
     /**
      * A04: caso crítico transfere direto, avisando. Chamado crítico recém-criado leva a conversa
-     * para o N2 sem depender de o agent lembrar disso.
+     * para o N2 sem depender de o agent lembrar disso. O chamado já existe: se a transferência
+     * falhar, a confirmação continua valendo e o resultado diz que a transferência não aconteceu.
      */
-    async escalateIfCritical(request: {
+    async escalateNewCriticalTicket(request: {
       employeeId: string;
       conversationId: string;
+      draft: Pick<DraftView, "kind">;
       ticket: Pick<TicketDto, "number" | "priority" | "title" | "description">;
-    }) {
-      if (request.ticket.priority !== "critical") return null;
+    }): Promise<{ handoff: HandoffView | null; escalationFailed: boolean }> {
+      const { draft, ticket } = request;
+      if (draft.kind !== "create" || ticket.priority !== "critical") {
+        return { handoff: null, escalationFailed: false };
+      }
       const conversation = await conversationStore.findById(request.conversationId);
-      if (conversation?.mode !== "agent") return null;
-      return handoff({
-        employeeId: request.employeeId,
-        conversationId: request.conversationId,
-        reason: "critical",
-        ticketNumber: request.ticket.number,
-        summary: {
-          problem: `${request.ticket.title}. ${request.ticket.description}`,
-          attempted: `Chamado ${request.ticket.number} aberto pelo chat com prioridade Crítica.`,
-        },
-      });
+      // Já transferida (por exemplo, o agent transferiu no mesmo passo): nada a fazer.
+      if (conversation?.mode !== "agent") return { handoff: null, escalationFailed: false };
+      try {
+        const handoffView = await handoff({
+          employeeId: request.employeeId,
+          conversationId: request.conversationId,
+          reason: "critical",
+          ticketNumber: ticket.number,
+          summary: {
+            problem: truncate(
+              `${ticket.title}. ${ticket.description}`,
+              HANDOFF_SUMMARY_FIELD_MAX_CHARS,
+            ),
+            attempted: `Chamado ${ticket.number} aberto pelo chat com prioridade Crítica.`,
+          },
+        });
+        return { handoff: handoffView, escalationFailed: false };
+      } catch (error) {
+        // Corrida com outra transferência: a conversa já está com os analistas.
+        if (error instanceof AppError && error.code === "CONFLICT") {
+          return { handoff: null, escalationFailed: false };
+        }
+        console.error(`Chamado crítico ${ticket.number} criado sem transferência`, error);
+        return { handoff: null, escalationFailed: true };
+      }
     },
   };
 }
@@ -161,13 +193,25 @@ export function createHandoffService({
 export type HandoffService = ReturnType<typeof createHandoffService>;
 
 /** O que o nível de suporte precisa saber do chamado ligado (A03). */
-function handoffTicket(ticket: TicketDto, now: Date) {
+function handoffTicket(ticket: TicketDto, now: Date): HandoffTicket {
   const sla = slaStatusOfTicket(ticket, now);
   return { priority: ticket.priority, isOverdue: sla.isTracked && sla.isOverdue };
 }
 
-function describeSummary(reason: HandoffReason, summary: HandoffSummary): string {
-  return `Motivo: ${HANDOFF_REASON_LABELS[reason]}. Problema: ${summary.problem} Já tentado: ${summary.attempted}`;
+function linkedNumber(linked: LinkedTicket): string | null {
+  if (linked.status === "found") return linked.ticket.number;
+  if (linked.status === "unavailable") return linked.number;
+  return null;
+}
+
+function truncate(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
+}
+
+/** O resumo como vai para o histórico do chamado, dentro do limite de uma atualização. */
+function describeSummary(row: HandoffRow): string {
+  const text = `Motivo: ${HANDOFF_REASON_LABELS[row.reason]}. Problema: ${row.problem} Já tentado: ${row.attempted}`;
+  return truncate(text, MAX_UPDATE_MESSAGE_CHARS);
 }
 
 export function toHandoffView(row: HandoffRow) {
@@ -182,6 +226,7 @@ export function toHandoffView(row: HandoffRow) {
 
 export type HandoffView = ReturnType<typeof toHandoffView>;
 
-function handoffLine(view: HandoffView): string {
+function handoffLine(row: HandoffRow): string {
+  const view = toHandoffView(row);
   return `Conversa transferida para o Suporte ${view.supportLevel} (${view.reason}). Um analista fala com você até ${view.responseBy}.`;
 }

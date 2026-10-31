@@ -61,12 +61,13 @@ export function createDraftActions({
       });
       await recordInConversation(conversationId, confirmedLine(result.draft));
       // A04: chamado crítico vai direto para o N2, também quando confirmado pelo botão.
-      const handoff = await handoffService.escalateIfCritical({
+      const escalation = await handoffService.escalateNewCriticalTicket({
         employeeId,
         conversationId,
+        draft: result.draft,
         ticket: result.ticket,
       });
-      return { ...result, handoff };
+      return { ...result, ...escalation };
     },
 
     async cancel(employeeId: string, draftNumber: number) {

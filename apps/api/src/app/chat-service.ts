@@ -64,6 +64,13 @@ export function createChatService({
   }
 
   return {
+    /** Se a próxima mensagem vai para o agent (e gasta o modelo) ou fica para o analista (RN08). */
+    async agentWillReply(employee: UserRow): Promise<boolean> {
+      const conversation = await conversationStore.findOpenByEmployee(employee.id);
+      // Sem conversa aberta, a próxima mensagem abre uma nova, com o agent.
+      return !conversation || agentMayReply(conversation.mode);
+    },
+
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, messages: [] };

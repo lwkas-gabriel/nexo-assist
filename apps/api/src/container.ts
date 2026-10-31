@@ -33,6 +33,7 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
+const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
 const LOGINS_PER_IP_PER_MINUTE = 20;
 
 /** O que o container precisa da config: banco, modelo e acesso ao serviço de chamados. */
@@ -98,6 +99,7 @@ export async function createContainer(
     ticketGateway,
     draftService,
     handoffService,
+    conversationStore,
     clock,
   });
 
@@ -123,6 +125,11 @@ export async function createContainer(
       globalPerDay: createRateLimiter({
         limit: config.CHAT_MESSAGES_PER_DAY,
         windowMs: DAY_MS,
+        clock,
+      }),
+      toAnalystPerUser: createRateLimiter({
+        limit: MESSAGES_TO_ANALYST_PER_USER_PER_HOUR,
+        windowMs: HOUR_MS,
         clock,
       }),
       draftActionsPerUser: createRateLimiter({

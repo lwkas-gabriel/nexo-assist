@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { TicketDto } from "@nexo/shared/contracts";
+import { transferTicketRequestSchema, type TicketDto } from "@nexo/shared/contracts";
 import { DEMO_USERS } from "@nexo/shared/demo";
 import { isOpenStatus, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
@@ -135,6 +135,10 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
       }),
     transferTicket: (ownerId, number, summary, key) =>
       idempotent(key, () => {
+        // Como o serviço real: resumo fora do contrato é recusado (o gateway vê um erro interno).
+        if (!transferTicketRequestSchema.safeParse({ ownerId, summary }).success) {
+          throw new AppError("INTERNAL", "Resposta inesperada (HTTP 400)");
+        }
         const ticket = findOwned(ownerId, number);
         ticket.status = "waiting_analyst";
         ticket.updates.push({
@@ -166,13 +170,20 @@ export async function createTestAgentServices(
     ticketGateway,
     clock,
   });
+  const handoffStore = createHandoffStore(db);
   const handoffService = createHandoffService({
     conversationStore,
-    handoffStore: createHandoffStore(db),
+    handoffStore,
     ticketGateway,
     clock,
   });
-  return { draftService, handoffService, conversationStore, conversationId: conversation.id };
+  return {
+    draftService,
+    handoffService,
+    handoffStore,
+    conversationStore,
+    conversationId: conversation.id,
+  };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */

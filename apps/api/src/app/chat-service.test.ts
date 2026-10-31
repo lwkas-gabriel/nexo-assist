@@ -57,6 +57,7 @@ async function chatChunksWith(model: MockLanguageModelV4): Promise<UIMessageChun
         ticketGateway,
         clock: systemClock,
       }),
+      conversationStore,
       clock: systemClock,
     }),
     conversationStore,

@@ -1,5 +1,7 @@
+import { systemClock } from "@nexo/shared/domain";
 import { describe, expect, it } from "vitest";
 import { createFakeTicketGateway, createTestApp, createTestContainer } from "../test-support.ts";
+import { createRateLimiter } from "./rate-limiter.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
 
@@ -74,5 +76,27 @@ describe("transferência pelo chat (RF16, RF17)", () => {
       handoff: { supportLevel: "N2", reason: "caso crítico" },
     });
     expect((await conversation()).conversation?.mode).toBe("waiting_analyst");
+  });
+
+  it("R42: mensagens para o analista não gastam a cota do modelo", async () => {
+    const container = await createTestContainer();
+    container.chatLimits.globalPerDay = createRateLimiter({
+      limit: 1,
+      windowMs: 60_000,
+      clock: systemClock,
+    });
+    const { app, login } = await createTestApp(container);
+    const ana = await login(ANA_EMAIL);
+    const say = (text: string) =>
+      app.request("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: ana },
+        body: JSON.stringify({ text }),
+      });
+
+    await (await say("Quero falar com um analista")).text();
+    const toAnalyst = await say("Ainda estou aguardando");
+
+    expect(toAnalyst.status).toBe(200);
   });
 });

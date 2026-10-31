@@ -33,16 +33,15 @@ async function createAgent({
   knowledgeBase = createFakeKnowledgeBase([]).knowledgeBase,
   ticketGateway = createFakeTicketGateway().ticketGateway,
 }: { knowledgeBase?: KnowledgeBase; ticketGateway?: TicketGateway } = {}) {
-  const { draftService, handoffService, conversationId } = await createTestAgentServices(
-    ticketGateway,
-    clock,
-  );
+  const { draftService, handoffService, conversationStore, conversationId } =
+    await createTestAgentServices(ticketGateway, clock);
   const agent = createNexoAgent({
     model: createModel({ LLM_MODE: "mock" }),
     knowledgeBase,
     ticketGateway,
     draftService,
     handoffService,
+    conversationStore,
     clock,
   });
 
