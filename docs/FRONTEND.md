@@ -40,6 +40,7 @@ Guardas de rota por papel; sessão expirada → `/login` com aviso.
 - **Base (`ui/`):** Button (primary/secondary/danger-soft/ghost), Pill/Badge, Avatar (iniciais), Card, IconButton, TextField, Checkbox, Skeleton, Toast, EmptyState, Kbd (atalho).
 - **Domínio (`features/*/components`):** MessageBubble (funcionário / agent "IA" / analista com setor / sistema), ActionChips (passos do agent), **DecisionPanel** (detalhe da decisão), QuickOptions (numeradas, teclas 1–4), DraftCard (rascunho → criado/cancelado), TicketPickerList, TicketCard (com prazo e vencido), SuggestedActions ("Falar com um analista" / "Adicionar informação" / "Não, obrigado"), Composer (contador 18/30, bloqueado), ConversationListItem, FilterTabs com contagem, TakeoverBar, TicketHistoryPanel, SystemLine, DayDivider.
 - **Detalhe da decisão (onde o mock é omisso):** clicar nos chips abre um **painel lateral à direita** no chat, aproveitando o espaço da coluna e o mesmo padrão do painel de chamados do console. Conteúdo: *O que entendi* (intenção + campos extraídos), *O que fiz* (cada tool, entrada resumida, resultado, fonte, ex.: artigo da KB), *Regras aplicadas* (ex.: "RN11: só eu + compromisso hoje → Alta"), *Confiança* (barra + sinais que a reduziram), *Por quê* (justificativa). **Reutilizado no console**: lá as mensagens do agent também ganham chips, porque o analista precisa entender por que recebeu a conversa.
+  - **Como ficou (T20):** um botão "detalhes" no fim da linha de chips abre o painel, em vez de os próprios chips serem clicáveis: a lista "Ações do assistente" continua lista para o leitor de tela, e o HTML fica válido. O painel tem 360 px (o de chamados do console tem 340), para a entrada e a fonte de cada passo caberem sem quebrar demais. A frase da confiança diz de onde ela veio: classificador, resposta rápida conferida pelo código, botão ou valor neutro (classificador fora do ar).
 
 ### 10.5 Estados que o mock não mostra (desenhar seguindo o mesmo estilo)
 | Situação | Comportamento |
@@ -63,7 +64,7 @@ Guardas de rota por papel; sessão expirada → `/login` com aviso.
 O mock tem 6 frames "(desktop)" e nenhuma variante de tablet ou celular. Medidas fixas que quebram em telas menores: padding de 200 px no chat, lista de 380 + painel de 340 no console, painel de apresentação de 800 px no login. Proposta (A18 revista):
 | Largura | Login | Chat do funcionário | Console do analista |
 |---|---|---|---|
-| ≥ 1280 px | Como o mock | Como o mock; detalhe da decisão em painel lateral | Como o mock (4 colunas) |
+| ≥ 1280 px | Como o mock | Como o mock; detalhe da decisão em painel lateral (com ele aberto, o recuo lateral da conversa cai de 200 para 48 px, para o card do rascunho não ficar espremido) | Como o mock (4 colunas) |
 | 1024–1279 | Painel de apresentação reduzido | Padding lateral cai de 200 para 48 px | Painel de chamados vira gaveta (botão no cabeçalho) |
 | 768–1023 | Só o formulário + marca | Sidebar vira rail de ícones; detalhe da decisão em gaveta sobreposta | Rail + lista + conversa; chamados em gaveta |
 | < 768 | Só o formulário | Coluna única; menu no topo; detalhe da decisão em *bottom sheet*; opções rápidas e card de rascunho em largura total | Uma coluna por vez: lista → conversa (voltar) → chamados |

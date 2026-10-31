@@ -607,3 +607,22 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **Ações de botão** (seleção de chamado) dizem no painel que foram decididas pelo código, sem o modelo; as linhas de sistema dos botões do card continuam sem botão de detalhe (o registro delas aparece no console, T23).
 - **Conferência visual:** capturas em 1440 px (coluna), 1024 px (gaveta) e 390 px (folha que sobe).
 - **Achado no caminho:** o jsdom calcula o nome acessível de "detalhes" + `<span class="sr-only"> da decisão</span>` sem o espaço; o nome passou a vir de um `aria-label` que contém o texto visível (WCAG 2.5.3), igual em qualquer ambiente.
+
+### 62. Revisão adversarial da T20 e correções
+- **Revisão independente** (sub-agente novo, sem o contexto da implementação, com esforço alto): 12 achados, nenhum crítico. Todos tratados.
+- **Importantes:**
+  - **O painel inventava nota do classificador.** Numa resposta rápida (R38) ele dizia "O classificador deu 100%", e o "Por quê" logo abaixo dizia que o classificador não rodou; com o classificador fora do ar, mostrava o valor neutro como se fosse nota dele. O registro passou a guardar de onde veio a confiança (classificador, resposta rápida, botão ou neutro), e a frase segue isso.
+  - **Códigos internos em inglês chegavam à tela** ("não concluiu (not_found)"). Os motivos ganharam texto em português; motivo sem texto aparece só como "não concluiu".
+  - **O "O que fiz" não cumpria o 10.4:** faltavam a entrada e a fonte. Cada passo agora traz a entrada resumida (a busca, o número do chamado) e os artigos que serviram de fonte.
+  - **No desktop, o painel ficava no fim da ordem do Tab e não era anunciado.** A coluna agora recebe o foco ao abrir, fecha com Esc e devolve o foco; o botão aponta para ela com `aria-controls`.
+  - **As faixas de confiança viraram regra de domínio sem teste.** Testadas nas fronteiras (0,4999, 0,5, 0,7999, 0,8), e o prompt do classificador passou a usar as mesmas constantes (o texto saiu idêntico, então não houve o que validar com o Gemini).
+- **Menores, todos tratados:**
+  - tipo do registro declarado duas vezes: o da api agora deriva do contrato;
+  - o botão com `aria-expanded` não fechava: agora alterna;
+  - resposta aberta que saía da janela de 200 mensagens deixava o foco perdido;
+  - alvo de toque do botão (agora 24 px) e contraste da barra (borda e aviso em tom mais escuro);
+  - documentação: o botão "detalhes", a largura de 360 px e o recuo menor com o painel aberto estão registrados no FRONTEND.md;
+  - comentário errado sobre o limiar (a barra mostra a confiança final; o R39 olha a do classificador), ternário aninhado, comentário órfão, reexport desnecessário e validação repetida a cada renderização;
+  - testes: fronteira de 50%, cor de aviso, gaveta no notebook, Esc e foco na folha do celular.
+- **Correção ao AI_LOG 61:** ali está escrito que o painel usa "os mesmos números que o agent recebe"; os cortes são os mesmos, mas o painel os aplica à confiança final (já com os sinais), e o agent e o R39 à do classificador.
+- **Lição:** um campo que só a interface lê (a origem da confiança) estava implícito em outros dados, e a interface adivinhou errado. Se a tela precisa explicar uma decisão, quem decidiu tem de gravar o porquê, não deixar a tela deduzir.
