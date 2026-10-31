@@ -560,3 +560,18 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **O E2E pegou um problema que a revisão não viu:** logo depois de uma confirmação por texto, o card antigo ainda mostrava "Confirmar" até a conversa ser recarregada, e o teste clicou nele. Os botões do card (e o Ctrl/⌘+Enter) agora esperam o agent terminar de responder.
 - **Validado com o Gemini real** (duas mensagens): o texto do rascunho saiu curto, citando o D-n e o motivo da prioridade; antes, o agent perguntou sobre um possível duplicado, como manda a RN05.
 - **Lição:** um E2E que espera "algum botão Confirmar" passa ou falha conforme a ordem dos eventos. O teste precisa mirar o card novo, e a tela não deve oferecer ação sobre um estado que ainda vai mudar.
+
+---
+
+## T19b: ações estruturadas sem o modelo (31/10/2026)
+
+### 59. T19b: o que o clique já diz, o código resolve
+- **IA gerou:** as regras puras das ações (`app/structured-actions.ts`), o endpoint de seleção de chamado, a marca `quickOption` no envio de mensagem, um roteiro novo no modelo de teste (lentidão → pergunta com respostas rápidas) e os testes, inclusive E2E.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **Resposta rápida continua indo ao agent, mas sem o classificador.** Diferente de "Confirmar", a opção é a resposta a uma pergunta do agent, que precisa dela para seguir (por exemplo, montar o rascunho). O que sobrava era a etapa 1: a opção já diz o que o funcionário quis. A api só aceita o atalho se o texto for uma das opções da mensagem mais recente do agent; senão, o turno segue o caminho normal. A classificação fica com confiança 100% e a intenção do turno que perguntou.
+  - **Seleção de chamado responde por modelo de texto, em JSON, como os botões do card.** A resposta é gravada com a mesma parte `get_ticket` que o agent produziria, para os chips e o card do chamado da tela 3 (T21) funcionarem sem saber que o modelo não rodou. O chamado é buscado antes de gravar qualquer coisa: se não é do funcionário (RN09) ou o sistema caiu, a conversa não fica pela metade.
+  - **"Não, obrigado" e as demais ações sugeridas** ficam com a T21, que desenha esses botões.
+- **Achados no caminho:**
+  - **Conversa sem mensagens abria com erro interno.** O AI SDK recusa validar uma lista vazia; uma conversa cuja primeira mensagem foi recusada (cota, limite) ficava inacessível. Corrigido, com teste.
+  - **O registro do "Falar com um analista" pelo botão dizia "confirmar rascunho".** O registro dos botões passou a receber a intenção.
+- **Lição:** o registro de decisão guarda o rótulo da intenção, não o código. A primeira versão comparava com o código e nunca reconhecia a opção; o teste de ponta a ponta (contando as chamadas ao classificador) pegou, o teste da função pura sozinho não pegaria.
