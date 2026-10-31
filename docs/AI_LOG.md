@@ -541,3 +541,22 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **"Meu perfil" aparece na barra lateral desativado,** com "em breve": a tela é da T25.
 - **Conferência visual:** capturas no desktop (1440 × 900) e no celular, com um rascunho aberto. A linha do topo do card quebrava no meio das palavras no celular e foi corrigida.
 
+
+### 58. Revisão adversarial da T19 e correções
+- **Revisão independente** (sub-agente novo, sem o contexto da implementação): 16 achados, 4 críticos. Todos tratados.
+- **Críticos:**
+  - o aviso de limite da sessão aparecia mesmo com a conversa no analista, bloqueando o funcionário (o limite vale só para o agent);
+  - o "Tentar novamente" usava o `regenerate`, que reenviava a mensagem errada e quebrava com a conversa vazia; além disso, o recarregamento depois da falha apagava a bolha que não foi enviada;
+  - os erros de "Nova sessão" e de "Falar com um analista" não apareciam em lugar nenhum (dividiam a mutação com o card);
+  - o erro de um rascunho aparecia em outro, e Ctrl/⌘+Enter repetido podia mandar outra confirmação durante a primeira.
+- **Correções:**
+  - **Ids estáveis:** a mensagem do funcionário é gravada com o id da bolha da tela e a do agent com o id do stream. Recarregar a conversa não remonta as bolhas, e o leitor de tela não relê tudo.
+  - **Reenvio exato:** o "Tentar novamente" manda o mesmo texto com o mesmo id. O servidor reconhece o reenvio (mesmo id, autor e texto) e não grava a mensagem duas vezes; id de outra mensagem é ignorado, para não dar ao cliente um jeito de esconder o texto do histórico do agent. A bolha que não chegou ao servidor fica marcada "Não enviada", e o alerta oferece também falar com um analista.
+  - **Erros no lugar certo:** mutações separadas para o card e para a sessão; o erro do card fica só no rascunho que falhou; o aviso de limite tem o próprio alerta.
+  - **Card:** a edição só fecha quando a api aceita, valida título e descrição com as constantes do shared e leva o foco ao primeiro campo; sai a linha da regra de prioridade; o cancelado não mostra prazo; o atalho tem `aria-keyshortcuts`.
+  - **Teclado e estrutura:** teclas 1 a 4 só sem modificadores; ⌘+Enter testado; foco volta ao campo de mensagem depois das ações; `h1` "Atendimento"; a região viva envolve a lista e o "pensando…".
+  - **Histórico exibido:** a tela recebe até 200 mensagens (o agent continua com 40), para as sessões anteriores seguirem visíveis.
+  - **Constantes:** limite de caracteres da mensagem e de mensagens por sessão vêm do pacote shared.
+- **O E2E pegou um problema que a revisão não viu:** logo depois de uma confirmação por texto, o card antigo ainda mostrava "Confirmar" até a conversa ser recarregada, e o teste clicou nele. Os botões do card (e o Ctrl/⌘+Enter) agora esperam o agent terminar de responder.
+- **Validado com o Gemini real** (duas mensagens): o texto do rascunho saiu curto, citando o D-n e o motivo da prioridade; antes, o agent perguntou sobre um possível duplicado, como manda a RN05.
+- **Lição:** um E2E que espera "algum botão Confirmar" passa ou falha conforme a ordem dos eventos. O teste precisa mirar o card novo, e a tela não deve oferecer ação sobre um estado que ainda vai mudar.
