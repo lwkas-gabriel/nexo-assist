@@ -77,7 +77,29 @@ export function startNewSession() {
   return apiRequest<unknown>("/chat/sessions", { method: "POST" });
 }
 
-/** "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão). */
-export function requestAnalyst() {
-  return apiRequest<unknown>("/chat/handoff", { method: "POST" });
+/**
+ * "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão). Com o
+ * chamado, é a oferta de um chamado vencido (tela 3): o motivo vira o prazo.
+ */
+export function requestAnalyst(ticketNumber?: string) {
+  return apiRequest<unknown>("/chat/handoff", {
+    method: "POST",
+    body: ticketNumber ? { ticketNumber } : {},
+  });
+}
+
+/** RF08: escolha de um chamado na lista, respondida pelo código (11.5). */
+export function selectTicket(ticketNumber: string) {
+  return apiRequest<unknown>("/chat/actions/select-ticket", {
+    method: "POST",
+    body: { ticketNumber },
+  });
+}
+
+/** "Não, obrigado" à oferta de analista, respondido pelo código (11.5). */
+export function declineOffer(ticketNumber: string) {
+  return apiRequest<unknown>("/chat/actions/decline-offer", {
+    method: "POST",
+    body: { ticketNumber },
+  });
 }

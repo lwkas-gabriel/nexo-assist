@@ -8,6 +8,8 @@ const SHORTCUT_OPTIONS = 4;
 type ComposerProps = {
   /** O campo de texto: o foco volta para ele depois de um botão do card ou de uma opção. */
   ref?: Ref<HTMLInputElement>;
+  /** Texto com que o campo começa ("Adicionar informação" da tela 3); para trocar, troque a key. */
+  initialText?: string;
   isBusy: boolean;
   onSend: (text: string) => void;
   /** Resposta rápida escolhida pelas teclas 1 a 4 (vai marcada, como o clique no botão). */
@@ -23,6 +25,7 @@ type ComposerProps = {
 /** Campo de mensagem da tela 2, com o contador da sessão e os atalhos de teclado. */
 export function Composer({
   ref,
+  initialText = "",
   isBusy,
   onSend,
   onPickOption,
@@ -30,7 +33,7 @@ export function Composer({
   quickOptions,
   onConfirmDraft,
 }: ComposerProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const trimmed = text.trim();
   const canSend = !isBusy && trimmed.length > 0 && trimmed.length <= CHAT_MESSAGE_MAX_CHARS;
 

@@ -29,4 +29,11 @@ describe("describeToolAction", () => {
   it("tem um rótulo genérico para ações ainda sem descrição", () => {
     expect(describeToolAction("tool_nova")).toBe("executou uma ação");
   });
+
+  it("tela 3: a consulta de um chamado diz qual", () => {
+    expect(describeToolAction("get_ticket", { ok: true, ticket: { number: "INC-20311" } })).toBe(
+      "consultou o INC-20311",
+    );
+    expect(describeToolAction("get_ticket")).toBe("consultou o chamado");
+  });
 });

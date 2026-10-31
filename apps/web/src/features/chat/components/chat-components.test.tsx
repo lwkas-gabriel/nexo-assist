@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DraftView } from "../chat-api.ts";
 import { sampleDecision } from "../decision.fixture.ts";
 import { Composer, SessionLimitNotice } from "./Composer.tsx";
+import { onTimeTicket, overdueTicket } from "../ticket.fixture.ts";
 import { DecisionPanel } from "./DecisionPanel.tsx";
+import { TicketCard } from "./TicketCard.tsx";
+import { TicketPickerList } from "./TicketPickerList.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
 
@@ -335,5 +338,41 @@ describe("detalhe da decisão (RF05, 10.4)", () => {
     render(<DecisionPanel decision={{ ...sampleDecision, steps: [] }} />);
 
     expect(screen.getByText("Respondi direto, sem consultar nada.")).toBeDefined();
+  });
+});
+
+describe("chamados na conversa (tela 3, RF08, RF09)", () => {
+  it("RF08: escolher um chamado da lista chama a ação com ele", async () => {
+    const onSelect = vi.fn();
+    render(
+      <TicketPickerList tickets={[overdueTicket, onTimeTicket]} isActive onSelect={onSelect} />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /INC-20298/ }));
+
+    expect(onSelect).toHaveBeenCalledWith(onTimeTicket);
+  });
+
+  it("lista antiga fica só como registro", () => {
+    render(
+      <TicketPickerList tickets={[overdueTicket]} isActive={false} onSelect={() => undefined} />,
+    );
+
+    expect(screen.getByRole("button", { name: /INC-20311/ })).toHaveProperty("disabled", true);
+  });
+
+  it("RN12: vencido diz há quanto tempo a TI não responde, em aviso, com prazo vencido", () => {
+    render(<TicketCard ticket={overdueTicket} />);
+
+    expect(screen.getByText("há 5 dias").className).toContain("text-warning-text");
+    expect(screen.getByText("· prazo vencido")).toBeDefined();
+    expect(screen.getByText("Aguardando analista")).toBeDefined();
+  });
+
+  it("dentro do prazo, sem aviso", () => {
+    render(<TicketCard ticket={onTimeTicket} />);
+
+    expect(screen.getByText("há 1 dia").className).not.toContain("text-warning");
+    expect(screen.queryByText("· prazo vencido")).toBeNull();
   });
 });

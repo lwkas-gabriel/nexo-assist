@@ -21,5 +21,16 @@ function didNotComplete(output: unknown): boolean {
 /** Rótulo da ação; se a tool respondeu que não concluiu, o chip diz isso em vez de dar a ação por feita. */
 export function describeToolAction(toolName: string, output?: unknown): string {
   const label = TOOL_ACTION_LABELS[toolName] ?? UNKNOWN_ACTION_LABEL;
-  return didNotComplete(output) ? `${label}${NOT_COMPLETED_SUFFIX}` : label;
+  if (didNotComplete(output)) return `${label}${NOT_COMPLETED_SUFFIX}`;
+  // Tela 3: "consultou o INC-20311", com o número que a consulta devolveu.
+  const number = consultedNumber(output);
+  return toolName === "get_ticket" && number ? `consultou o ${number}` : label;
+}
+
+function consultedNumber(output: unknown): string | undefined {
+  if (typeof output !== "object" || output === null || !("ticket" in output)) return undefined;
+  const { ticket } = output;
+  return typeof ticket === "object" && ticket !== null && "number" in ticket
+    ? String(ticket.number)
+    : undefined;
 }

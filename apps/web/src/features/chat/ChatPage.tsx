@@ -12,9 +12,11 @@ import type { CurrentUser } from "../auth/auth-api.ts";
 import {
   cancelDraft,
   confirmDraft,
+  declineOffer,
   editDraft,
   fetchConversation,
   requestAnalyst,
+  selectTicket,
   startNewSession,
   type ConversationView,
   type DraftFields,
@@ -33,7 +35,13 @@ import { ChatShell } from "./ChatShell.tsx";
 import { DecisionPanel } from "./components/DecisionPanel.tsx";
 import { decisionOf } from "./decision-model.ts";
 import { Composer, SessionLimitNotice } from "./components/Composer.tsx";
-import { MessageBubble, type DraftActions } from "./components/MessageBubble.tsx";
+import {
+  MessageBubble,
+  type DraftActions,
+  type TicketActions,
+} from "./components/MessageBubble.tsx";
+import type { SuggestedAction } from "./components/SuggestedActions.tsx";
+import type { TicketSummaryView } from "./ticket-model.ts";
 
 const CONVERSATION_KEY = ["conversation"] as const;
 
@@ -140,6 +148,41 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     },
   });
 
+  // Tela 3: escolher um chamado e responder à oferta de analista, sem o modelo (11.5).
+  const ticketAction = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: async () => {
+      await refresh();
+      composerRef.current?.focus();
+    },
+  });
+  // "Adicionar informação": o campo de mensagem recomeça com o começo da frase (nova key).
+  const [composerSeed, setComposerSeed] = useState({ key: 0, text: "" });
+  useEffect(() => {
+    const input = composerRef.current;
+    if (composerSeed.key === 0 || !input) return;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [composerSeed]);
+  const suggest = (action: SuggestedAction, ticket: TicketSummaryView) => {
+    if (action === "add_info") {
+      setComposerSeed((seed) => ({
+        key: seed.key + 1,
+        text: `Quero adicionar uma informação ao ${ticket.number}: `,
+      }));
+      return;
+    }
+    ticketAction.mutate(() =>
+      action === "analyst" ? requestAnalyst(ticket.number) : declineOffer(ticket.number),
+    );
+  };
+  const ticketActions: TicketActions = {
+    isWorking: ticketAction.isPending || isBusy,
+    error: ticketAction.error ? ticketAction.error.message : null,
+    select: (ticket) => ticketAction.mutate(() => selectTicket(ticket.number)),
+    suggest,
+  };
+
   const pendingDraft = confirmableDraft(messages, view.drafts);
   const draftActions: DraftActions = {
     // Enquanto o agent responde, o card pode estar mudando: os botões esperam o fim do turno.
@@ -239,6 +282,8 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
                       decisionPanelId={decisionPanelId}
                       onPickOption={pickOption}
                       draftActions={draftActions}
+                      isLatestAgentTurn={message === lastMessage && !isBusy && mode === "agent"}
+                      ticketActions={ticketActions}
                     />
                   </MessageWithSummary>
                 ))}
@@ -294,6 +339,8 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
             />
           ) : (
             <Composer
+              key={composerSeed.key}
+              initialText={composerSeed.text}
               ref={composerRef}
               isBusy={isBusy}
               onSend={send}

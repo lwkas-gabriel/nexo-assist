@@ -45,6 +45,21 @@ export const CONVERSATION_MODE_TONES: Record<ConversationMode, Tone> = {
   closed: "neutral",
 };
 
+/**
+ * Ponto da prioridade, como no protótipo. A api manda o rótulo já em português (o mesmo de
+ * TICKET_PRIORITY_LABELS); rótulo desconhecido fica neutro.
+ */
+const PRIORITY_DOT_CLASSES: Record<string, string> = {
+  Crítica: "bg-danger",
+  Alta: "bg-warning",
+  Média: "bg-primary",
+  Baixa: "bg-ink-3",
+};
+
+export function priorityDotClass(priorityLabel: string): string {
+  return PRIORITY_DOT_CLASSES[priorityLabel] ?? "bg-ink-3";
+}
+
 /** Prazo vencido é sempre perigo, qualquer que seja o status (RN12). */
 export function ticketTone(status: TicketStatus, isOverdue: boolean): Tone {
   return isOverdue ? "danger" : TICKET_STATUS_TONES[status];

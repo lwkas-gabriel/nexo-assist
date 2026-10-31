@@ -3,9 +3,26 @@ import { useMemo } from "react";
 import type { DraftFields, DraftView } from "../chat-api.ts";
 import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf, textOf } from "../chat-model.ts";
 import { decisionOf } from "../decision-model.ts";
+import {
+  consultedTicketOf,
+  isOverdueAndOpen,
+  listedTicketsOf,
+  type TicketSummaryView,
+} from "../ticket-model.ts";
+import { SuggestedActions, type SuggestedAction } from "./SuggestedActions.tsx";
+import { TicketCard } from "./TicketCard.tsx";
+import { TicketPickerList } from "./TicketPickerList.tsx";
 import { ActionChips } from "./ActionChips.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
+
+/** Tela 3: escolher um chamado da lista e responder à oferta de analista (11.5, sem o modelo). */
+export type TicketActions = {
+  isWorking: boolean;
+  error: string | null;
+  select: (ticket: TicketSummaryView) => void;
+  suggest: (action: SuggestedAction, ticket: TicketSummaryView) => void;
+};
 
 export type DraftActions = {
   isWorking: boolean;
@@ -32,6 +49,12 @@ type MessageBubbleProps = {
   openDecisionId: string | null;
   /** Id do painel de detalhe (aria-controls do botão). */
   decisionPanelId: string;
+  /**
+   * A resposta mais recente, com o agent livre e a conversa com ele: só ela aceita escolher um
+   * chamado ou responder à oferta de analista; as antigas ficam como registro.
+   */
+  isLatestAgentTurn: boolean;
+  ticketActions: TicketActions;
   onPickOption: (option: string) => void;
   draftActions: DraftActions;
 };
@@ -90,6 +113,8 @@ function AgentMessage({
   onOpenDecision,
   openDecisionId,
   decisionPanelId,
+  isLatestAgentTurn,
+  ticketActions,
   text,
 }: MessageBubbleProps & { text: string }) {
   const options = quickOptionsOf(message);
@@ -97,6 +122,10 @@ function AgentMessage({
   const hasDecision = useMemo(() => decisionOf(message) !== undefined, [message]);
   const proposal = proposedDraft(message);
   const draft = proposal ? liveDraft(proposal, drafts) : undefined;
+  const listed = listedTicketsOf(message);
+  const consulted = consultedTicketOf(message);
+  const offersAnalyst = consulted !== undefined && isOverdueAndOpen(consulted);
+  const canAct = isLatestAgentTurn && !ticketActions.isWorking;
 
   return (
     <li className="flex flex-col gap-1.5">
@@ -106,6 +135,7 @@ function AgentMessage({
         isDecisionOpen={openDecisionId === message.id}
         decisionPanelId={decisionPanelId}
       />
+      {consulted && <TicketCard ticket={consulted} />}
       {(text || options) && (
         <div className="flex max-w-[600px] flex-col gap-3 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4 py-3">
           {text && (
@@ -114,7 +144,25 @@ function AgentMessage({
           {options && (
             <QuickOptions data={options} isActive={optionsActive} onPick={onPickOption} />
           )}
+          {offersAnalyst && (isLatestAgentTurn || ticketActions.isWorking) && (
+            <SuggestedActions
+              isActive={canAct}
+              onAction={(action) => ticketActions.suggest(action, consulted)}
+            />
+          )}
         </div>
+      )}
+      {listed && (
+        <TicketPickerList
+          tickets={listed}
+          isActive={canAct}
+          onSelect={(ticket) => ticketActions.select(ticket)}
+        />
+      )}
+      {isLatestAgentTurn && ticketActions.error && (listed || offersAnalyst) && (
+        <p role="alert" className="text-[13px] text-danger-text">
+          {ticketActions.error}
+        </p>
       )}
       {draft && (
         <DraftCard

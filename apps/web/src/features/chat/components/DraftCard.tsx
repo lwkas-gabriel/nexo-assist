@@ -17,6 +17,7 @@ import { isMacPlatform, modifierEnterShortcut, modifierKeyLabel } from "../../..
 import { Button } from "../../../ui/Button.tsx";
 import { Card } from "../../../ui/Card.tsx";
 import { cx } from "../../../ui/cx.ts";
+import { priorityDotClass } from "../../../ui/status-styles.ts";
 import type { DraftFields, DraftView } from "../chat-api.ts";
 
 type DraftCardProps = {
@@ -43,14 +44,6 @@ const KIND_LABELS: Record<DraftView["kind"], string> = {
   create: "Novo chamado",
   update: "Complemento",
   reopen: "Reabertura",
-};
-
-/** Cor do ponto da prioridade, como no protótipo. */
-const PRIORITY_DOTS: Record<string, string> = {
-  Crítica: "bg-danger",
-  Alta: "bg-warning",
-  Média: "bg-primary",
-  Baixa: "bg-ink-3",
 };
 
 /**
@@ -186,7 +179,7 @@ function DraftFieldsGrid({
         <Field label="Prioridade">
           <span
             aria-hidden
-            className={cx("size-1.5 rounded-full", PRIORITY_DOTS[ticket.priority] ?? "bg-ink-3")}
+            className={cx("size-1.5 rounded-full", priorityDotClass(ticket.priority))}
           />
           {ticket.priority}
           {showDeadline && (

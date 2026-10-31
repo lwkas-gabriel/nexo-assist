@@ -8,6 +8,7 @@ import type { CurrentUser } from "../auth/auth-api.ts";
 import type { ConversationView } from "./chat-api.ts";
 import { ChatPage } from "./ChatPage.tsx";
 import { sampleDecision } from "./decision.fixture.ts";
+import { agentWithTool, onTimeTicket, overdueTicket } from "./ticket.fixture.ts";
 
 const ANA: CurrentUser = {
   id: "emp-ana-souza",
@@ -281,6 +282,98 @@ describe("tela do chat (tela 2)", () => {
 
       expect(screen.queryByRole("dialog", { name: "Detalhe da decisão" })).toBeNull();
       expect(document.activeElement).toBe(details);
+    });
+  });
+
+  describe("tela 3: escolher um chamado e a oferta de analista (RF08, RF09, RN07)", () => {
+    /** Conversa com a resposta dada e a api que guarda o corpo de cada POST. */
+    function stubWithBodies(messages: ConversationView["messages"]) {
+      const posts: { path: string; body: unknown }[] = [];
+      vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          const body = typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : null;
+          posts.push({ path: input, body });
+        }
+        const view = { ...conversationAt("agent", false), messages };
+        const body = input === "/api/chat" ? view : {};
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      });
+      return posts;
+    }
+
+    it("RF08: clicar num chamado da lista manda a escolha, sem passar pelo modelo", async () => {
+      const posts = stubWithBodies([
+        agentWithTool("a-1", "list_my_tickets", {
+          ok: true,
+          tickets: [overdueTicket, onTimeTicket],
+        }),
+      ]);
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: /INC-20298/ }));
+
+      await waitFor(() =>
+        expect(posts).toContainEqual({
+          path: "/api/chat/actions/select-ticket",
+          body: { ticketNumber: "INC-20298" },
+        }),
+      );
+    });
+
+    it("RN07: chamado vencido na última resposta oferece analista, ligado ao chamado", async () => {
+      const posts = stubWithBodies([
+        agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+      ]);
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
+
+      await waitFor(() =>
+        expect(posts).toContainEqual({
+          path: "/api/chat/handoff",
+          body: { ticketNumber: "INC-20311" },
+        }),
+      );
+    });
+
+    it("Não, obrigado responde pelo código", async () => {
+      const posts = stubWithBodies([
+        agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+      ]);
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Não, obrigado" }));
+
+      await waitFor(() =>
+        expect(posts).toContainEqual({
+          path: "/api/chat/actions/decline-offer",
+          body: { ticketNumber: "INC-20311" },
+        }),
+      );
+    });
+
+    it("Adicionar informação começa a frase no campo de mensagem, com o foco nele", async () => {
+      stubWithBodies([
+        agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+      ]);
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Adicionar informação" }));
+
+      const input = screen.getByLabelText("Mensagem para o Nexo");
+      expect(input).toHaveProperty("value", "Quero adicionar uma informação ao INC-20311: ");
+      expect(document.activeElement).toBe(input);
+    });
+
+    it("sem prazo vencido, ou numa resposta antiga, não há oferta", async () => {
+      stubWithBodies([
+        agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+        agentWithTool("a-2", "get_ticket", { ok: true, ticket: onTimeTicket }, "Em dia."),
+      ]);
+      renderChat();
+
+      await screen.findByText("Em dia.");
+      expect(screen.queryByRole("button", { name: "Não, obrigado" })).toBeNull();
     });
   });
 });
