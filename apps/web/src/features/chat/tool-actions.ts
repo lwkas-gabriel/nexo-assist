@@ -7,6 +7,7 @@ const TOOL_ACTION_LABELS: Record<string, string> = {
   propose_ticket_update: "montou o complemento",
   confirm_draft: "confirmou o rascunho",
   ask_with_options: "ofereceu opções",
+  handoff_to_analyst: "chamou um analista",
 };
 
 const UNKNOWN_ACTION_LABEL = "executou uma ação";

@@ -16,6 +16,10 @@ describe("describeToolAction", () => {
     expect(describeToolAction("confirm_draft", { ok: true })).toBe("confirmou o rascunho");
   });
 
+  it("descreve a transferência como no protótipo", () => {
+    expect(describeToolAction("handoff_to_analyst", { ok: true })).toBe("chamou um analista");
+  });
+
   it("não dá por feita a ação que a tool recusou (ex.: confirmação fora de hora)", () => {
     expect(describeToolAction("confirm_draft", { ok: false, reason: "refused" })).toBe(
       "confirmou o rascunho (não concluiu)",

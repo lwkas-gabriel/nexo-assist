@@ -29,6 +29,13 @@ body {
   align-self: flex-end;
 }
 
+/* Registro do sistema (transferência, rascunho confirmado): linha discreta, sem remetente. */
+.message--system {
+  align-self: center;
+  font-size: 12px;
+  color: #5b6472;
+}
+
 .message__text {
   margin: 4px 0 0;
   white-space: pre-wrap;
