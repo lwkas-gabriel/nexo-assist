@@ -626,3 +626,20 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - testes: fronteira de 50%, cor de aviso, gaveta no notebook, Esc e foco na folha do celular.
 - **Correção ao AI_LOG 61:** ali está escrito que o painel usa "os mesmos números que o agent recebe"; os cortes são os mesmos, mas o painel os aplica à confiança final (já com os sinais), e o agent e o R39 à do classificador.
 - **Lição:** um campo que só a interface lê (a origem da confiança) estava implícito em outros dados, e a interface adivinhou errado. Se a tela precisa explicar uma decisão, quem decidiu tem de gravar o porquê, não deixar a tela deduzir.
+
+---
+
+## T21: tela 3, seleção de chamado (31/10/2026)
+
+### 63. T21: escolher o chamado, ver o card e responder à oferta de analista
+- **IA gerou:** as ações da api ("Não, obrigado" pelo código; "Falar com um analista" com o chamado), o modelo da tela (`ticket-model.ts`), `TicketPickerList`, `TicketCard`, `SuggestedActions`, o ajuste do prompt e os testes, inclusive E2E.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **"Falar com um analista" na oferta leva o chamado:** o motivo vira "prazo vencido", que o handoff confere com o chamado de verdade (se não venceu, volta a "pedido do funcionário"). O chamado fica ligado à transferência e ao console.
+  - **"Adicionar informação" não chama nada:** começa a frase no campo de mensagem ("Quero adicionar uma informação ao INC-20311: ") e põe o foco nele; o complemento segue o caminho do rascunho (RN04).
+  - **"Não, obrigado" responde pelo código,** com registro de decisão de botão; com a conversa no analista, só fica registrado para ele.
+  - **A cor do status é a do status, como no protótipo;** o vencimento aparece escrito ("prazo vencido", em aviso), na lista e em "Última atualização" do card. Na primeira versão o vencido pintava o status de vermelho, o que o protótipo não faz.
+  - **O clique na lista grava "número · título",** como a bolha do protótipo, e passa a conferir o dono também com a conversa no analista (antes, nesse caso, gravava o número sem consultar).
+  - **O resumo do chamado ganhou o código do status e a data curta** ("16 out"), que a tela precisa e o agent recebe junto (poucos tokens a mais).
+  - **"Hardware › Notebook" do protótipo fica "Hardware":** subcategoria é opcional (A09) e o seed não tem.
+- **Validado com o Gemini real** (duas mensagens): com um chamado, ele consultou direto e resumiu o prazo sem repetir o card; com três, disse quantos eram e perguntou qual, sem a lista linha por linha.
+- **Conferência visual:** lista e card em 1440 px e no celular; ajustados os cantos da lista (o raio "2xl" não existe nos tokens), a fonte do número e a cor do status.
