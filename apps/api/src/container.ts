@@ -7,9 +7,12 @@ import { createMarkdownKnowledgeBase } from "./adapters/markdown-knowledge-base.
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
+import { createDraftService } from "./app/draft-service.ts";
 import type { LlmConfig } from "./config.ts";
 import { createConversationStore, type ConversationStore } from "./db/conversation-store.ts";
 import { openDatabase, type Database } from "./db/database.ts";
+import { createDraftStore } from "./db/draft-store.ts";
 import { createSessionStore } from "./db/session-store.ts";
 import { createUserStore } from "./db/user-store.ts";
 import type { ChatLimits } from "./http/chat-routes.ts";
@@ -45,6 +48,7 @@ export type Container = {
   ticketGateway: TicketGateway;
   authService: AuthService;
   chatService: ChatService;
+  draftActions: DraftActions;
   conversationStore: ConversationStore;
   chatLimits: ChatLimits;
   loginLimiter: RateLimiter;
@@ -74,10 +78,16 @@ export async function createContainer(
       baseUrl: config.TICKETS_SERVICE_URL,
       serviceToken: config.TICKETS_SERVICE_TOKEN,
     });
+  const draftService = createDraftService({
+    draftStore: createDraftStore(db),
+    ticketGateway,
+    clock,
+  });
   const mastra = createNexoMastra({
     model: createModel(config),
     knowledgeBase,
     ticketGateway,
+    draftService,
     clock,
   });
 
@@ -87,6 +97,7 @@ export async function createContainer(
     ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
     chatService: createChatService({ mastra, conversationStore, clock }),
+    draftActions: createDraftActions({ draftService, conversationStore, clock }),
     conversationStore,
     chatLimits: {
       perUser: createRateLimiter({
