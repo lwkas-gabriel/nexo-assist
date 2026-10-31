@@ -1,5 +1,6 @@
 import type { Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
+import type { Intent } from "../agent/classifier.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView, NewTicketInput } from "./draft-service.ts";
@@ -30,6 +31,11 @@ function confirmedLine(draft: DraftView): string {
  * Valem só para rascunhos da conversa em andamento, e cada ação vira uma linha de sistema
  * nela: o funcionário vê o registro e o agent, no próximo turno, sabe o que mudou.
  */
+/** Cancelar ou editar mexe no pedido do rascunho: abrir um chamado ou complementar um existente. */
+function draftIntent(draft: DraftView): Intent {
+  return draft.kind === "create" ? "new_ticket" : "ticket_update";
+}
+
 export function createDraftActions({
   draftService,
   handoffService,
@@ -47,7 +53,8 @@ export function createDraftActions({
    * Linha de sistema na conversa, com o registro de decisão de uma ação determinística (11.5).
    * Lida depois da ação, a versão da conversa é a do momento em que o clique aconteceu.
    */
-  async function recordInConversation(conversationId: string, text: string) {
+  /** Linha de sistema e registro de decisão do clique; a intenção diz o que o botão fez. */
+  async function recordInConversation(conversationId: string, text: string, intent: Intent) {
     const at = clock.now();
     const line = await conversationStore.appendMessage({
       conversationId,
@@ -63,6 +70,8 @@ export function createDraftActions({
       messageId: line.id,
       description: text,
       at,
+      intent,
+      step: "draft_button",
     });
   }
 
@@ -75,7 +84,7 @@ export function createDraftActions({
         conversationId,
         source: { via: "button" },
       });
-      await recordInConversation(conversationId, confirmedLine(result.draft));
+      await recordInConversation(conversationId, confirmedLine(result.draft), "confirm_draft");
       // A04: chamado crítico vai direto para o N2, também quando confirmado pelo botão.
       const escalation = await handoffService.escalateNewCriticalTicket({
         employeeId,
@@ -89,7 +98,11 @@ export function createDraftActions({
     async cancel(employeeId: string, draftNumber: number) {
       const conversationId = await currentConversationId(employeeId, draftNumber);
       const draft = await draftService.cancel({ employeeId, draftNumber, conversationId });
-      await recordInConversation(conversationId, `Rascunho ${draft.draftId} cancelado.`);
+      await recordInConversation(
+        conversationId,
+        `Rascunho ${draft.draftId} cancelado.`,
+        draftIntent(draft),
+      );
       return draft;
     },
 
@@ -101,6 +114,7 @@ export function createDraftActions({
       await recordInConversation(
         conversationId,
         `Rascunho ${draft.draftId} editado pelo funcionário.${priority}`,
+        draftIntent(draft),
       );
       return draft;
     },

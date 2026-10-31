@@ -88,16 +88,16 @@ export function createDecisionService({
       messageId: string;
       description: string;
       at: Date;
-      /** O que o clique quer dizer; o padrão é o dos botões do card. */
-      intent?: Intent;
+      /** O que o clique quer dizer (confirmar, falar com um analista, consultar um chamado...). */
+      intent: Intent;
       /** Nome do passo no registro (o "tool" do detalhe da decisão). */
-      step?: string;
+      step: string;
     }) {
       const classification: ClassificationResult = {
         ok: true,
         tokens: undefined,
         classification: {
-          intent: action.intent ?? "confirm_draft",
+          intent: action.intent,
           understood: action.description,
           extracted: {},
           confidence: 1,
@@ -110,7 +110,7 @@ export function createDecisionService({
         parts: [{ type: "text", text: action.description }],
       };
       const trace = buildDecisionTrace(classification, response, {
-        steps: [{ tool: action.step ?? "draft_button", ok: true, outcome: action.description }],
+        steps: [{ tool: action.step, ok: true, outcome: action.description }],
         rules: ["11.5: ação da tela tratada pelo código, sem o LLM"],
       });
       await saveSafely(

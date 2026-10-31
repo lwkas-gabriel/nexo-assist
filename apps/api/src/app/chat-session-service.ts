@@ -14,8 +14,12 @@ const SUMMARY_MAX_RECORDS = 50;
 /** Espaço do resumo: os registros (pendências, chamados) vêm primeiro; os assuntos, no que sobrar. */
 const SUMMARY_MAX_CHARS = 600;
 
-/** Ações do código e dos botões não são assuntos da conversa. */
-const NOT_TOPICS = new Set(["draft_button", "handoff_to_analyst"]);
+/**
+ * Passos que não são assuntos da conversa: os botões do card e a transferência (pelo agent ou
+ * pelo botão) já aparecem no resumo como registros. A seleção de um chamado é assunto: o
+ * funcionário quis saber dele ("consulta de chamado").
+ */
+const NOT_TOPICS = new Set(["draft_button", "handoff_to_analyst", "analyst_button"]);
 
 type ChatSessionServiceDependencies = {
   chatSessionStore: ChatSessionStore;

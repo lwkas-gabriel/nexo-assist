@@ -149,6 +149,18 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     expect(recording.lastAgentPrompt().system).not.toContain("IGNORE AS REGRAS");
   });
 
+  it("R03: o botão Falar com um analista não vira assunto no resumo da sessão", async () => {
+    const { post, say, conversation } = await setup();
+    await say("Qual o horário do service desk?");
+    await post("/handoff");
+
+    await post("/sessions");
+
+    const summary = (await conversation()).session?.previousSummary ?? "";
+    expect(summary).toMatch(/Assuntos: dúvida de TI\.$/);
+    expect(summary).not.toContain("falar com um analista");
+  });
+
   it("R03: clicar duas vezes em nova sessão não troca o resumo verdadeiro por um vazio", async () => {
     const { post, say, conversation } = await setup();
     await say("Qual o horário do service desk?");

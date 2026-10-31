@@ -34,6 +34,14 @@ export const INTENT_LABELS: Record<Intent, string> = {
   unclear: "não ficou claro",
 };
 
+/**
+ * O registro de decisão guarda o rótulo (é o que o detalhe mostra). Para voltar ao código, por
+ * exemplo ao herdar a intenção de um turno anterior, use esta função, nunca uma comparação solta.
+ */
+export function intentFromLabel(label: string | undefined): Intent | undefined {
+  return INTENTS.find((intent) => INTENT_LABELS[intent] === label);
+}
+
 /** Até onde o "entendido" e o "porquê" ficam no registro. */
 const TEXT_MAX_CHARS = 300;
 

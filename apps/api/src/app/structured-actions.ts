@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { INTENTS, INTENT_LABELS, type ClassificationResult } from "../agent/classifier.ts";
+import { intentFromLabel, type ClassificationResult } from "../agent/classifier.ts";
+import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
 import type { toTicketDetails } from "../agent/ticket-view.ts";
 import { ASK_WITH_OPTIONS_TOOL_ID } from "../agent/tools/draft-tools.ts";
 import { GET_TICKET_TOOL_ID } from "../agent/tools/ticket-tools.ts";
@@ -19,30 +20,38 @@ const askedQuestionSchema = z.object({
 });
 
 /** A pergunta com respostas rápidas que a mensagem do agent fez, se fez. */
-export function askedQuestionOf(
-  message: UIMessage,
-): { question: string; options: string[] } | undefined {
+function askedQuestionOf(message: UIMessage): { question: string; options: string[] } | undefined {
   const asked = message.parts
     .map((part) => askedQuestionSchema.safeParse(part))
     .findLast((parsed) => parsed.success);
   return asked?.data.output;
 }
 
+/** O que o registro de decisão diz do turno que fez a pergunta. */
+export type AskingTurn = { intent: string; classifierConfidence: number };
+
 /**
- * R38: a resposta rápida clicada dispensa o classificador. Vale só se a opção é uma das que o
- * agent ofereceu na mensagem mais recente da conversa, e a intenção continua a do turno que fez
- * a pergunta (o registro de decisão guarda o rótulo, como o detalhe mostra). Fora disso (pergunta antiga, texto que não é opção), devolve undefined e o turno
- * segue o caminho normal, com o classificador.
+ * R38: a resposta rápida clicada dispensa o classificador (só ele; o agent continua respondendo,
+ * porque precisa da resposta para seguir). Vale só se a opção é uma das que o agent ofereceu na
+ * mensagem mais recente da conversa, e a intenção continua a do turno que fez a pergunta.
+ *
+ * Volta ao classificador (devolve undefined) com pergunta antiga, texto que não é opção ou turno
+ * que perguntou sem ter entendido ("não ficou claro" ou confiança baixa): aí o clique não pode
+ * zerar a sequência de confiança baixa do R39.
  */
 export function quickAnswerClassification(
   lastMessage: UIMessage | undefined,
-  askedIntentLabel: string | undefined,
+  askingTurn: AskingTurn | undefined,
   answer: string,
 ): ClassificationResult | undefined {
-  if (!lastMessage || lastMessage.role !== "assistant") return undefined;
+  if (!lastMessage || lastMessage.role !== "assistant" || !askingTurn) return undefined;
   const asked = askedQuestionOf(lastMessage);
-  const intent = INTENTS.find((candidate) => INTENT_LABELS[candidate] === askedIntentLabel);
-  if (!asked || !asked.options.includes(answer) || !intent) return undefined;
+  const intent = intentFromLabel(askingTurn.intent);
+  const askedWithoutUnderstanding =
+    intent === "unclear" || askingTurn.classifierConfidence < LOW_CONFIDENCE_THRESHOLD;
+  if (!asked || !asked.options.includes(answer) || !intent || askedWithoutUnderstanding) {
+    return undefined;
+  }
   return {
     ok: true,
     tokens: undefined,
@@ -60,9 +69,13 @@ export function quickAnswerClassification(
 /**
  * Resposta à seleção de um chamado (tela 3), montada pelo código: o estado, há quanto tempo a TI
  * não responde e o prazo, com a mesma conta que o agent usaria (RN12, A17). Vencido, oferece um
- * analista (RN07, A04).
+ * analista (RN07, A04); com a sessão no limite (RN14), o "sim" por texto seria recusado, então
+ * aponta o botão.
  */
-export function describeSelectedTicket(ticket: TicketDetails): string {
+export function describeSelectedTicket(
+  ticket: TicketDetails,
+  { sessionAtLimit }: { sessionAtLimit: boolean },
+): string {
   const lines = [`${ticket.number} · ${ticket.title}: ${ticket.status}.`];
   if (!ticket.isOpen) {
     lines.push(
@@ -78,9 +91,10 @@ export function describeSelectedTicket(ticket: TicketDetails): string {
       : `A equipe de TI ainda não respondeu; aberto há ${ticket.timeWithoutTeamResponse}.`,
   );
   if (ticket.deadline?.isOverdue) {
-    lines.push(
-      `O prazo (${ticket.deadline.rule}) venceu em ${ticket.deadline.dueAt}. Quer que eu chame um analista?`,
-    );
+    const offer = sessionAtLimit
+      ? "Para falar com um analista, use o botão abaixo."
+      : "Quer que eu chame um analista?";
+    lines.push(`O prazo (${ticket.deadline.rule}) venceu em ${ticket.deadline.dueAt}. ${offer}`);
   } else if (ticket.deadline) {
     lines.push(`Próxima resposta prevista até ${ticket.deadline.dueAt} (${ticket.deadline.rule}).`);
   }
@@ -91,7 +105,11 @@ export function describeSelectedTicket(ticket: TicketDetails): string {
  * A resposta gravada tem a mesma parte de tool que o agent produziria ao consultar o chamado:
  * a tela mostra o chip "consultou o INC-…" e o card do chamado sem saber que o modelo não rodou.
  */
-export function selectedTicketParts(ticket: TicketDetails, toolCallId: string): UIMessage["parts"] {
+export function selectedTicketParts(
+  ticket: TicketDetails,
+  toolCallId: string,
+  options: { sessionAtLimit: boolean },
+): UIMessage["parts"] {
   return [
     {
       type: `tool-${GET_TICKET_TOOL_ID}`,
@@ -100,6 +118,6 @@ export function selectedTicketParts(ticket: TicketDetails, toolCallId: string): 
       input: { number: ticket.number },
       output: { ok: true, ticket },
     },
-    { type: "text", text: describeSelectedTicket(ticket) },
+    { type: "text", text: describeSelectedTicket(ticket, options) },
   ];
 }

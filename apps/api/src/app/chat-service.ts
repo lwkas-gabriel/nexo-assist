@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
 import { parseTicketNumber, type Clock } from "@nexo/shared/domain";
@@ -32,6 +33,7 @@ import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
+import { isSessionAtLimit } from "./session-state.ts";
 import { quickAnswerClassification, selectedTicketParts } from "./structured-actions.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
@@ -131,8 +133,8 @@ export function createChatService({
   ): Promise<ClassificationResult | undefined> {
     const last = previous.at(-1);
     if (!last) return undefined;
-    const asked = (await decisionService.forMessages([last.id])).get(last.id);
-    return quickAnswerClassification(toUIMessage(last), asked?.intent, answer);
+    const askingTurn = (await decisionService.forMessages([last.id])).get(last.id);
+    return quickAnswerClassification(toUIMessage(last), askingTurn, answer);
   }
 
   /** Histórico da conversa; com `since`, só a partir dessa data (a sessão atual, para o agent). */
@@ -231,37 +233,51 @@ export function createChatService({
     /**
      * Clique num chamado da lista (tela 3, 11.5): a resposta é montada pelo código, sem o modelo.
      * O chamado é buscado com o funcionário da sessão, então só os dele aparecem (RN09). Com a
-     * conversa num analista, o clique fica registrado para ele e ninguém responde (RN08).
+     * conversa num analista (antes ou durante a busca), o clique fica registrado para ele e
+     * ninguém responde (RN08). Não conta no limite da sessão (R42: não vai ao agent), mas a
+     * mantém viva e recomeça a vencida, como uma mensagem.
      */
     async selectTicket(employee: UserRow, number: string) {
       const ticketNumber = parseTicketNumber(number);
       if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
-        const now = clock.now();
+        const saveClick = () =>
+          saveEmployeeMessage(conversation.id, employee.id, ticketNumber, clock.now(), undefined);
         if (!agentMayReply(conversation.mode)) {
-          await saveEmployeeMessage(conversation.id, employee.id, ticketNumber, now, undefined);
+          await chatSessionService.touch(conversation);
+          await saveClick();
           return;
         }
         // Busca antes de gravar: se o chamado não é dele ou o sistema caiu, nada fica pela metade.
         const ticket = toTicketDetails(
           await ticketGateway.getTicket(employee.id, ticketNumber),
-          now,
+          clock.now(),
         );
-        await saveEmployeeMessage(conversation.id, employee.id, ticketNumber, now, undefined);
+        // A busca pode levar segundos (novas tentativas): a conversa pode ter sido transferida
+        // nesse meio-tempo, por um chamado crítico confirmado pelo card (A04, RN08).
+        const current = await conversationStore.findById(conversation.id);
+        await chatSessionService.touch(conversation);
+        await saveClick();
+        if (!current || !agentMayReply(current.mode)) return;
+        const session = await chatSessionService.current(current);
+        const replyId = randomUUID();
         const reply = await conversationStore.appendMessage({
+          id: replyId,
           conversationId: conversation.id,
           author: "agent",
           authorId: null,
-          parts: selectedTicketParts(ticket, `select-${ticketNumber}`),
-          createdAt: now,
+          parts: selectedTicketParts(ticket, `select-${replyId}`, {
+            sessionAtLimit: isSessionAtLimit(session),
+          }),
+          createdAt: clock.now(),
         });
         await decisionService.recordButtonAction({
           conversationId: conversation.id,
-          conversationVersion: conversation.version,
+          conversationVersion: current.version,
           messageId: reply.id,
           description: `Funcionário escolheu o chamado ${ticketNumber} na lista.`,
-          at: now,
+          at: reply.createdAt,
           intent: "ticket_status",
           step: "ticket_selection",
         });
@@ -322,9 +338,11 @@ export function createChatService({
           conversation.id,
           CLASSIFIER_CONTEXT,
         );
+        const quickAnswer = client.quickOption
+          ? await classifyQuickAnswer(previous, text)
+          : undefined;
         const classification =
-          (client.quickOption && (await classifyQuickAnswer(previous, text))) ||
-          (await classifier.classify(previous.map(toTranscriptLine), text));
+          quickAnswer ?? (await classifier.classify(previous.map(toTranscriptLine), text));
         await saveEmployeeMessage(
           conversation.id,
           employee.id,
