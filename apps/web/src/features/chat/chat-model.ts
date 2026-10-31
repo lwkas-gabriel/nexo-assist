@@ -28,6 +28,18 @@ export function messageCreatedAt(message: UIMessage): string | undefined {
   return typeof createdAt === "string" ? createdAt : undefined;
 }
 
+/** Nome e setor de quem escreveu, nas mensagens de um analista (R27). */
+export function messageAnalyst(
+  message: UIMessage,
+): { name: string; department: string } | undefined {
+  const analyst = metadataOf(message).analyst;
+  if (typeof analyst !== "object" || analyst === null) return undefined;
+  const { name, department } = analyst as Record<string, unknown>;
+  return typeof name === "string" && typeof department === "string"
+    ? { name, department }
+    : undefined;
+}
+
 /** O texto da mensagem, sem as partes de tool. */
 export function textOf(message: UIMessage): string {
   return message.parts

@@ -1,7 +1,14 @@
 import { isToolUIPart, type UIMessage } from "ai";
 import { useMemo } from "react";
 import type { DraftFields, DraftView } from "../chat-api.ts";
-import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf, textOf } from "../chat-model.ts";
+import {
+  liveDraft,
+  messageAnalyst,
+  messageAuthor,
+  proposedDraft,
+  quickOptionsOf,
+  textOf,
+} from "../chat-model.ts";
 import { decisionOf } from "../decision-model.ts";
 import {
   consultedTicketOf,
@@ -93,9 +100,13 @@ export function MessageBubble(props: MessageBubbleProps) {
   }
 
   if (author === "analyst") {
+    const analyst = messageAnalyst(message);
     return (
       <li className="flex flex-col gap-1.5">
-        <span className="text-[12.5px] font-semibold text-ink">Analista de TI</span>
+        <span className="text-[12.5px] text-ink-3">
+          <span className="font-semibold text-ink">{analyst?.name ?? "Analista de TI"}</span>
+          {analyst && ` · ${analyst.department}`}
+        </span>
         <p className="max-w-[600px] rounded-[4px_12px_12px_12px] bg-bubble-analyst px-4 py-3 text-[14.5px] leading-normal whitespace-pre-wrap text-ink">
           {text}
         </p>

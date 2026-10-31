@@ -18,9 +18,11 @@ const ANA: CurrentUser = {
   department: "Financeiro",
 };
 
+const RAFAEL = { name: "Rafael Lima", department: "Suporte N2" };
+
 function conversationAt(mode: ConversationMode, isAtLimit: boolean): ConversationView {
   return {
-    conversation: { id: "c-1", mode },
+    conversation: { id: "c-1", mode, analyst: mode === "analyst" ? RAFAEL : null },
     session: {
       agentMessages: isAtLimit ? 30 : 12,
       limit: 30,
@@ -446,6 +448,54 @@ describe("tela do chat (tela 2)", () => {
       expect((await screen.findByRole("alert")).textContent).toBe(
         "Essa oferta não está mais valendo.",
       );
+    });
+  });
+
+  describe("conversa com os analistas (RF17, R27)", () => {
+    const analystSays = (id: string, text: string) => ({
+      id,
+      role: "assistant" as const,
+      metadata: { author: "analyst", analyst: RAFAEL },
+      parts: [{ type: "text" as const, text }],
+    });
+
+    it("a pílula diz quem atende, e o campo avisa que as mensagens vão para o analista", async () => {
+      stubApi({ ...conversationAt("analyst", false), messages: [analystSays("m-1", "Oi, Ana.")] });
+      renderChat();
+
+      expect(await screen.findByText("Com Rafael Lima · Suporte N2")).toBeDefined();
+      expect(screen.getByText("Rafael Lima")).toBeDefined();
+      expect(screen.getByLabelText("Mensagem para o Nexo").getAttribute("placeholder")).toBe(
+        "Escreva para o analista…",
+      );
+      expect(
+        screen.getByText("Suas mensagens vão para o analista · contador pausado em 12/30"),
+      ).toBeDefined();
+    });
+
+    it("aguardando analista, a resposta dele chega sozinha (polling curto)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let current: ConversationView = conversationAt("waiting_analyst", false);
+        vi.stubGlobal("fetch", (input: string) =>
+          Promise.resolve(
+            new Response(JSON.stringify(input === "/api/chat" ? current : {}), { status: 200 }),
+          ),
+        );
+        renderChat();
+        await screen.findByText("Aguardando analista");
+
+        current = {
+          ...conversationAt("analyst", false),
+          messages: [analystSays("m-1", "Oi, Ana. Já estou com seu chamado.")],
+        };
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(await screen.findByText("Oi, Ana. Já estou com seu chamado.")).toBeDefined();
+        expect(screen.getByText("Com Rafael Lima · Suporte N2")).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

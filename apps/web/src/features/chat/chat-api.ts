@@ -46,8 +46,11 @@ export type DraftView = {
   update?: { message: string };
 };
 
+/** Quem atende a conversa, quando um analista a assumiu (R27). */
+export type AnalystView = { name: string; department: string };
+
 export type ConversationView = {
-  conversation: { id: string; mode: ConversationMode } | null;
+  conversation: { id: string; mode: ConversationMode; analyst: AnalystView | null } | null;
   session: SessionView | null;
   messages: UIMessage[];
   /** Estado atual dos rascunhos: o card mostra o que aconteceu depois de proposto (RF07). */

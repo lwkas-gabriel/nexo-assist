@@ -44,6 +44,8 @@ import type { SuggestedAction } from "./components/SuggestedActions.tsx";
 import type { TicketSummaryView } from "./ticket-model.ts";
 
 const CONVERSATION_KEY = ["conversation"] as const;
+/** De quanto em quanto tempo a conversa com os analistas é recarregada (5: polling de 2 a 3 s). */
+const ANALYST_POLL_MS = 3000;
 
 /**
  * O histórico vive no servidor: o navegador manda só o texto da mensagem nova, com o id da bolha
@@ -65,11 +67,23 @@ type ChatPageProps = { user: CurrentUser; isLoggingOut: boolean; onLogout: () =>
 
 /** Tela 2: carrega a conversa salva (voltar outro dia e continuar, RF11) e mostra o chat. */
 export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
-  const conversation = useQuery({ queryKey: CONVERSATION_KEY, queryFn: fetchConversation });
+  const conversation = useQuery({
+    queryKey: CONVERSATION_KEY,
+    queryFn: fetchConversation,
+    // RF17: com os analistas, as respostas deles chegam por aqui (polling curto, ADR do tempo real).
+    refetchInterval: (query) =>
+      (query.state.data?.conversation?.mode ?? "agent") === "agent" ? false : ANALYST_POLL_MS,
+  });
   const mode = conversation.data?.conversation?.mode ?? "agent";
 
   return (
-    <ChatShell user={user} mode={mode} isLoggingOut={isLoggingOut} onLogout={onLogout}>
+    <ChatShell
+      user={user}
+      mode={mode}
+      analyst={conversation.data?.conversation?.analyst ?? null}
+      isLoggingOut={isLoggingOut}
+      onLogout={onLogout}
+    >
       {conversation.isPending ? (
         <div
           aria-busy="true"
@@ -234,6 +248,13 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
+  // O polling traz mensagens novas do analista: entram na conversa quando nada está a caminho
+  // (com um envio em curso ou uma falha na tela, esperam para não apagar a bolha do funcionário).
+  useEffect(() => {
+    if (status !== "ready" || sameMessageIds(messages, view.messages)) return;
+    setMessages(view.messages);
+  }, [status, messages, view.messages, setMessages]);
+
   const openDecisionMessage = messages.find((message) => message.id === openDecisionId);
   const openDecision = openDecisionMessage ? decisionOf(openDecisionMessage) : undefined;
   // A resposta aberta saiu da conversa (janela de 200 mensagens): o painel conta como fechado,
@@ -347,6 +368,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
             />
           ) : (
             <Composer
+              recipient={mode === "agent" ? "agent" : "analyst"}
               key={composerSeed.key}
               initialText={composerSeed.text}
               ref={composerRef}
@@ -415,4 +437,8 @@ function SessionSummaryCard({ summary }: { summary: string }) {
       <p className="mt-1 text-[13.5px] text-ink-2">{summary}</p>
     </li>
   );
+}
+
+function sameMessageIds(a: readonly UIMessage[], b: readonly UIMessage[]): boolean {
+  return a.length === b.length && a.every((message, index) => message.id === b[index]?.id);
 }

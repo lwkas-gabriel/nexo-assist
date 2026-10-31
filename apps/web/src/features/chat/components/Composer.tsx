@@ -16,6 +16,11 @@ type ComposerProps = {
   onPickOption: (option: string) => void;
   /** Contador da sessão (RF10): mensagens ao agent e o limite. */
   counter: { used: number; limit: number };
+  /**
+   * Para quem a mensagem vai. Com os analistas (RF17), o agent está pausado: o campo diz isso e
+   * o contador fica congelado, porque só mensagens ao agent contam (R42).
+   */
+  recipient?: "agent" | "analyst";
   /** Respostas rápidas ativas: as teclas 1 a 4 escolhem, com o campo vazio (R34). */
   quickOptions: readonly string[];
   /** R33: Ctrl/⌘+Enter confirma o rascunho pendente, se houver. */
@@ -30,6 +35,7 @@ export function Composer({
   onSend,
   onPickOption,
   counter,
+  recipient = "agent",
   quickOptions,
   onConfirmDraft,
 }: ComposerProps) {
@@ -74,7 +80,7 @@ export function Composer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Escreva para o Nexo…"
+          placeholder={recipient === "agent" ? "Escreva para o Nexo…" : "Escreva para o analista…"}
           maxLength={CHAT_MESSAGE_MAX_CHARS}
           autoComplete="off"
           aria-describedby="composer-counter"
@@ -86,7 +92,9 @@ export function Composer({
         </Button>
       </div>
       <p id="composer-counter" className="text-right text-[12.5px] text-ink-3">
-        {counter.used}/{counter.limit} mensagens nesta sessão
+        {recipient === "agent"
+          ? `${counter.used}/${counter.limit} mensagens nesta sessão`
+          : `Suas mensagens vão para o analista · contador pausado em ${counter.used}/${counter.limit}`}
       </p>
     </form>
   );

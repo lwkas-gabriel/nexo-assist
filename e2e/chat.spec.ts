@@ -54,6 +54,16 @@ test("RF11: a conversa continua depois de recarregar a página", async ({ page }
 
   await expect(page.getByText("Minha senha da rede expirou")).toBeVisible();
   await expect(page.getByText(/Senha da rede expirada/)).toBeVisible();
+
+  // RF16, RF17: pedido de analista; o agent pausa e o campo passa a falar com os analistas.
+  await page.getByLabel("Mensagem para o Nexo").fill("Quero falar com um analista");
+  await page.getByRole("button", { name: "Enviar" }).click();
+  await expect(page.getByText("Aguardando analista", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Conversa transferida para o Suporte N1/)).toBeVisible();
+  await expect(page.getByLabel("Mensagem para o Nexo")).toHaveAttribute(
+    "placeholder",
+    "Escreva para o analista…",
+  );
 });
 
 test("o botão de enviar fica desabilitado sem texto", async ({ page }) => {

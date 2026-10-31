@@ -6,6 +6,7 @@ import { IconButton } from "../../ui/IconButton.tsx";
 import { Pill } from "../../ui/Pill.tsx";
 import { CONVERSATION_MODE_TONES } from "../../ui/status-styles.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
+import type { AnalystView } from "./chat-api.ts";
 import { NexoMark } from "../auth/NexoMark.tsx";
 
 /** O que a pílula do topo diz em cada estado da conversa (os estados de analista ganham detalhe na T22). */
@@ -19,6 +20,8 @@ const MODE_LABELS: Record<ConversationMode, string> = {
 type ChatShellProps = {
   user: CurrentUser;
   mode: ConversationMode;
+  /** Quem atende, com a conversa num analista: a pílula diz o nome e o setor (R27). */
+  analyst: AnalystView | null;
   isLoggingOut: boolean;
   onLogout: () => void;
   children: ReactNode;
@@ -28,7 +31,18 @@ type ChatShellProps = {
  * Moldura da tela 2 (10.6): barra lateral a partir de 1024 px, trilho de ícones no tablet e barra
  * no topo no celular. As mesmas peças em todas as larguras.
  */
-export function ChatShell({ user, mode, isLoggingOut, onLogout, children }: ChatShellProps) {
+export function ChatShell({
+  user,
+  mode,
+  analyst,
+  isLoggingOut,
+  onLogout,
+  children,
+}: ChatShellProps) {
+  const modeLabel =
+    mode === "analyst" && analyst
+      ? `Com ${analyst.name} · ${analyst.department}`
+      : MODE_LABELS[mode];
   return (
     <div className="flex h-dvh bg-paper">
       <nav
@@ -99,7 +113,7 @@ export function ChatShell({ user, mode, isLoggingOut, onLogout, children }: Chat
             <h1 className="sr-only font-semibold text-ink md:not-sr-only">Atendimento</h1>
           </div>
           <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
-            {MODE_LABELS[mode]}
+            {modeLabel}
           </Pill>
           <IconButton
             label="Sair"
