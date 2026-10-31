@@ -11,9 +11,10 @@ type SidePanelProps = {
   children: ReactNode;
   /**
    * A partir de que largura o painel é uma coluna do layout, ao lado do conteúdo. Abaixo disso,
-   * vira gaveta sobreposta (tablet e notebook) ou, no celular, folha ou tela cheia.
+   * vira gaveta sobreposta (tablet e notebook) ou, no celular, folha ou tela cheia. "never": sempre
+   * sobreposto, para telas sem espaço para uma coluna a mais (ex.: o login, já com duas colunas).
    */
-  inlineFrom?: Extract<Breakpoint, "laptop" | "desktop">;
+  inlineFrom?: Extract<Breakpoint, "laptop" | "desktop"> | "never";
   /**
    * No celular: folha que sobe de baixo (detalhe da decisão) ou tela cheia (o console mostra uma
    * coluna por vez, 10.6).
@@ -26,6 +27,7 @@ type SidePanelProps = {
 const INLINE_FROM: Record<NonNullable<SidePanelProps["inlineFrom"]>, Breakpoint[]> = {
   laptop: ["laptop", "desktop"],
   desktop: ["desktop"],
+  never: [],
 };
 
 /**

@@ -26,7 +26,7 @@ function stubApi(routes: Record<string, ApiReply>) {
 
 const NO_STATS = {
   status: 200,
-  body: { firstResponseSeconds: null, resolvedWithoutQueuePercent: null, analystsOnline: 0 },
+  body: { averageReplySeconds: null, answeredWithoutAnalystPercent: null, analystsSignedIn: 0 },
 };
 
 function renderLogin() {
@@ -96,31 +96,37 @@ describe("tela de login (RF01, tela 1)", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("E-mail ou senha inválidos.");
   });
 
-  it("mostrar os caracteres troca o tipo do campo de senha", async () => {
+  it("mostrar os caracteres troca o tipo do campo; o botão diz se está ligado", async () => {
     stubApi({ "/stats": NO_STATS });
     renderLogin();
     const password = screen.getByLabelText("Senha");
+    const toggle = screen.getByRole("button", { name: "Mostrar os caracteres" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Mostrar os caracteres" }));
+    await userEvent.click(toggle);
 
     expect(password.getAttribute("type")).toBe("text");
-    expect(screen.getByRole("button", { name: "Esconder os caracteres" })).toBeDefined();
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("'Esqueci minha senha' explica que, na demonstração, qualquer senha entra", async () => {
     stubApi({ "/stats": NO_STATS });
     renderLogin();
 
-    await userEvent.click(screen.getByRole("button", { name: "Esqueci minha senha" }));
+    const forgot = screen.getByRole("button", { name: "Esqueci minha senha" });
+    await userEvent.click(forgot);
 
-    expect(screen.getByText("Nesta demonstração, qualquer senha entra.")).toBeDefined();
+    // A dica fica numa região anunciada, ligada ao botão que a abre.
+    const hint = document.getElementById(forgot.getAttribute("aria-controls") ?? "");
+    expect(hint?.getAttribute("aria-live")).toBe("polite");
+    expect(hint?.textContent).toBe("Nesta demonstração, qualquer senha entra.");
   });
 
   it("A11: sem dados ainda, os números aparecem como travessão, não inventados", async () => {
     stubApi({ "/stats": NO_STATS });
     renderLogin();
 
-    await waitFor(() => expect(screen.getAllByText("—")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("ainda sem dados")).toHaveLength(2));
+    expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.getByText("0")).toBeDefined();
   });
 
@@ -128,7 +134,7 @@ describe("tela de login (RF01, tela 1)", () => {
     stubApi({
       "/stats": {
         status: 200,
-        body: { firstResponseSeconds: 3.8, resolvedWithoutQueuePercent: 72, analystsOnline: 2 },
+        body: { averageReplySeconds: 3.8, answeredWithoutAnalystPercent: 72, analystsSignedIn: 2 },
       },
     });
     renderLogin();
@@ -137,15 +143,21 @@ describe("tela de login (RF01, tela 1)", () => {
     expect(screen.getByText("72%")).toBeDefined();
   });
 
-  it("10.6: abaixo de 1024 px, a tela é só o formulário (sem o painel escuro)", () => {
+  it("10.6: no celular, sem o painel escuro, os números nem são buscados", async () => {
     setViewportWidth(390);
+    const calls = stubApi({ "/stats": NO_STATS });
+    renderLogin();
+
+    await screen.findByRole("heading", { name: "Entrar" });
+    expect(calls.some((call) => call.path === "/stats")).toBe(false);
+  });
+
+  it("privacidade abre sobreposta mesmo no desktop, sem esmagar o formulário", async () => {
     stubApi({ "/stats": NO_STATS });
     renderLogin();
 
-    // O painel existe no HTML, mas o CSS o esconde abaixo de lg; o formulário continua.
-    expect(screen.getByRole("region", { name: "Sobre o Nexo Assist" }).className).toContain(
-      "hidden",
-    );
-    expect(screen.getByRole("heading", { name: "Entrar" })).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: "Privacidade e uso de dados" }));
+
+    expect(screen.getByRole("dialog", { name: "Privacidade e uso de dados" })).toBeDefined();
   });
 });

@@ -1,14 +1,11 @@
+import { loginStatsSchema, type LoginStats } from "@nexo/shared/contracts";
 import { apiRequest } from "../../lib/api-client.ts";
 
-/** Números da tela de login (A11), calculados pela api. Nulo quando ainda não há dados. */
-export type LoginStats = {
-  firstResponseSeconds: number | null;
-  resolvedWithoutQueuePercent: number | null;
-  analystsOnline: number;
-};
+export type { LoginStats };
 
-export function fetchLoginStats(): Promise<LoginStats> {
-  return apiRequest<LoginStats>("/stats");
+/** Números da tela de login (A11), validados pelo mesmo contrato que a api usa. */
+export async function fetchLoginStats(): Promise<LoginStats> {
+  return loginStatsSchema.parse(await apiRequest<unknown>("/stats"));
 }
 
 /** "8 s", "72%"; sem dado, um travessão (a tela não inventa número). */

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { useBreakpoint } from "../../lib/use-breakpoint.ts";
 import { NexoMark } from "./NexoMark.tsx";
-import { fetchLoginStats, formatStat } from "./stats-api.ts";
+import { fetchLoginStats, formatStat, type LoginStats } from "./stats-api.ts";
 
 /**
  * Painel escuro da tela 1: o que o assistente faz, uma conversa de exemplo e os números do
@@ -14,15 +15,16 @@ export function LoginShowcase() {
     >
       <div className="flex items-center gap-2.5">
         <NexoMark tone="onDark" />
-        <span className="text-[17px] font-bold">Nexo Assist</span>
+        <span className="text-[17px] font-bold tracking-[-0.2px]">Nexo Assist</span>
       </div>
 
       <div className="flex flex-col gap-9">
         <div className="flex flex-col gap-[18px]">
           <p className="text-[13.5px] font-medium text-paper/55">Service desk de TI da Nexo</p>
-          <h2 className="font-display text-[40px] leading-[1.05] xl:text-[54px]">
+          {/* Texto de destaque, não título: o título da página é o "Entrar" do formulário. */}
+          <p className="font-display text-[40px] leading-[1.05] tracking-[-1.2px] xl:text-[54px]">
             Seu problema de TI, resolvido em uma conversa.
-          </h2>
+          </p>
           <p className="max-w-[520px] text-base text-paper/65">
             Descreva o que está acontecendo. O assistente consulta seus chamados, busca na central
             de ajuda e chama um analista quando precisa.
@@ -31,7 +33,7 @@ export function LoginShowcase() {
         <ConversationPreview />
       </div>
 
-      <LoginStats />
+      <AttendanceStats />
     </section>
   );
 }
@@ -49,7 +51,7 @@ function ConversationPreview() {
         </p>
         <div className="flex flex-col gap-1.5">
           <p className="flex gap-1.5 text-[12.5px]">
-            <span className="font-semibold text-paper/80">Nexo Assist</span>
+            <span className="font-semibold whitespace-nowrap text-paper/80">Nexo Assist</span>
             <span className="text-paper/45">consultou seus chamados · criou um chamado</span>
           </p>
           <p className="max-w-[380px] rounded-[4px_12px_12px_12px] bg-paper/8 px-3.5 py-2.5 text-[13.5px]">
@@ -66,28 +68,46 @@ function ConversationPreview() {
   );
 }
 
-/** Os três números do atendimento (A11), calculados pela api; sem dado ainda, um travessão. */
-function LoginStats() {
-  const stats = useQuery({ queryKey: ["login-stats"], queryFn: fetchLoginStats });
-  const data = stats.data;
+/** Sem dado, o leitor de tela ouve o porquê, não "travessão". */
+function statusFor(isPending: boolean, isError: boolean): string {
+  if (isPending) return "carregando";
+  if (isError) return "indisponível no momento";
+  return "ainda sem dados";
+}
+
+/**
+ * Os três números do atendimento (A11), calculados pela api. Só são buscados quando o painel
+ * aparece (a partir de 1024 px). Os rótulos dizem o que o número mede, nem mais nem menos.
+ */
+function AttendanceStats() {
+  const breakpoint = useBreakpoint();
+  const stats = useQuery({
+    queryKey: ["login-stats"],
+    queryFn: fetchLoginStats,
+    enabled: breakpoint === "laptop" || breakpoint === "desktop",
+  });
+  const data: LoginStats | undefined = stats.data;
+  const missing = statusFor(stats.isPending, stats.isError);
   const items = [
     {
-      value: formatStat(data?.firstResponseSeconds ?? null, "s"),
-      label: "primeira resposta, em média",
+      value: formatStat(data?.averageReplySeconds ?? null, "s"),
+      hasValue: data?.averageReplySeconds != null,
+      label: "resposta do assistente, em média",
     },
     {
-      value: formatStat(data?.resolvedWithoutQueuePercent ?? null, "%"),
-      label: "resolvidos sem fila",
+      value: formatStat(data?.answeredWithoutAnalystPercent ?? null, "%"),
+      hasValue: data?.answeredWithoutAnalystPercent != null,
+      label: "atendidas sem analista",
     },
     {
-      value: data ? String(data.analystsOnline) : "—",
-      label: "analistas online agora",
-      live: true,
+      value: data ? String(data.analystsSignedIn) : "—",
+      hasValue: data !== undefined,
+      label: "analistas conectados",
     },
   ];
 
   return (
-    <dl className="grid grid-cols-3 border-t border-paper/10 pt-6">
+    <dl className="grid grid-cols-3 border-t border-paper/10 pt-6" aria-busy={stats.isPending}>
       {items.map((item, index) => (
         <div
           key={item.label}
@@ -98,11 +118,9 @@ function LoginStats() {
           }
         >
           <dt className="order-2 text-[13.5px] text-paper/55">{item.label}</dt>
-          <dd className="order-1 flex items-center gap-2 font-display text-[34px] leading-none">
-            {item.value}
-            {item.live && data && data.analystsOnline > 0 && (
-              <span aria-hidden className="size-2 rounded-full bg-success" />
-            )}
+          <dd className="order-1 font-display text-[34px] leading-none tracking-[-0.6px]">
+            <span aria-hidden={!item.hasValue}>{item.value}</span>
+            {!item.hasValue && <span className="sr-only">{missing}</span>}
           </dd>
         </div>
       ))}
