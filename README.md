@@ -112,7 +112,9 @@ O deploy é no [Railway](https://railway.com), configurado em [railway.json](rai
 **Uso limitado contra abuso** (o login aceita qualquer senha, por requisito do desafio). Com o Gemini no plano gratuito não há gasto possível; os limites protegem a cota gratuita:
 
 - até 30 mensagens por hora por funcionário e, somando todos, 3 por minuto e 120 por dia, respondendo `429` acima disso. Os tetos globais saem da cota gratuita do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 4 chamadas ao modelo por mensagem: o classificador e até 3 passos do agent). Mensagens para um analista não chamam o modelo e não entram nesses tetos;
-- até 60 mensagens ao agent por hora por IP: como qualquer senha entra, uma pessoa poderia usar todas as contas de demonstração;
+- até 60 mensagens ao agent por hora e 40 por dia por IP: como qualquer senha entra, uma pessoa poderia usar todas as contas de demonstração. IPv6 conta pela rede /64;
+- os tetos diários contam no dia da cota do Gemini (vira à meia-noite do Pacífico) e ficam no banco, sobrevivendo a reinícios;
+- no máximo 2 tentativas por chamada ao modelo, quando o provedor falha;
 - 30 mensagens ao agent por sessão (RN14), e no máximo 3 passos do agent por resposta;
 - até 60 ações de botão (rascunho, nova sessão, falar com analista) e 60 mensagens ao analista por hora por funcionário;
 - até 20 tentativas de login por minuto por IP;
@@ -120,7 +122,7 @@ O deploy é no [Railway](https://railway.com), configurado em [railway.json](rai
 - raciocínio baixo no modelo (`thinkingLevel: low`), para gastar menos cota por mensagem;
 - erros do modelo nunca chegam crus ao navegador: o funcionário vê uma mensagem amigável, e a cota esgotada vira um aviso claro.
 
-Os limites ficam em memória, o que basta para uma instância só (ADR-0003); com mais de uma instância, iriam para o banco ou para um Redis.
+Os limites por janela curta (minuto e hora) ficam em memória, o que basta para uma instância só (ADR-0003); com mais de uma instância, iriam para o banco ou para um Redis. Os diários já ficam no banco.
 
 **Custo e latência medidos** (RT10): cada turno grava os tokens do classificador e do agent e a latência, e `pnpm --filter @nexo/api usage:report` resume isso por turno e por conversa. Numa conversa real com o Gemini (dúvida na central de ajuda, consulta de chamado e abertura de chamado), deu **cerca de 10,7 mil tokens por turno**, quase tudo de entrada: instruções, definições das tools e histórico. A conversa toda ficou em **cerca de 32 mil tokens**, com latência de **3,8 s no p50 e 5,7 s no p95**. No plano gratuito isso não custa nada; o que limita é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto).
 

@@ -1,6 +1,6 @@
 import type { UserRole } from "@nexo/shared/demo";
 import type { HandoffReason, SupportLevel } from "@nexo/shared/domain";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Espelho tipado das tabelas criadas em migrations/*.sql (fonte da verdade do schema, ADR-0009).
@@ -148,3 +148,13 @@ export const chatSessions = sqliteTable("chat_sessions", {
 });
 
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
+
+export const usageCounters = sqliteTable(
+  "usage_counters",
+  {
+    scope: text("scope").notNull(),
+    day: text("day").notNull(),
+    count: integer("count").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.scope, table.day] })],
+);

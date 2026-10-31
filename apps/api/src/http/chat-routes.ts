@@ -5,11 +5,11 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import { z } from "zod";
+import type { ChatLimits } from "../app/agent-quota.ts";
 import type { ChatService } from "../app/chat-service.ts";
 import type { DraftActions } from "../app/draft-actions.ts";
 import type { AppEnv } from "./app-env.ts";
 import { clientIp } from "./client-ip.ts";
-import type { RateLimiter } from "./rate-limiter.ts";
 import { currentUser, requireRole } from "./session.ts";
 
 /** Limites de entrada: protegem custo e memória contra abuso (RT10, RT13). */
@@ -20,21 +20,6 @@ const MAX_MESSAGE_CHARS = 2000;
 const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 });
-
-/**
- * Mensagens para o agent: por funcionário, e para todos juntos dentro da cota gratuita do modelo
- * (ADR-0010). Mensagens para o analista não gastam o modelo: têm só um limite por funcionário, para
- * não consumir a cota de todos (R42). Botões do rascunho: gravam na conversa e no sistema de chamados.
- */
-export type ChatLimits = {
-  perUser: RateLimiter;
-  /** A13: o login aceita qualquer senha, então uma pessoa pode usar todas as contas de demonstração. */
-  perIp: RateLimiter;
-  globalPerMinute: RateLimiter;
-  globalPerDay: RateLimiter;
-  toAnalystPerUser: RateLimiter;
-  draftActionsPerUser: RateLimiter;
-};
 
 type ChatRoutesDependencies = {
   chatService: ChatService;
@@ -80,27 +65,12 @@ export function createChatRoutes({
     return c.json(await chatService.getConversation(currentUser(c, "employee")));
   });
 
+  // Os limites de uso são do caso de uso do chat (agent-quota.ts): é ele que sabe, com a conversa
+  // travada, se a mensagem vai para o modelo ou para o analista.
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
-    // Conta antes de validar: requisições inválidas em massa também são abuso.
-    const agentReplies = await chatService.agentWillReply(employee);
-    // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.
-    if (agentReplies) await chatService.assertSessionBelowLimit(employee);
-    const withinLimits = agentReplies
-      ? chatLimits.perUser.tryConsume(employee.id) &&
-        chatLimits.perIp.tryConsume(clientIp(c)) &&
-        chatLimits.globalPerMinute.tryConsume("global") &&
-        chatLimits.globalPerDay.tryConsume("global")
-      : chatLimits.toAnalystPerUser.tryConsume(employee.id);
-    if (!withinLimits) {
-      throw new AppError(
-        "RATE_LIMITED",
-        "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
-      );
-    }
-
     const { text } = parseInput(sendMessageSchema, await readJson(c.req));
-    const stream = await chatService.sendMessage(employee, text);
+    const stream = await chatService.sendMessage(employee, text, { ip: clientIp(c) });
     return createUIMessageStreamResponse({ stream });
   });
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { GENERIC_AGENT_ERROR_MESSAGE, QUOTA_EXCEEDED_MESSAGE } from "../agent/agent-errors.ts";
 import type { MessageRow } from "../db/schema.ts";
 import { createTestContainer } from "../test-support.ts";
-import { toAgentHistoryMessage } from "./chat-service.ts";
+import { keepWithinCharBudget, toAgentHistoryMessage } from "./chat-service.ts";
 
 /** Modelo que sempre falha como o provedor falharia (chave inválida, cota esgotada...). */
 function failingModel(statusCode: number, message: string) {
@@ -29,7 +29,7 @@ async function chatChunksWith(model: MockLanguageModelV4): Promise<UIMessageChun
     remember: false,
   });
 
-  const stream = await chatService.sendMessage(employee, "Minha VPN dá erro 809");
+  const stream = await chatService.sendMessage(employee, "Minha VPN dá erro 809", { ip: "local" });
   const chunks: UIMessageChunk[] = [];
   const reader = stream.getReader();
   for (let result = await reader.read(); !result.done; result = await reader.read()) {
@@ -91,5 +91,26 @@ describe("histórico que o agent recebe (R18)", () => {
     expect(toAgentHistoryMessage(row("agent", "Olá!"))).toMatchObject({
       parts: [{ type: "text", text: "Olá!" }],
     });
+  });
+});
+
+describe("orçamento de texto do histórico (ADR-0010)", () => {
+  const message = (id: string, size: number) => ({
+    id,
+    role: "user" as const,
+    parts: [{ type: "text" as const, text: "x".repeat(size) }],
+  });
+
+  it("fica com as mensagens mais novas que cabem, na ordem da conversa", () => {
+    const kept = keepWithinCharBudget(
+      [message("1", 600), message("2", 500), message("3", 400)],
+      1000,
+    );
+
+    expect(kept.map((item) => item.id)).toEqual(["2", "3"]);
+  });
+
+  it("a mensagem mais nova entra sempre, mesmo maior que o orçamento", () => {
+    expect(keepWithinCharBudget([message("1", 10), message("2", 5000)], 1000)).toHaveLength(1);
   });
 });

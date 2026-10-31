@@ -26,12 +26,18 @@ import {
   type ChatSessionService,
   type SessionView,
 } from "./chat-session-service.ts";
+import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
+/**
+ * Teto de texto do histórico que o agent recebe. Sem ele, 20 mensagens de 2.000 caracteres,
+ * reenviadas a cada passo do agent, chegariam perto dos 250 mil tokens por minuto do plano gratuito.
+ */
+const HISTORY_MAX_CHARS = 16_000;
 /** Quantas mensagens anteriores o classificador vê: só o bastante para entender a nova. */
 const CLASSIFIER_CONTEXT = 6;
 /** A partir daqui a confiança é alta; entre o limiar e isto, média (como no prompt do classificador). */
@@ -45,6 +51,7 @@ type ChatServiceDependencies = {
   classifier: Classifier;
   decisionService: DecisionService;
   chatSessionService: ChatSessionService;
+  quota: AgentQuota;
   clock: Clock;
 };
 
@@ -67,6 +74,7 @@ export function createChatService({
   classifier,
   decisionService,
   chatSessionService,
+  quota,
   clock,
 }: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
@@ -107,13 +115,6 @@ export function createChatService({
   }
 
   return {
-    /** Se a próxima mensagem vai para o agent (e gasta o modelo) ou fica para o analista (RN08). */
-    async agentWillReply(employee: UserRow): Promise<boolean> {
-      const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      // Sem conversa aberta, a próxima mensagem abre uma nova, com o agent.
-      return !conversation || agentMayReply(conversation.mode);
-    },
-
     /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
@@ -130,12 +131,6 @@ export function createChatService({
             : message;
         }),
       };
-    },
-
-    /** Antes de gastar cota: a próxima mensagem ao agent seria recusada pelo limite da sessão? */
-    async assertSessionBelowLimit(employee: UserRow): Promise<void> {
-      const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      if (conversation) await chatSessionService.assertBelowLimit(conversation);
     },
 
     /**
@@ -182,9 +177,18 @@ export function createChatService({
      * Grava a mensagem do funcionário e devolve a resposta do agent em streaming. Com a conversa
      * transferida ou com um analista, o agent nem é chamado (RN08): a mensagem fica para o analista.
      */
-    async sendMessage(employee: UserRow, text: string): Promise<ReadableStream<UIMessageChunk>> {
+    async sendMessage(
+      employee: UserRow,
+      text: string,
+      client: { ip: string },
+    ): Promise<ReadableStream<UIMessageChunk>> {
       const conversation = await openConversationFor(employee);
       if (!agentMayReply(conversation.mode)) {
+        if (!quota.tryConsumeForAnalyst(employee.id))
+          throw new AppError(
+            "RATE_LIMITED",
+            "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
+          );
         await conversationStore.appendMessage({
           conversationId: conversation.id,
           author: "employee",
@@ -202,7 +206,20 @@ export function createChatService({
       const release = () => busyConversations.delete(conversation.id);
 
       try {
-        // RN14: conta a mensagem na sessão (ou recusa, na 31ª), antes de gastar o modelo.
+        // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.
+        await chatSessionService.assertBelowLimit(conversation);
+        // A cota do modelo é gasta aqui, com a trava da conversa e a mesma leitura que decidiu
+        // chamar o agent (ADR-0010, A13).
+        const withinQuota = await quota.tryConsumeForAgent({
+          employeeId: employee.id,
+          ip: client.ip,
+        });
+        if (!withinQuota)
+          throw new AppError(
+            "RATE_LIMITED",
+            "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
+          );
+        // RN14: conta a mensagem na sessão (ou recusa, na 31ª).
         const session = await chatSessionService.countAgentMessage(conversation);
         const turnStartedAt = clock.now();
         // Etapa 1 (R05): o classificador vê a mensagem nova e um pouco do que veio antes.
@@ -243,10 +260,9 @@ export function createChatService({
         }
 
         // O agent vê só a sessão atual; o que veio antes chega pelo resumo (R03, custo por turno).
-        const history = await loadHistory(
-          conversation.id,
-          toAgentHistoryMessage,
-          session.startedAt,
+        const history = keepWithinCharBudget(
+          await loadHistory(conversation.id, toAgentHistoryMessage, session.startedAt),
+          HISTORY_MAX_CHARS,
         );
         const previousSummary = await chatSessionService.previousSummary(conversation.id);
         const pendingDrafts = await draftService.describePending(conversation.id);
@@ -328,6 +344,19 @@ function systemNoticeStream(text: string): ReadableStream<UIMessageChunk> {
       writer.write({ type: "text-end", id });
     },
   });
+}
+
+/** As mensagens mais novas que cabem no orçamento de texto; a mais nova entra sempre. */
+export function keepWithinCharBudget(messages: UIMessage[], maxChars: number): UIMessage[] {
+  const kept: UIMessage[] = [];
+  let used = 0;
+  for (const message of [...messages].reverse()) {
+    const size = textOf(message).length;
+    if (kept.length > 0 && used + size > maxChars) break;
+    kept.unshift(message);
+    used += size;
+  }
+  return kept;
 }
 
 const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {

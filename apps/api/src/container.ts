@@ -22,8 +22,9 @@ import { createDecisionStore } from "./db/decision-store.ts";
 import { createDraftStore } from "./db/draft-store.ts";
 import { createHandoffStore } from "./db/handoff-store.ts";
 import { createSessionStore } from "./db/session-store.ts";
+import { createUsageCounterStore } from "./db/usage-counter-store.ts";
 import { createUserStore } from "./db/user-store.ts";
-import type { ChatLimits } from "./http/chat-routes.ts";
+import { createAgentQuota, type ChatLimits } from "./app/agent-quota.ts";
 import { createRateLimiter, type RateLimiter } from "./http/rate-limiter.ts";
 import type { TicketGateway } from "./ports/ticket-gateway.ts";
 
@@ -36,10 +37,14 @@ const KNOWLEDGE_DIRECTORY = join(import.meta.dirname, "..", "knowledge");
  */
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
 /** Um pouco mais que um funcionário: cabe uma sala com IP compartilhado, não todas as contas de uma vez. */
 const CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
+/**
+ * Bem abaixo do teto global do dia (120): uma pessoa num IP não esgota o dia de todos sozinha.
+ * Cabem uns 2 funcionários por IP, o bastante para quem divide a rede do escritório.
+ */
+const CHAT_MESSAGES_PER_IP_PER_DAY = 40;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
 const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
 const LOGINS_PER_IP_PER_MINUTE = 20;
@@ -108,6 +113,36 @@ export async function createContainer(
   });
   const decisionStore = createDecisionStore(db);
   const decisionService = createDecisionService({ decisionStore, handoffService, clock });
+  // Limites em memória por janela curta; os tetos diários ficam no banco (agent-quota.ts).
+  const chatLimits: ChatLimits = {
+    perUser: createRateLimiter({
+      limit: CHAT_MESSAGES_PER_USER_PER_HOUR,
+      windowMs: HOUR_MS,
+      clock,
+    }),
+    perIp: createRateLimiter({ limit: CHAT_MESSAGES_PER_IP_PER_HOUR, windowMs: HOUR_MS, clock }),
+    globalPerMinute: createRateLimiter({
+      limit: config.CHAT_MESSAGES_PER_MINUTE,
+      windowMs: MINUTE_MS,
+      clock,
+    }),
+    toAnalystPerUser: createRateLimiter({
+      limit: MESSAGES_TO_ANALYST_PER_USER_PER_HOUR,
+      windowMs: HOUR_MS,
+      clock,
+    }),
+    draftActionsPerUser: createRateLimiter({
+      limit: DRAFT_ACTIONS_PER_USER_PER_HOUR,
+      windowMs: HOUR_MS,
+      clock,
+    }),
+  };
+  const quota = createAgentQuota({
+    limits: chatLimits,
+    dailyCaps: { global: config.CHAT_MESSAGES_PER_DAY, perIp: CHAT_MESSAGES_PER_IP_PER_DAY },
+    usageCounterStore: createUsageCounterStore(db),
+    clock,
+  });
   const mastra = createNexoMastra({
     model,
     knowledgeBase,
@@ -131,6 +166,7 @@ export async function createContainer(
       // Etapa 1 do turno (R05): o mesmo modelo, numa chamada curta e com saída estruturada.
       classifier: createClassifier(model),
       decisionService,
+      quota,
       chatSessionService: createChatSessionService({
         chatSessionStore: createChatSessionStore(db),
         conversationStore,
@@ -147,38 +183,7 @@ export async function createContainer(
       clock,
     }),
     conversationStore,
-    chatLimits: {
-      perUser: createRateLimiter({
-        limit: CHAT_MESSAGES_PER_USER_PER_HOUR,
-        windowMs: HOUR_MS,
-        clock,
-      }),
-      perIp: createRateLimiter({
-        limit: CHAT_MESSAGES_PER_IP_PER_HOUR,
-        windowMs: HOUR_MS,
-        clock,
-      }),
-      globalPerMinute: createRateLimiter({
-        limit: config.CHAT_MESSAGES_PER_MINUTE,
-        windowMs: MINUTE_MS,
-        clock,
-      }),
-      globalPerDay: createRateLimiter({
-        limit: config.CHAT_MESSAGES_PER_DAY,
-        windowMs: DAY_MS,
-        clock,
-      }),
-      toAnalystPerUser: createRateLimiter({
-        limit: MESSAGES_TO_ANALYST_PER_USER_PER_HOUR,
-        windowMs: HOUR_MS,
-        clock,
-      }),
-      draftActionsPerUser: createRateLimiter({
-        limit: DRAFT_ACTIONS_PER_USER_PER_HOUR,
-        windowMs: HOUR_MS,
-        clock,
-      }),
-    },
+    chatLimits,
     loginLimiter: createRateLimiter({
       limit: LOGINS_PER_IP_PER_MINUTE,
       windowMs: MINUTE_MS,

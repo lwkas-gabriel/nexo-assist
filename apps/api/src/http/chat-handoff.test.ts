@@ -1,7 +1,11 @@
-import { systemClock } from "@nexo/shared/domain";
 import { describe, expect, it } from "vitest";
-import { createFakeTicketGateway, createTestApp, createTestContainer } from "../test-support.ts";
-import { createRateLimiter } from "./rate-limiter.ts";
+import { createContainer } from "../container.ts";
+import {
+  createFakeTicketGateway,
+  createTestApp,
+  createTestContainer,
+  testConfig,
+} from "../test-support.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
 
@@ -79,12 +83,8 @@ describe("transferência pelo chat (RF16, RF17)", () => {
   });
 
   it("R42: mensagens para o analista não gastam a cota do modelo", async () => {
-    const container = await createTestContainer();
-    container.chatLimits.globalPerDay = createRateLimiter({
-      limit: 1,
-      windowMs: 60_000,
-      clock: systemClock,
-    });
+    // Teto global de 1 mensagem por dia: a primeira, ao agent, já o esgota.
+    const container = await createContainer(testConfig({ CHAT_MESSAGES_PER_DAY: 1 }));
     const { app, login } = await createTestApp(container);
     const ana = await login(ANA_EMAIL);
     const say = (text: string) =>

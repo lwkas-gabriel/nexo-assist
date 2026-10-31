@@ -84,7 +84,8 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     }
     const callsAtLimit = recording.counter.calls;
     const messagesAtLimit = (await conversation()).messages.length;
-    container.chatLimits.globalPerDay = createRateLimiter({
+    // Teto de 1 por minuto: se a recusa gastasse cota, a segunda já viria como 429.
+    container.chatLimits.globalPerMinute = createRateLimiter({
       limit: 1,
       windowMs: HOUR_MS,
       clock: { now: () => new Date() },

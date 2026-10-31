@@ -160,8 +160,12 @@ describe("chat do funcionário", () => {
       remember: false,
     });
 
-    const firstTurn = await container.chatService.sendMessage(ana.user, "primeira");
-    await expect(container.chatService.sendMessage(ana.user, "segunda")).rejects.toMatchObject({
+    const firstTurn = await container.chatService.sendMessage(ana.user, "primeira", {
+      ip: "local",
+    });
+    await expect(
+      container.chatService.sendMessage(ana.user, "segunda", { ip: "local" }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
 
@@ -170,7 +174,9 @@ describe("chat do funcionário", () => {
     while (!(await reader.read()).done) {
       // lê o stream até o fim: o turno termina
     }
-    await expect(container.chatService.sendMessage(ana.user, "terceira")).resolves.toBeDefined();
+    await expect(
+      container.chatService.sendMessage(ana.user, "terceira", { ip: "local" }),
+    ).resolves.toBeDefined();
   });
 
   it("A13: o limite por IP vale para todas as contas que saem dele", async () => {

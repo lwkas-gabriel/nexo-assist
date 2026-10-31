@@ -13,7 +13,7 @@ O Google oferece um plano gratuito da API do Gemini, sem cartão, com modelos qu
   - É um dos dois modelos que o Google recomenda para projetos novos, é estável e suporta tools e saída estruturada.
   - A outra recomendação, o `gemini-3.8-flash`, é mais capaz, mas no plano gratuito tem uma cota diária bem menor. Um agent usa de 2 a 3 chamadas por mensagem, então ele se esgotaria rápido.
 - **Raciocínio baixo** (`thinkingLevel: "low"`): menos tokens por chamada e respostas mais rápidas.
-- **Uma única nova tentativa do modelo** (`maxRetries: 1`): cobre uma falha passageira sem atrasar demais o aviso quando a cota por minuto acaba.
+- **Uma única nova tentativa do modelo** (`maxRetries: 1` com `maxProcessorRetries: 0`, em `apps/api/src/agent/model-settings.ts`): cobre uma falha passageira sem atrasar demais o aviso quando a cota por minuto acaba. *Revisto na T16:* o Mastra repete em duas camadas que se multiplicam, e só `maxRetries: 1` dava 6 tentativas por chamada (12 por mensagem). Um teste conta as chamadas.
 - **Tetos globais de mensagens calibrados pela cota real**, somando todos os usuários. A cota gratuita do `gemini-3.5-flash-lite` no projeto, conferida no AI Studio em 30/10/2026, é de **15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia**. Cada mensagem usa até 4 chamadas ao modelo: o classificador (T14) e até 3 passos do agent (`maxSteps: 3`, por exemplo duas tools e a resposta). Por isso:
   - **3 mensagens por minuto** (15 ÷ 4 ≈ 3,75);
   - **120 mensagens por dia** (500 ÷ 4 = 125, com folga). Antes da troca, o teto diário era 500.
@@ -21,6 +21,9 @@ O Google oferece um plano gratuito da API do Gemini, sem cartão, com modelos qu
   *Revisto na T14:* a primeira conta usava 3 chamadas por mensagem (5 por minuto e 150 por dia), mas um turno com duas tools e o classificador já usava 4, e o 429 do provedor chegaria antes do teto da api.
 
   Os dois valores ficam no `.env` (`CHAT_MESSAGES_PER_MINUTE` e `CHAT_MESSAGES_PER_DAY`), porque dependem da cota da conta, e não de uma regra do produto. A api recusa o excesso antes de chamar o modelo, sem gastar cota à toa.
+
+  O teto diário conta no **dia da cota do Gemini**, que vira à meia-noite do Pacífico, e fica **no banco** (`usage_counters`), sobrevivendo a reinícios e deploys. Há também um teto diário por IP (40), para uma pessoa sozinha não esgotar o dia de todos. *Revisto na T16:* antes, era uma janela de 24 h em memória, que podia deixar passar o dobro num mesmo dia do Gemini.
+- **Histórico do agent com teto de texto** (16 mil caracteres, além das 40 mensagens): no pior caso, mensagens longas reenviadas a cada passo do agent chegariam perto dos 250 mil tokens por minuto.
 - **Cota esgotada (HTTP 429)** vira um aviso claro ao funcionário ("o assistente atingiu o limite de uso..."), nunca o erro bruto do provedor.
 - **Nada muda no agent em si:** o modo `mock` continua igual, e o CI e os testes E2E seguem sem chamar o modelo real.
 

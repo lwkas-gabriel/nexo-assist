@@ -4,9 +4,35 @@ import { summarizeUsage } from "./usage-report.ts";
 describe("relatório de custo (RT10)", () => {
   it("soma classificador e agent, por turno e por conversa, com a latência em percentis", () => {
     const report = summarizeUsage([
-      { conversationId: "a", classifierTokens: 100, agentTokens: 900, latencyMs: 1000 },
-      { conversationId: "a", classifierTokens: 100, agentTokens: 400, latencyMs: 3000 },
-      { conversationId: "b", classifierTokens: null, agentTokens: null, latencyMs: 200 },
+      {
+        conversationId: "a",
+        isButtonAction: false,
+        classifierTokens: 100,
+        agentTokens: 900,
+        latencyMs: 1000,
+      },
+      {
+        conversationId: "a",
+        isButtonAction: false,
+        classifierTokens: 100,
+        agentTokens: 400,
+        latencyMs: 3000,
+      },
+      {
+        conversationId: "b",
+        isButtonAction: false,
+        classifierTokens: null,
+        agentTokens: null,
+        latencyMs: 200,
+      },
+      // Clique de botão: fica de fora (não é turno do modelo).
+      {
+        conversationId: "c",
+        isButtonAction: true,
+        classifierTokens: null,
+        agentTokens: null,
+        latencyMs: 0,
+      },
     ]);
 
     expect(report).toEqual({

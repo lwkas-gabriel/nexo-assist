@@ -4,6 +4,8 @@
  */
 export type UsageRow = {
   conversationId: string;
+  /** Clique de botão (confirmar, cancelar, falar com analista): não é turno do modelo. */
+  isButtonAction: boolean;
   classifierTokens: number | null;
   agentTokens: number | null;
   latencyMs: number;
@@ -24,7 +26,8 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[Math.max(0, index)] ?? 0;
 }
 
-export function summarizeUsage(rows: readonly UsageRow[]): UsageReport {
+export function summarizeUsage(allRows: readonly UsageRow[]): UsageReport {
+  const rows = allRows.filter((row) => !row.isButtonAction);
   const tokens = rows.map((row) => (row.classifierTokens ?? 0) + (row.agentTokens ?? 0));
   const total = tokens.reduce((sum, value) => sum + value, 0);
   const conversations = new Set(rows.map((row) => row.conversationId)).size;
