@@ -330,7 +330,7 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - a gravação por turno, ligada à mensagem, com o registro chegando à tela nos metadados.
 - **Decisões tomadas pela IA, sem consultar o usuário:**
   - A classificação vai para o agent pela opção `system` do Mastra. O provedor do Gemini não aceita mensagem de sistema no meio da conversa, e colocá-la no texto do funcionário deixaria qualquer um forjar uma classificação.
-  - O ADR-0010 já contava o classificador nas 3 chamadas por mensagem, então os tetos de uso não mudaram.
+  - O ADR-0010 já contava o classificador nas 3 chamadas por mensagem, então os tetos de uso não mudaram. *(Correção: a conta estava errada; ver o item 47.)*
   - Limiar inicial de 0,5, a calibrar na avaliação da T27.
 - **O teste pegou um problema da central de ajuda (R13):** "Como calibro..." achava o artigo "Como instalar ou pedir um software" só pela palavra "como". As palavras de pergunta e de ligação passaram a ser ignoradas na busca, o que também melhora a detecção de duplicados.
 - **O Gemini real pegou dois problemas** (cerca de 15 chamadas da cota gratuita):
@@ -338,4 +338,31 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   2. O limiar era aplicado depois da resposta: o agent fez uma pergunta com opções e a conversa foi transferida logo em seguida, deixando a pergunta sem ninguém para acompanhar. A decisão passou para antes do agent falar. A segunda mensagem seguida com confiança baixa vai para o analista com um aviso fixo, sem chamar o agent, o que também economiza uma chamada.
 - **Validação final com o modelo real:** "qual o horário" saiu com confiança 0,9, sem sinais. A mensagem vaga gerou uma pergunta e, na segunda vaga, a transferência para o N2, com a regra R39 no registro. O pedido claro de abertura saiu com confiança 0,95 e rascunho Alta.
 - **Fica para depois:** os tokens da etapa 2 (o agent) não são medidos ainda, porque o stream do Mastra não os expõe no ponto em que o turno é gravado. Ficam para a T16, junto com o teto de custo.
+
+### 47. Revisão adversarial independente da T14
+- **Como:** sub-agente novo, sem o contexto da implementação, com a skill `revisao-adversarial` sobre `19dc7f3..50c67ca`. Ele confirmou as hipóteses com testes temporários, usando o modelo de teste.
+- **Resultado:** 5 importantes e 4 menores. As correções:
+  1. A classificação leva segundos, e o modo da conversa só era conferido antes dela. Uma transferência nesse intervalo (por exemplo, o botão de um chamado crítico) deixava o agent responder com a conversa já com os analistas. Agora a conversa é conferida de novo depois do classificador.
+  2. Depois de o analista devolver a conversa, a primeira mensagem vaga transferia de novo, sem o agent perguntar. O limiar passou a olhar só o mesmo período com o agent: o registro guarda a versão da conversa, que muda a cada transferência ou devolução.
+  3. O limiar comparava a confiança final do turno anterior, já reduzida pelos sinais, com a do classificador no turno atual. E o agent só recebia a do classificador, rotulada "alta" em 0,6. Uma conversa normal de rascunho podia ir para o analista sem a pergunta exigida pela R39. Correções:
+     - as duas pontas usam a confiança do classificador, que é o que o agent recebe;
+     - o rótulo tem três faixas (alta, média e baixa), como no prompt do classificador.
+  4. A conta de "até 3 chamadas por mensagem" do ADR-0010 estava errada: com duas tools e o classificador, um turno usa 4. A 5 mensagens por minuto, o 429 do provedor chegaria antes do teto da api. Correções:
+     - o agent ganhou um máximo de 3 passos por resposta;
+     - os tetos passaram para 3 mensagens por minuto e 120 por dia, no ADR, no README, no `.env.example` e no `.env` local.
+  5. O "entendido" do classificador, que parafraseia o texto do funcionário, ia para o contexto de sistema do agent. Isso abria uma porta para injeção de instruções. Agora o agent recebe só a intenção e a confiança.
+  6. Uma falha ao gravar o registro derrubava o aviso da transferência pelo limiar; agora a falha vai só para o log.
+  7. Faltavam testes de:
+     - transferência durante a classificação;
+     - classificador fora do ar no fluxo completo;
+     - falha ao gravar o registro;
+     - conversa já transferida no limiar, que respondia "o agent responde" em vez de "pausa".
+  8. Texto longo do classificador fazia perder a classificação inteira; agora é cortado.
+  9. Contradições com a documentação:
+     - os botões do card não gravavam o registro "ação determinística, confiança 100%" prometido no ADR-0006; agora gravam, e um clique zera a sequência do limiar;
+     - duplicado e campos faltando apareciam como falha no registro; agora aparecem como passos normais.
+- **O que ficou, com o motivo:**
+  - O sinal "categoria ambígua" da R09 não foi implementado: o classificador devolve uma categoria só, sem alternativas para comparar. A calibração da T27 dirá se ele faz falta.
+  - O teste de que o agent pergunta quando a confiança é baixa depende do prompt, e o modelo de teste não verifica isso. Foi conferido com o Gemini real (item 46) e entra na avaliação roteirizada da T27.
+- **Lição:** o limiar parecia simples, mas tinha três problemas de desenho: a medida, o período e a corrida com outras ações. Nenhum aparecia nos testes do caminho feliz.
 
