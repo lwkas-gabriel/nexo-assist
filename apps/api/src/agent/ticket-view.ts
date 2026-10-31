@@ -1,4 +1,4 @@
-import type { TicketDto } from "@nexo/shared/contracts";
+import type { TicketDto, UpdateAuthor } from "@nexo/shared/contracts";
 import {
   SLA_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -6,14 +6,23 @@ import {
   TICKET_STATUS_LABELS,
   TICKET_TYPE_LABELS,
   checkReopen,
+  describeElapsed,
   formatBrasiliaDateTime,
   getSlaStatus,
   isOpenStatus,
-  wholeDaysSince,
+  slaClockStart,
 } from "@nexo/shared/domain";
 
 /** Quantas atualizações recentes o agent vê ao consultar um chamado (contexto sem desperdício). */
 const RECENT_UPDATES = 5;
+
+/** Quem escreveu cada atualização, como o funcionário entende. Um autor novo quebra a compilação aqui. */
+const UPDATE_AUTHOR_LABELS: Record<UpdateAuthor, string> = {
+  staff: "equipe de TI",
+  employee: "funcionário",
+  agent: "Nexo Assist",
+  system: "sistema",
+};
 
 /**
  * Chamado do jeito que o agent precisa para responder: rótulos em português, datas em Brasília
@@ -21,17 +30,16 @@ const RECENT_UPDATES = 5;
  */
 export function toTicketSummary(ticket: TicketDto, now: Date) {
   const createdAt = new Date(ticket.createdAt);
-  const lastStaffUpdateAt = ticket.lastStaffUpdateAt ? new Date(ticket.lastStaffUpdateAt) : null;
-  const lastUpdate = lastStaffUpdateAt ?? createdAt;
-  const sla = getSlaStatus(
-    {
-      status: ticket.status,
-      priority: ticket.priority,
-      createdAt,
-      ...(lastStaffUpdateAt ? { lastStaffUpdateAt } : {}),
-    },
-    now,
-  );
+  const lastStaffUpdateAt = ticket.lastStaffUpdateAt
+    ? new Date(ticket.lastStaffUpdateAt)
+    : undefined;
+  const slaTicket = {
+    status: ticket.status,
+    priority: ticket.priority,
+    createdAt,
+    ...(lastStaffUpdateAt ? { lastStaffUpdateAt } : {}),
+  };
+  const sla = getSlaStatus(slaTicket, now);
 
   return {
     number: ticket.number,
@@ -42,8 +50,10 @@ export function toTicketSummary(ticket: TicketDto, now: Date) {
     status: TICKET_STATUS_LABELS[ticket.status],
     isOpen: isOpenStatus(ticket.status),
     openedAt: formatBrasiliaDateTime(createdAt),
-    lastTeamUpdateAt: formatBrasiliaDateTime(lastUpdate),
-    daysWithoutTeamUpdate: wholeDaysSince(lastUpdate, now),
+    // null quando a TI ainda não respondeu: o agent não pode inventar uma atualização.
+    lastTeamUpdateAt: lastStaffUpdateAt ? formatBrasiliaDateTime(lastStaffUpdateAt) : null,
+    // Desde a última resposta da TI ou, sem resposta, desde a abertura (A17).
+    timeWithoutTeamResponse: describeElapsed(slaClockStart(slaTicket), now),
     deadline: sla.isTracked
       ? {
           rule: SLA_LABELS[ticket.priority],
@@ -51,10 +61,13 @@ export function toTicketSummary(ticket: TicketDto, now: Date) {
           isOverdue: sla.isOverdue,
         }
       : null,
-    canReopen: ticket.resolvedAt
-      ? checkReopen({ status: ticket.status, resolvedAt: new Date(ticket.resolvedAt) }, now)
-          .canReopen
-      : false,
+    canReopen: checkReopen(
+      {
+        status: ticket.status,
+        ...(ticket.resolvedAt ? { resolvedAt: new Date(ticket.resolvedAt) } : {}),
+      },
+      now,
+    ).canReopen,
   };
 }
 
@@ -64,12 +77,7 @@ export function toTicketDetails(ticket: TicketDto, now: Date) {
     ...toTicketSummary(ticket, now),
     description: ticket.description,
     recentUpdates: ticket.updates.slice(-RECENT_UPDATES).map((update) => ({
-      by:
-        update.author === "staff"
-          ? "equipe de TI"
-          : update.author === "employee"
-            ? "funcionário"
-            : "sistema",
+      by: UPDATE_AUTHOR_LABELS[update.author],
       at: formatBrasiliaDateTime(new Date(update.createdAt)),
       message: update.message,
     })),

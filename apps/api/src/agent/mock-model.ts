@@ -135,7 +135,7 @@ const ticketSchema = z.object({
   title: z.string(),
   status: z.string(),
   deadline: z.object({ isOverdue: z.boolean(), rule: z.string() }).nullable(),
-  daysWithoutTeamUpdate: z.number(),
+  timeWithoutTeamResponse: z.string(),
 });
 const listResultSchema = z.object({ ok: z.literal(true), tickets: z.array(ticketSchema) });
 const getResultSchema = z.object({ ok: z.literal(true), ticket: ticketSchema });
@@ -146,6 +146,7 @@ const FAILURE_ANSWERS: Record<string, string> = {
   tickets_unavailable:
     "O sistema de chamados está instável no momento; tente de novo em instantes.",
   invalid_number: "Pode confirmar o número no formato INC-12345 ou REQ-12345?",
+  tickets_error: "Não consegui consultar seus chamados agora; tente de novo em instantes.",
   default: "Não consegui consultar seus chamados agora.",
 };
 
@@ -184,9 +185,9 @@ function answerTicketList(value: unknown): string {
 function answerTicket(value: unknown): string {
   const parsed = getResultSchema.safeParse(value);
   if (!parsed.success) return `Não encontrei esse chamado. ${TEST_MODEL_NOTE}`;
-  const { number, status, deadline, daysWithoutTeamUpdate } = parsed.data.ticket;
+  const { number, status, deadline, timeWithoutTeamResponse } = parsed.data.ticket;
   const overdue = deadline?.isOverdue
-    ? ` Está sem atualização há ${daysWithoutTeamUpdate} dias, acima do prazo de ${deadline.rule}.`
+    ? ` Está sem resposta da TI há ${timeWithoutTeamResponse}, acima do prazo de ${deadline.rule}.`
     : "";
   return `O chamado ${number} está ${status.toLowerCase()}.${overdue} ${TEST_MODEL_NOTE}`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBrasiliaDateTime, wholeDaysSince } from "./date-format.ts";
+import { describeElapsed, formatBrasiliaDateTime } from "./date-format.ts";
 
 describe("formatBrasiliaDateTime", () => {
   it("mostra no horário de Brasília, mesmo com a data em UTC (R02)", () => {
@@ -13,16 +13,25 @@ describe("formatBrasiliaDateTime", () => {
   });
 });
 
-describe("wholeDaysSince", () => {
-  it("conta dias inteiros desde a data", () => {
-    const now = new Date("2026-10-27T15:00:00Z");
+describe("describeElapsed", () => {
+  const now = new Date("2026-10-27T15:00:00Z");
+  const before = (hours: number) => new Date(now.getTime() - hours * 60 * 60 * 1000);
 
-    expect(wholeDaysSince(new Date("2026-10-22T14:20:00Z"), now)).toBe(5);
+  it("conta em dias a partir de um dia inteiro", () => {
+    expect(describeElapsed(before(5 * 24 + 1), now)).toBe("5 dias");
+    expect(describeElapsed(before(24), now)).toBe("1 dia");
   });
 
-  it("nunca devolve número negativo", () => {
-    const now = new Date("2026-10-27T15:00:00Z");
+  it("abaixo de um dia conta em horas: prazos de Crítica e Alta vencem antes disso", () => {
+    expect(describeElapsed(before(2), now)).toBe("2 horas");
+    expect(describeElapsed(before(1), now)).toBe("1 hora");
+  });
 
-    expect(wholeDaysSince(new Date("2026-10-28T00:00:00Z"), now)).toBe(0);
+  it("menos de uma hora não vira '0 horas'", () => {
+    expect(describeElapsed(before(0.5), now)).toBe("menos de 1 hora");
+  });
+
+  it("data no futuro (relógios dessincronizados) não vira tempo negativo", () => {
+    expect(describeElapsed(before(-3), now)).toBe("menos de 1 hora");
   });
 });

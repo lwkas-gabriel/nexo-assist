@@ -17,8 +17,34 @@ describe("toTicketSummary", () => {
       priority: "Média",
       isOpen: true,
       lastTeamUpdateAt: "22/10, 14:20",
-      daysWithoutTeamUpdate: 5,
+      timeWithoutTeamResponse: "5 dias",
       deadline: { rule: "3 dias úteis", dueAt: "27/10, 14:20", isOverdue: true },
+    });
+  });
+
+  it("A17: quando a TI nunca respondeu, não inventa uma atualização e conta desde a abertura", () => {
+    // Aberto há 3 dias (sexta 24/10 às 15h), sem nenhuma resposta da TI.
+    const neverAnswered = sampleTicket({
+      createdAt: "2026-10-24T18:00:00.000Z",
+      lastStaffUpdateAt: null,
+    });
+
+    expect(toTicketSummary(neverAnswered, NOW)).toMatchObject({
+      lastTeamUpdateAt: null,
+      timeWithoutTeamResponse: "3 dias",
+    });
+  });
+
+  it("RN12: chamado crítico vencido conta em horas, não em '0 dias'", () => {
+    const critical = sampleTicket({
+      priority: "critical",
+      createdAt: "2026-10-27T16:00:00.000Z",
+      lastStaffUpdateAt: null,
+    });
+
+    expect(toTicketSummary(critical, NOW)).toMatchObject({
+      timeWithoutTeamResponse: "2 horas",
+      deadline: { rule: "1 hora", isOverdue: true },
     });
   });
 

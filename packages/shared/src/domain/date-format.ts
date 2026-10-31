@@ -1,7 +1,8 @@
 /** Fuso do service desk (RN13): datas mostradas ao funcionário e ao agent sempre nele. */
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: BUSINESS_TIME_ZONE,
@@ -19,7 +20,17 @@ export function formatBrasiliaDateTime(date: Date): string {
   return dateTimeFormatter.format(date);
 }
 
-/** Dias inteiros desde `from` até `now` ("sem atualização há 5 dias"). */
-export function wholeDaysSince(from: Date, now: Date): number {
-  return Math.max(0, Math.floor((now.getTime() - from.getTime()) / DAY_MS));
+/**
+ * Tempo decorrido em texto ("2 horas", "5 dias"), para frases como "sem resposta há 5 dias".
+ * Abaixo de um dia conta em horas: os prazos de Crítica (1 h) e Alta (4 h úteis) vencem antes disso.
+ */
+export function describeElapsed(from: Date, now: Date): string {
+  const elapsedMs = Math.max(0, now.getTime() - from.getTime());
+  if (elapsedMs < HOUR_MS) return "menos de 1 hora";
+  if (elapsedMs < DAY_MS) return plural(Math.floor(elapsedMs / HOUR_MS), "hora", "horas");
+  return plural(Math.floor(elapsedMs / DAY_MS), "dia", "dias");
+}
+
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
 }
