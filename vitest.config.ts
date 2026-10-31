@@ -47,6 +47,9 @@ export default defineConfig({
           name: "api",
           include: ["apps/api/src/**/*.test.ts"],
           environment: "node",
+          // Turnos do agent com banco e streaming: com a suíte inteira em paralelo, os mais longos
+          // chegavam perto dos 5 s padrão e falhavam por tempo, não por erro.
+          testTimeout: 15_000,
         },
       },
     ],

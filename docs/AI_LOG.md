@@ -751,3 +751,4 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **Navegação por hash (`#/perfil`)** em vez das rotas `/atendimento` e `/perfil` do 10.3: o voltar e o avançar do navegador funcionam, sem roteador nem rota nova no servidor (que serve o front estático). Registrado como desvio do 10.3.
   - **O perfil é do funcionário:** o protótipo só desenha "Cliente — Meu perfil". O "Disponível" do analista (A21) continua salvo no navegador, pelo console.
 - **Conferência visual:** desktop e celular, com o aviso de simulação aberto.
+- **Tropeço no caminho:** pela segunda vez (a primeira foi na T24), um teste antigo da api falhou por tempo na suíte completa, e o commit da T25 saiu com a suíte vermelha. Sozinho, ele passava em 4 s. Em vez de remendar teste por teste, o projeto api ganhou um limite de 15 s, e a suíte passou duas vezes seguidas. Regra que reforço para mim: conferir o resultado da suíte antes de cada commit, não depois.

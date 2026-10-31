@@ -78,7 +78,6 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     });
   });
 
-  // 30 turnos do agent: com a suíte inteira em paralelo, passa dos 5 s padrão.
   it(
     "RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota",
     { timeout: 20_000 },
