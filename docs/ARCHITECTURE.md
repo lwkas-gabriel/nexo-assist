@@ -41,7 +41,7 @@ nexo-assist/
       ├─ domain/         regras puras e tipos: prioridade, SLA/calendário útil (America/Sao_Paulo), reabertura, duplicidade, status
       └─ contracts/      schemas Zod dos DTOs HTTP (web↔api e api↔tickets-service)
 ```
-- **Direção das dependências:** `http → app → ports ← adapters`; `domain` não depende de nada. O agent chama casos de uso, nunca HTTP nem banco direto.
+- **Direção das dependências:** `http → app → ports ← adapters`; `domain` não depende de nada. As tools do agent usam casos de uso ou portas (ex.: `TicketGateway`, `KnowledgeBase`), nunca HTTP nem banco direto.
 - **Uma fonte de verdade para conversas:** nosso repositório guarda mensagens, estado e traces. O console, as mensagens do analista e os traces precisam disso. Para o agent, passamos o histórico em janela, explicitamente. A memória do Mastra fica desligada para não haver dois históricos.
 - **Composição sem framework de DI:** funções-fábrica (`createChatService({ tickets, conversations, clock })`), montadas num único `container.ts`. Nos testes, basta passar fakes.
 - **`Clock` injetado:** SLA, vencimento e o seed com datas relativas ficam testáveis e determinísticos.
