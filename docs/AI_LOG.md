@@ -207,3 +207,16 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Usuário conferiu no AI Studio** a cota gratuita do `gemini-3.5-flash-lite` no projeto: 15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia. Os contadores já mostravam uma requisição, confirmando que a chave dele funcionou.
 - **Ajuste da IA:** o teto diário de 150 mensagens estava certo, mas o limite por minuto era o mais apertado, e nada no projeto o respeitava. Entrou um teto global de 5 mensagens por minuto (15 ÷ 3 chamadas por mensagem), para a api recusar antes de gastar cota.
 - **Decisão de desenho:** os dois tetos globais passaram para o `.env`, porque dependem da cota da conta, e não de uma regra do produto. Isso também evita que os testes E2E em paralelo esbarrem no limite, já que eles usam tetos altos. O limite de 30 mensagens por hora por funcionário continua no código, como regra do produto.
+
+---
+
+## T11: o agent consulta chamados (30/10/2026)
+
+### 38. Validação manual do usuário com o Gemini real
+- **Usuário criou a chave gratuita, testou o chat e avaliou:** "a resposta foi boa". Esse foi o primeiro uso do modelo real no projeto.
+
+### 39. T11: tools de chamados e prompt com as regras do Anexo A
+- **IA gerou:** `list_my_tickets` e `get_ticket`, que **não recebem quem é o funcionário**: ele vem da sessão pelo contexto do turno, e sem ele a tool falha fechada. O chamado chega ao agent com rótulos em português, datas em Brasília e o prazo já calculado pelo domínio, então o modelo não faz conta nem converte fuso. O prompt diz como decidir entre central de ajuda, lista e consulta por número, e inclui uma regra para **nunca dizer que fez uma ação que não fez**, porque abrir e transferir chamados só chegam nas T12 e T13.
+- **Validação com o Gemini real** (4 conversas, cerca de 10 chamadas da cota gratuita): listou os 3 chamados da tela 3 e perguntou qual; entendeu "o do notebook" pelo contexto e avisou que o prazo de 3 dias úteis venceu; recusou o chamado de outra pessoa sem nem consultar; redirecionou férias para o RH com o ramal certo.
+- **Ajuste feito com base no modelo real:** o Gemini respondia em markdown, que o chat mostraria como asteriscos. O prompt passou a pedir texto simples com marcadores "• ".
+- **O E2E pegou um problema de desenho dos testes:** dois testes em paralelo dividiam a mesma conversa e esbarravam, corretamente, na regra de um turno por vez (R06). Cada teste que envia mensagem passou a ter um funcionário próprio; Fábio Nunes e Gabriela Rocha, que aparecem na tela 4 do protótipo, entraram nas pessoas de demonstração.

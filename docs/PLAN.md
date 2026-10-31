@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T10b concluídas. **Pausa antes da T11** (combinado: decidir Railway e crédito do modelo).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T11 concluídas; próxima T12 (rascunho e confirmação). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -148,7 +148,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T10b Testes de segurança: funcionário A não acessa chamado/conversa de B; funcionário não acessa console; tickets-service recusa chamada sem token (RN09, RT11) — **concluída** (`apps/api/src/security.test.ts`). Para testar o acesso ao console, a primeira rota dele (lista de conversas) foi antecipada da T23.
 
 **Fase 3 — Agent**
-- [ ] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito (cota já conferida e tetos calibrados, ADR-0010)
+- [x] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito (cota já conferida e tetos calibrados, ADR-0010) — **concluída**. Tools list_my_tickets e get_ticket com o funcionário vindo da sessão (falha fechada); prazo e datas calculados pelo domínio; prompt validado com o Gemini real (listar e perguntar qual, prazo vencido, recusa de chamado alheio, redirecionamento para o RH).
 - [ ] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05)
 - [ ] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08)
 - [ ] T14 Classificador estruturado (etapa 1) + registro de decisão por turno + confiança ajustada por sinais (RF04, RF05, R05, R09)
