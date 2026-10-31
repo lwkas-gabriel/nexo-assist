@@ -100,6 +100,39 @@ describe("tela do chat (tela 2)", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Atendimento" })).toBeDefined();
   });
 
+  it("R38: o clique numa resposta rápida vai marcado, para a api dispensar o classificador", async () => {
+    const asked: ConversationView = {
+      ...conversationAt("agent", false),
+      messages: [
+        {
+          id: "agent-1",
+          role: "assistant",
+          metadata: { author: "agent" },
+          parts: [
+            {
+              type: "tool-ask_with_options",
+              toolCallId: "c-1",
+              state: "output-available",
+              input: {},
+              output: {
+                ok: true,
+                question: "Quem está sendo afetado?",
+                options: ["Só eu", "Minha equipe"],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const { sentBodies } = stubApi(asked);
+    renderChat();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Minha equipe/ }));
+
+    await waitFor(() => expect(sentBodies).toHaveLength(1));
+    expect(sentBodies[0]).toMatchObject({ text: "Minha equipe", quickOption: true });
+  });
+
   it("mensagem recusada fica marcada, e Tentar novamente reenvia a mesma (texto e id)", async () => {
     const { sentBodies } = stubApi(conversationAt("agent", false));
     renderChat();

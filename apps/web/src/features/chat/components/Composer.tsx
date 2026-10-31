@@ -10,6 +10,8 @@ type ComposerProps = {
   ref?: Ref<HTMLInputElement>;
   isBusy: boolean;
   onSend: (text: string) => void;
+  /** Resposta rápida escolhida pelas teclas 1 a 4 (vai marcada, como o clique no botão). */
+  onPickOption: (option: string) => void;
   /** Contador da sessão (RF10): mensagens ao agent e o limite. */
   counter: { used: number; limit: number };
   /** Respostas rápidas ativas: as teclas 1 a 4 escolhem, com o campo vazio (R34). */
@@ -23,6 +25,7 @@ export function Composer({
   ref,
   isBusy,
   onSend,
+  onPickOption,
   counter,
   quickOptions,
   onConfirmDraft,
@@ -52,7 +55,7 @@ export function Composer({
       text === "" && !isBusy && !hasModifier ? quickOptions[Number(event.key) - 1] : undefined;
     if (option && Number(event.key) <= SHORTCUT_OPTIONS) {
       event.preventDefault();
-      send(option);
+      onPickOption(option);
     }
   }
 

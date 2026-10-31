@@ -40,9 +40,12 @@ const CONVERSATION_KEY = ["conversation"] as const;
  */
 const chatTransport = new DefaultChatTransport({
   api: "/api/chat/messages",
-  prepareSendMessagesRequest: ({ messages }) => {
+  // `body` traz o que o envio acrescenta, como a marca de resposta rápida (R38).
+  prepareSendMessagesRequest: ({ messages, body }) => {
     const last = messages.at(-1);
-    return { body: { text: last ? textOf(last) : "", ...(last ? { id: last.id } : {}) } };
+    return {
+      body: { ...body, text: last ? textOf(last) : "", ...(last ? { id: last.id } : {}) },
+    };
   },
 });
 
@@ -159,8 +162,9 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
   const isAtLimit = mode === "agent" && view.session?.isAtLimit === true;
 
   const send = (text: string) => void sendMessage({ text });
+  // R38: a api confere a opção e dispensa o classificador; o foco volta ao campo de mensagem.
   const pickOption = (option: string) => {
-    send(option);
+    void sendMessage({ text: option }, { body: { quickOption: true } });
     composerRef.current?.focus();
   };
   const retry = (message: UIMessage) =>
@@ -255,6 +259,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
             ref={composerRef}
             isBusy={isBusy}
             onSend={send}
+            onPickOption={pickOption}
             counter={{
               used: view.session?.agentMessages ?? 0,
               limit: view.session?.limit ?? SESSION_MESSAGE_LIMIT,

@@ -56,6 +56,7 @@ function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {})
   const props = {
     isBusy: false,
     onSend: vi.fn(),
+    onPickOption: vi.fn(),
     counter: { used: 18, limit: 30 },
     quickOptions: ["Só eu", "Minha equipe", "Toda a empresa"],
     onConfirmDraft: vi.fn(),
@@ -180,7 +181,8 @@ describe("campo de mensagem (RF10, R33, R34)", () => {
 
     await userEvent.keyboard("2");
 
-    expect(props.onSend).toHaveBeenCalledWith("Minha equipe");
+    expect(props.onPickOption).toHaveBeenCalledWith("Minha equipe");
+    expect(props.onSend).not.toHaveBeenCalled();
   });
 
   it("R34: com texto no campo, o número é só texto", async () => {
@@ -217,7 +219,7 @@ describe("campo de mensagem (RF10, R33, R34)", () => {
 
     await userEvent.keyboard("{Control>}2{/Control}{Alt>}1{/Alt}");
 
-    expect(props.onSend).not.toHaveBeenCalled();
+    expect(props.onPickOption).not.toHaveBeenCalled();
   });
 
   it("Enter envia o texto e limpa o campo", async () => {

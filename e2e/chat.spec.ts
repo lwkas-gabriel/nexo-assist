@@ -20,6 +20,13 @@ test("o funcionário tira uma dúvida e vê o que o agent fez", async ({ page },
     page.getByRole("list", { name: "Ações do assistente" }).getByText("buscou na central de ajuda"),
   ).toBeVisible();
   await expect(page.getByText(/artigo "Horário do service desk"/)).toBeVisible();
+
+  // RF06, R38: pergunta com respostas rápidas; o clique vira a resposta do funcionário.
+  await page.getByLabel("Mensagem para o Nexo").fill("O computador está lento");
+  await page.getByRole("button", { name: "Enviar" }).click();
+  await page.getByRole("button", { name: /Minha equipe/ }).click();
+  await expect(page.getByRole("log").getByText("Minha equipe", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Minha equipe/ })).toBeDisabled();
 });
 
 test("RF11: a conversa continua depois de recarregar a página", async ({ page }, testInfo) => {
