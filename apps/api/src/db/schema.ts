@@ -55,3 +55,29 @@ export const messages = sqliteTable("messages", {
 export type UserRow = typeof users.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+
+export const DRAFT_KINDS = ["create", "update", "reopen"] as const;
+export type DraftKind = (typeof DRAFT_KINDS)[number];
+
+export const DRAFT_STATUSES = ["pending", "confirmed", "cancelled"] as const;
+export type DraftStatus = (typeof DRAFT_STATUSES)[number];
+
+export const drafts = sqliteTable("drafts", {
+  number: integer("number").primaryKey({ autoIncrement: true }),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id")
+    .notNull()
+    .references(() => users.id),
+  kind: text("kind").$type<DraftKind>().notNull(),
+  ticketNumber: text("ticket_number"),
+  content: text("content").notNull(),
+  priorityReason: text("priority_reason"),
+  status: text("status").$type<DraftStatus>().notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type DraftRow = typeof drafts.$inferSelect;
