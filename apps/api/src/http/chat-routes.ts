@@ -80,7 +80,10 @@ export function createChatRoutes({
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
     // Conta antes de validar: requisições inválidas em massa também são abuso.
-    const withinLimits = (await chatService.agentWillReply(employee))
+    const agentReplies = await chatService.agentWillReply(employee);
+    // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.
+    if (agentReplies) await chatService.assertSessionBelowLimit(employee);
+    const withinLimits = agentReplies
       ? chatLimits.perUser.tryConsume(employee.id) &&
         chatLimits.globalPerMinute.tryConsume("global") &&
         chatLimits.globalPerDay.tryConsume("global")
@@ -109,6 +112,12 @@ export function createChatRoutes({
   });
   routes.use("/drafts/*", limitButtonActions);
   routes.use("/sessions", limitButtonActions);
+  routes.use("/handoff", limitButtonActions);
+
+  // "Falar com um analista" pelo botão: transfere sem o agent (11.5), inclusive no limite da sessão.
+  routes.post("/handoff", async (c) => {
+    return c.json({ handoff: await chatService.requestAnalyst(currentUser(c, "employee")) });
+  });
 
   // RN14: "Nova sessão", quando a atual chega ao limite ou o funcionário quer recomeçar.
   routes.post("/sessions", async (c) => {

@@ -28,6 +28,7 @@ import {
 } from "./chat-session-service.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService } from "./draft-service.ts";
+import type { HandoffService } from "./handoff-service.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
@@ -40,6 +41,7 @@ type ChatServiceDependencies = {
   mastra: Mastra;
   conversationStore: ConversationStore;
   draftService: DraftService;
+  handoffService: HandoffService;
   classifier: Classifier;
   decisionService: DecisionService;
   chatSessionService: ChatSessionService;
@@ -61,6 +63,7 @@ export function createChatService({
   mastra,
   conversationStore,
   draftService,
+  handoffService,
   classifier,
   decisionService,
   chatSessionService,
@@ -90,6 +93,19 @@ export function createChatService({
     return result.data;
   }
 
+  /** Uma ação por vez em cada conversa (R06): mensagens, nova sessão e pedido de analista. */
+  async function withConversationLock<T>(conversationId: string, action: () => Promise<T>) {
+    if (busyConversations.has(conversationId)) {
+      throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
+    }
+    busyConversations.add(conversationId);
+    try {
+      return await action();
+    } finally {
+      busyConversations.delete(conversationId);
+    }
+  }
+
   return {
     /** Se a próxima mensagem vai para o agent (e gasta o modelo) ou fica para o analista (RN08). */
     async agentWillReply(employee: UserRow): Promise<boolean> {
@@ -104,12 +120,9 @@ export function createChatService({
       if (!conversation) return { conversation: null, session: null, messages: [] };
       const messages = await loadHistory(conversation.id, toUIMessage);
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
-      const session = await chatSessionService.activeSession(conversation.id);
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
-        session: session
-          ? toSessionView(session, await chatSessionService.previousSummary(conversation.id))
-          : null,
+        session: await chatSessionService.view(conversation),
         messages: messages.map((message) => {
           const decision = decisions.get(message.id);
           return decision
@@ -119,14 +132,50 @@ export function createChatService({
       };
     },
 
-    /** "Nova sessão" (RN14): encerra a atual com resumo e abre outra na mesma conversa. */
+    /** Antes de gastar cota: a próxima mensagem ao agent seria recusada pelo limite da sessão? */
+    async assertSessionBelowLimit(employee: UserRow): Promise<void> {
+      const conversation = await conversationStore.findOpenByEmployee(employee.id);
+      if (conversation) await chatSessionService.assertBelowLimit(conversation);
+    },
+
+    /**
+     * "Nova sessão" (RN14): encerra a atual com resumo e abre outra na mesma conversa. Passa pela
+     * mesma trava das mensagens: não corre junto com um turno nem com outro clique.
+     */
     async startNewSession(employee: UserRow): Promise<SessionView> {
       const conversation = await openConversationFor(employee);
-      if (busyConversations.has(conversation.id)) {
-        throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
-      }
-      const session = await chatSessionService.startNew(conversation);
-      return toSessionView(session, await chatSessionService.previousSummary(conversation.id));
+      return withConversationLock(conversation.id, async () => {
+        const session = await chatSessionService.startNew(conversation);
+        return toSessionView(session, await chatSessionService.previousSummary(conversation.id));
+      });
+    },
+
+    /**
+     * "Falar com um analista" pelo botão (11.5): transfere sem passar pelo agent. É o caminho
+     * quando a sessão chegou ao limite e a mensagem por texto já não é aceita.
+     */
+    async requestAnalyst(employee: UserRow) {
+      const conversation = await openConversationFor(employee);
+      return withConversationLock(conversation.id, async () => {
+        const transfer = await handoffService.transfer({
+          employeeId: employee.id,
+          conversationId: conversation.id,
+          reason: "employee_request",
+          summary: {
+            problem: "O funcionário pediu um analista pelo botão do chat.",
+            attempted: await chatSessionService.describeCurrent(conversation),
+          },
+        });
+        const updated = await conversationStore.findById(conversation.id);
+        await decisionService.recordButtonAction({
+          conversationId: conversation.id,
+          conversationVersion: updated?.version ?? conversation.version,
+          messageId: transfer.notice.id,
+          description: "Funcionário pediu um analista pelo botão.",
+          at: clock.now(),
+        });
+        return transfer.view;
+      });
     },
 
     /**

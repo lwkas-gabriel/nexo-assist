@@ -25,8 +25,12 @@ export function createChatSessionStore(db: Database) {
       });
     },
 
+    /**
+     * Abre uma sessão, ou devolve a que outra requisição acabou de abrir: o índice único do banco
+     * garante uma sessão ativa por conversa.
+     */
     async start(conversationId: string, now: Date): Promise<ChatSessionRow> {
-      const [row] = await db
+      await db
         .insert(chatSessions)
         .values({
           id: randomUUID(),
@@ -35,7 +39,13 @@ export function createChatSessionStore(db: Database) {
           startedAt: now,
           lastActivityAt: now,
         })
-        .returning();
+        .onConflictDoNothing();
+      const row = await db.query.chatSessions.findFirst({
+        where: and(
+          eq(chatSessions.conversationId, conversationId),
+          eq(chatSessions.status, "active"),
+        ),
+      });
       if (!row) throw new Error("Falha ao abrir a sessão");
       return row;
     },

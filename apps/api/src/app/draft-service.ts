@@ -278,14 +278,12 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
     async describePending(conversationId: string): Promise<string | null> {
       const pending = await draftStore.listPending(conversationId);
       if (pending.length === 0) return null;
+      // Só textos do código (rótulos, números): o título e a descrição são texto livre do
+      // funcionário e não entram no contexto de sistema do agent.
       return pending
         .map((draft) => {
-          const what =
-            draft.kind === "create"
-              ? `chamado novo "${draft.content.title}"`
-              : `complemento ao chamado ${draft.ticketNumber}`;
           const shown = draft.shownAt ? "já mostrado ao funcionário" : "ainda não mostrado";
-          return `D-${draft.number}: ${what} (${shown})`;
+          return `D-${draft.number}: ${describePendingKind(draft)} (${shown})`;
         })
         .join("; ");
     },
@@ -342,6 +340,16 @@ function updateTarget(ticket: TicketDto, now: Date) {
     reason: "cannot_reopen" as const,
     why: check.reason === "window_expired" ? ("window_expired" as const) : ("cancelled" as const),
   };
+}
+
+function describePendingKind(draft: Draft): string {
+  if (draft.kind === "create") {
+    const { type, category, priority } = draft.content;
+    return `chamado novo (${TICKET_TYPE_LABELS[type]}, ${TICKET_CATEGORY_LABELS[category]}, prioridade ${TICKET_PRIORITY_LABELS[priority]})`;
+  }
+  return draft.kind === "reopen"
+    ? `reabertura do chamado ${draft.ticketNumber} com complemento`
+    : `complemento ao chamado ${draft.ticketNumber}`;
 }
 
 /** O que falta para propor o chamado, com os nomes que o agent usa para perguntar (RN03). */

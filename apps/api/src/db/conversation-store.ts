@@ -106,7 +106,6 @@ export function createConversationStore(db: Database) {
       return rows;
     },
 
-    /** As últimas `limit` mensagens, da mais antiga para a mais nova. */
     /**
      * As últimas `limit` mensagens, da mais antiga para a mais nova. Com `since`, só as a partir
      * dessa data (por exemplo, as da sessão atual).

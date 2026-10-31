@@ -191,7 +191,10 @@ function draftFrom(userText: string) {
  */
 function lastDraftIdShown(prompt: LanguageModelV4Prompt): string | undefined {
   const texts = prompt.flatMap((message) => {
-    if (message.role === "system") return [message.content];
+    // Do contexto de sistema, só a linha de pendentes: as instruções também citam um "D-3".
+    if (message.role === "system") {
+      return message.content.split("\n").filter((line) => line.startsWith("Rascunhos pendentes"));
+    }
     if (message.role !== "assistant") return [];
     return message.content.map((part) => (part.type === "text" ? part.text : ""));
   });

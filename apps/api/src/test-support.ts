@@ -212,6 +212,51 @@ export function mockModelWithClassifier(onClassifier: () => Promise<void> | void
   });
 }
 
+/**
+ * Modelo de teste que guarda o que o agent recebeu (contexto de sistema e histórico) e conta as
+ * chamadas ao modelo, para os testes provarem o que vai e o que não vai para o LLM.
+ */
+export function recordingMockModel() {
+  const scripted = createMockModel();
+  const agentPrompts: LanguageModelV4Prompt[] = [];
+  const counter = { calls: 0 };
+  const record = (prompt: LanguageModelV4Prompt) => {
+    counter.calls += 1;
+    const isClassifier = prompt.some(
+      (message) => message.role === "system" && message.content.includes(CLASSIFIER_MARKER),
+    );
+    if (!isClassifier) agentPrompts.push(prompt);
+  };
+  const model = new MockLanguageModelV4({
+    doGenerate: (options) => {
+      record(options.prompt);
+      return scripted.doGenerate(options);
+    },
+    doStream: (options) => {
+      record(options.prompt);
+      return scripted.doStream(options);
+    },
+  });
+  /** O contexto de sistema e as mensagens que o agent recebeu na última chamada. */
+  const lastAgentPrompt = () => {
+    const prompt = agentPrompts.at(-1) ?? [];
+    return {
+      system: prompt
+        .filter((message) => message.role === "system")
+        .map((message) => message.content)
+        .join("\n"),
+      texts: prompt
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .flatMap((message) =>
+          typeof message.content === "string"
+            ? [message.content]
+            : message.content.flatMap((part) => ("text" in part && part.text ? [part.text] : [])),
+        ),
+    };
+  };
+  return { model, counter, lastAgentPrompt };
+}
+
 /** Chamado de exemplo para testes; os campos podem ser trocados. */
 export function sampleTicket(overrides: Partial<TicketDto> = {}): TicketDto {
   return {

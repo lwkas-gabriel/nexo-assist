@@ -125,6 +125,7 @@ export async function createContainer(
       mastra,
       conversationStore,
       draftService,
+      handoffService,
       // Etapa 1 do turno (R05): o mesmo modelo, numa chamada curta e com saída estruturada.
       classifier: createClassifier(model),
       decisionService,
