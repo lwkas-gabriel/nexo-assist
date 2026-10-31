@@ -297,3 +297,24 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - depois da transferência, ficou calado ("obrigada" não teve resposta do agent);
   - "a VPN caiu para todo o Financeiro" virou rascunho Crítico e, confirmado, foi transferido sozinho para o N2, com contato em 1 hora.
 
+### 45. Revisão adversarial independente da T13
+- **Como:** sub-agente novo, sem o contexto da implementação, com a skill `revisao-adversarial` sobre `c036750..5bdb828`. Ele confirmou cada hipótese com testes temporários e LLM falso.
+- **Resultado:** 1 crítico, 5 importantes e 5 menores. As correções:
+  1. **Crítico:** um caso crítico relatado sem chamado ligado recebia contato em 4 horas úteis. Numa sexta à tarde, isso dava cerca de 66 horas. O prazo de 1 hora passou a valer pelo motivo ou pela prioridade (A02).
+  2. Se a transferência automática do chamado crítico falhasse, por exemplo numa corrida com uma transferência feita pelo agent no mesmo passo, a confirmação aparecia como falha, com o chamado já criado. Agora a confirmação vale e o resultado traz `escalationFailed`; uma transferência simultânea não é tratada como erro.
+  3. O resumo do crítico (título + descrição) podia passar do limite do sistema de chamados, e o chamado ficava sem a marcação de "aguardando analista". O resumo agora é limitado. O gateway falso dos testes passou a validar o contrato como o serviço real.
+  4. A transferência automática pelo chat não tinha teste; agora tem.
+  5. As mensagens para o analista gastavam a cota do modelo, que nem é chamado. Um funcionário falando com uma pessoa podia esgotar o teto diário de todos. Elas passaram a ter um limite próprio por funcionário (R42).
+  6. Três testes passavam por acaso: o chamado "vencido" não estava vencido, e o status conferido já era o inicial. Foram reescritos com chamados de fato vencidos e asserções que provam o que dizem.
+  7. Uma falha inesperada ao atualizar o chamado deixava a conversa na fila sem resumo e sem aviso. Correções:
+     - o resumo e o aviso são gravados logo depois da troca de estado;
+     - o sistema de chamados fica por último, e qualquer falha nele só vai para o log.
+  8. O motivo "prazo vencido" era aceito sem conferência; agora só fica registrado se o chamado está mesmo vencido.
+  9. Complementar um chamado crítico já existente também transferia, com um resumo falso; agora só chamado novo transfere.
+  10. Erros do sistema de chamados eram engolidos sem log, e o número do chamado se perdia; agora vão para o log e o número fica registrado.
+  11. As tools de rascunho agiam depois de a conversa ter sido transferida no mesmo turno; agora recusam. A tela mostrava o analista como "Nexo Assist".
+- **O que ficou, com o motivo:**
+  - A troca de estado, o resumo e o aviso são três gravações locais em sequência, não uma transação única. Uma falha entre elas exigiria o banco local cair no meio. Os casos que de fato falham (o sistema de chamados) ficaram fora desse trecho.
+  - A resposta do agent não é revalidada contra o estado no fim do turno. Depois de uma transferência, essa resposta é o próprio aviso ao funcionário e precisa ser gravada; o que importava era impedir ações, e isso as tools agora fazem.
+- **Lição:** de novo, o revisor achou o que os testes do autor não pegavam, e alguns desses testes passavam por acaso. Conferir que um teste falha sem a correção passou a fazer parte das correções.
+
