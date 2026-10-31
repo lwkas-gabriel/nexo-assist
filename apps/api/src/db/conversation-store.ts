@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, gte, ne } from "drizzle-orm";
 import type { Database } from "./database.ts";
 import {
   conversations,
@@ -107,9 +107,19 @@ export function createConversationStore(db: Database) {
     },
 
     /** As últimas `limit` mensagens, da mais antiga para a mais nova. */
-    async listRecentMessages(conversationId: string, limit: number): Promise<MessageRow[]> {
+    /**
+     * As últimas `limit` mensagens, da mais antiga para a mais nova. Com `since`, só as a partir
+     * dessa data (por exemplo, as da sessão atual).
+     */
+    async listRecentMessages(
+      conversationId: string,
+      limit: number,
+      since?: Date,
+    ): Promise<MessageRow[]> {
       const newestFirst = await db.query.messages.findMany({
-        where: eq(messages.conversationId, conversationId),
+        where: since
+          ? and(eq(messages.conversationId, conversationId), gte(messages.createdAt, since))
+          : eq(messages.conversationId, conversationId),
         orderBy: desc(messages.createdAt),
         limit,
       });

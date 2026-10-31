@@ -100,6 +100,14 @@ export function createDraftStore(db: Database) {
       return row ? toDraft(row) : undefined;
     },
 
+    /** Rascunhos ainda pendentes da conversa (no máximo um, pela regra abaixo). */
+    async listPending(conversationId: string): Promise<Draft[]> {
+      const rows = await db.query.drafts.findMany({
+        where: and(eq(drafts.conversationId, conversationId), eq(drafts.status, "pending")),
+      });
+      return rows.map(toDraft);
+    },
+
     /** Só um rascunho pendente por conversa: propor outro descarta o anterior. */
     async cancelPendingInConversation(conversationId: string, now: Date): Promise<void> {
       await db

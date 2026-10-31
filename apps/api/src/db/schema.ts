@@ -128,3 +128,22 @@ export const decisionTraces = sqliteTable("decision_traces", {
 });
 
 export type DecisionTraceRow = typeof decisionTraces.$inferSelect;
+
+export const SESSION_END_REASONS = ["limit", "inactivity", "new_session"] as const;
+export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
+
+export const chatSessions = sqliteTable("chat_sessions", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  status: text("status").$type<"active" | "ended">().notNull(),
+  agentMessages: integer("agent_messages").notNull().default(0),
+  summary: text("summary"),
+  endedReason: text("ended_reason").$type<SessionEndReason>(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  lastActivityAt: integer("last_activity_at", { mode: "timestamp_ms" }).notNull(),
+  endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+});
+
+export type ChatSessionRow = typeof chatSessions.$inferSelect;

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import type { DecisionTrace } from "../agent/decision-trace.ts";
 import type { Database } from "./database.ts";
 import { decisionTraces } from "./schema.ts";
@@ -38,6 +38,18 @@ export function createDecisionStore(db: Database) {
         orderBy: desc(decisionTraces.createdAt),
       });
       return row?.classifierConfidence ?? undefined;
+    },
+
+    /** Registros da conversa a partir de uma data (os de uma sessão), do mais antigo ao mais novo. */
+    async listSince(conversationId: string, since: Date): Promise<DecisionTrace[]> {
+      const rows = await db.query.decisionTraces.findMany({
+        where: and(
+          eq(decisionTraces.conversationId, conversationId),
+          gte(decisionTraces.createdAt, since),
+        ),
+        orderBy: asc(decisionTraces.createdAt),
+      });
+      return rows.map((row) => JSON.parse(row.trace) as DecisionTrace);
     },
 
     /** Registros das mensagens pedidas, por id da mensagem (para a tela mostrar o detalhe). */
