@@ -194,7 +194,7 @@ export function createDraftTools({
   const askWithOptions = createTool({
     id: ASK_WITH_OPTIONS_TOOL_ID,
     description:
-      "Faz uma pergunta com respostas rápidas, que viram botões na tela. Use quando as respostas possíveis forem poucas e conhecidas (ex.: quem está sendo afetado). Escreva também a pergunta e as opções numeradas no texto da sua resposta.",
+      "Faz uma pergunta com respostas rápidas, que viram botões na tela. Use quando as respostas possíveis forem poucas e conhecidas (ex.: quem está sendo afetado). A tela mostra a pergunta e as opções; não as repita no texto.",
     inputSchema: z.object({
       question: z.string().min(1).max(200),
       options: z.array(z.string().min(1).max(80)).min(2).max(4),
