@@ -14,9 +14,11 @@ O Google oferece um plano gratuito da API do Gemini, sem cartão, com modelos qu
   - A outra recomendação, o `gemini-3.8-flash`, é mais capaz, mas no plano gratuito tem uma cota diária bem menor. Um agent usa de 2 a 3 chamadas por mensagem, então ele se esgotaria rápido.
 - **Raciocínio baixo** (`thinkingLevel: "low"`): menos tokens por chamada e respostas mais rápidas.
 - **Uma única nova tentativa do modelo** (`maxRetries: 1`): cobre uma falha passageira sem atrasar demais o aviso quando a cota por minuto acaba.
-- **Tetos globais de mensagens calibrados pela cota real**, somando todos os usuários. A cota gratuita do `gemini-3.5-flash-lite` no projeto, conferida no AI Studio em 30/10/2026, é de **15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia**. Como cada mensagem usa até 3 chamadas ao modelo (busca, resposta e, a partir da T14, o classificador):
-  - **5 mensagens por minuto** (15 ÷ 3);
-  - **150 mensagens por dia** (500 ÷ 3 ≈ 166, com folga). Antes da troca, o teto diário era 500.
+- **Tetos globais de mensagens calibrados pela cota real**, somando todos os usuários. A cota gratuita do `gemini-3.5-flash-lite` no projeto, conferida no AI Studio em 30/10/2026, é de **15 requisições por minuto, 250 mil tokens por minuto e 500 requisições por dia**. Cada mensagem usa até 4 chamadas ao modelo: o classificador (T14) e até 3 passos do agent (`maxSteps: 3`, por exemplo duas tools e a resposta). Por isso:
+  - **3 mensagens por minuto** (15 ÷ 4 ≈ 3,75);
+  - **120 mensagens por dia** (500 ÷ 4 = 125, com folga). Antes da troca, o teto diário era 500.
+
+  *Revisto na T14:* a primeira conta usava 3 chamadas por mensagem (5 por minuto e 150 por dia), mas um turno com duas tools e o classificador já usava 4, e o 429 do provedor chegaria antes do teto da api.
 
   Os dois valores ficam no `.env` (`CHAT_MESSAGES_PER_MINUTE` e `CHAT_MESSAGES_PER_DAY`), porque dependem da cota da conta, e não de uma regra do produto. A api recusa o excesso antes de chamar o modelo, sem gastar cota à toa.
 - **Cota esgotada (HTTP 429)** vira um aviso claro ao funcionário ("o assistente atingiu o limite de uso..."), nunca o erro bruto do provedor.

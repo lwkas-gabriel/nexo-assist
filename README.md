@@ -53,8 +53,8 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 | api             | `LLM_MODE`                 | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)                   |
 | api             | `GEMINI_API_KEY`           | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`                     |
 | api             | `LLM_MODEL`                | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`       |
-| api             | `CHAT_MESSAGES_PER_MINUTE` | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (5 no plano gratuito) |
-| api             | `CHAT_MESSAGES_PER_DAY`    | Teto global de mensagens ao agent por dia, dentro da cota do modelo (150 no plano gratuito)  |
+| api             | `CHAT_MESSAGES_PER_MINUTE` | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (3 no plano gratuito) |
+| api             | `CHAT_MESSAGES_PER_DAY`    | Teto global de mensagens ao agent por dia, dentro da cota do modelo (120 no plano gratuito)  |
 | api             | `TICKETS_SERVICE_URL`      | Endereço do serviço de chamados                                                              |
 | api             | `TICKETS_SERVICE_TOKEN`    | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`             |
 | tickets-service | `PORT`                     | Porta HTTP do serviço de chamados                                                            |
@@ -111,7 +111,7 @@ O deploy é no [Railway](https://railway.com), configurado em [railway.json](rai
 
 **Uso limitado contra abuso** (o login aceita qualquer senha, por requisito do desafio). Com o Gemini no plano gratuito não há gasto possível; os limites protegem a cota gratuita:
 
-- até 30 mensagens por hora por funcionário e, somando todos, 5 por minuto e 150 por dia, respondendo `429` acima disso. Os tetos globais saem da cota gratuita do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 3 chamadas ao modelo por mensagem);
+- até 30 mensagens por hora por funcionário e, somando todos, 3 por minuto e 120 por dia, respondendo `429` acima disso. Os tetos globais saem da cota gratuita do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 4 chamadas ao modelo por mensagem: o classificador e até 3 passos do agent). Mensagens para um analista não chamam o modelo e não entram nesses tetos;
 - até 20 tentativas de login por minuto por IP;
 - mensagens de até 2.000 caracteres e corpo de até 16 KB;
 - raciocínio baixo no modelo (`thinkingLevel: low`), para gastar menos cota por mensagem;
