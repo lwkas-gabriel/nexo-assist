@@ -26,13 +26,20 @@ type ChatShellProps = {
   user: CurrentUser;
   /** Atendimento ou "Meu perfil" (10.3): a navegação marca a atual e o título acompanha. */
   page: EmployeePage;
-  mode: ConversationMode;
+  /** Null enquanto a conversa não carregou (ou falhou): a pílula não afirma nada. */
+  mode: ConversationMode | null;
   /** Quem atende, com a conversa num analista: a pílula diz o nome e o setor (R27). */
   analyst: AnalystView | null;
   isLoggingOut: boolean;
   onLogout: () => void;
   children: ReactNode;
 };
+
+function modeLabelOf(mode: ConversationMode, analyst: AnalystView | null): string {
+  return mode === "analyst" && analyst
+    ? `Com ${analyst.name} · ${analyst.department}`
+    : MODE_LABELS[mode];
+}
 
 /**
  * Moldura da tela 2 (10.6): barra lateral a partir de 1024 px, trilho de ícones no tablet e barra
@@ -47,10 +54,7 @@ export function ChatShell({
   onLogout,
   children,
 }: ChatShellProps) {
-  const modeLabel =
-    mode === "analyst" && analyst
-      ? `Com ${analyst.name} · ${analyst.department}`
-      : MODE_LABELS[mode];
+  const modeLabel = mode === null ? null : modeLabelOf(mode, analyst);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const shownPageRef = useRef(page);
   // A troca de página não recarrega nada: o foco vai ao título novo, que o leitor de tela lê. Na
@@ -123,9 +127,10 @@ export function ChatShell({
             </h1>
           </div>
           {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta).
-              No perfil a pílula some, como no protótipo (só o breadcrumb). */}
+              No perfil a pílula some, como no protótipo (só o breadcrumb); sem a conversa carregada,
+              também (não há o que afirmar). */}
           <span role="status">
-            {page === "chat" && (
+            {page === "chat" && mode !== null && (
               <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
                 {modeLabel}
               </Pill>

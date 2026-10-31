@@ -1,16 +1,17 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { createAppQueryClient } from "./features/auth/app-query-client.ts";
 import { LoginPage } from "./features/auth/LoginPage.tsx";
 import { useAuth } from "./features/auth/use-auth.ts";
 import { ChatPage } from "./features/chat/ChatPage.tsx";
 import { ConsolePage } from "./features/console/ConsolePage.tsx";
+import { ErrorState, LoadingState, Skeleton } from "./ui/Feedback.tsx";
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
-});
+const appQueryClient = createAppQueryClient();
 
-export function App() {
+/** `client` só muda nos testes, que não podem dividir o cache entre si. */
+export function App({ client = appQueryClient }: { client?: QueryClient }) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <AuthenticatedArea />
     </QueryClientProvider>
   );
@@ -18,20 +19,23 @@ export function App() {
 
 /** Decide a tela pelo usuário logado: login, chat do funcionário ou console do analista. */
 function AuthenticatedArea() {
-  const { user, isLoading, loadError, logout } = useAuth();
+  const { user, isLoading, loadError, isRetrying, retry, logout } = useAuth();
 
   if (isLoading) {
     return (
-      <p aria-busy="true" className="p-6 text-[13.5px] text-ink-3">
-        Carregando…
-      </p>
+      <LoadingState label="Carregando…" className="flex min-h-dvh items-center justify-center p-6">
+        <Skeleton className="h-10 w-64" />
+      </LoadingState>
     );
   }
   if (loadError) {
     return (
-      <p role="alert" className="p-6 text-[13.5px] text-danger-text">
-        {loadError.message}
-      </p>
+      <ErrorState
+        message={loadError.message}
+        onRetry={retry}
+        isRetrying={isRetrying}
+        className="min-h-dvh justify-center"
+      />
     );
   }
   if (!user) return <LoginPage />;

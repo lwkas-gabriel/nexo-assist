@@ -24,6 +24,13 @@ describe("queryViewOf (10.5)", () => {
     });
   });
 
+  it("nova tentativa depois de uma falha segue como erro, sem piscar o carregamento", () => {
+    expect(queryViewOf({ ...idle, isFetching: true, errorUpdatedAt: 5 })).toEqual({
+      status: "error",
+      message: GENERIC_MESSAGE,
+    });
+  });
+
   it("erro que não é da api (nada técnico na tela) vira a frase genérica", () => {
     expect(queryViewOf({ ...idle, error: new TypeError("Failed to fetch") })).toEqual({
       status: "error",

@@ -832,4 +832,59 @@ describe("tela do chat (tela 2)", () => {
       expect(signal?.aborted).toBe(false);
     });
   });
+
+  describe("estados de carregamento e erro (10.5, RF23)", () => {
+    it("carregando: skeleton anunciado, e a pílula não afirma que o assistente está online", async () => {
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      renderChat();
+
+      expect(await screen.findByText("Carregando sua conversa")).toBeDefined();
+      expect(screen.queryByText("Assistente online")).toBeNull();
+      expect(screen.queryByLabelText("Mensagem para o Nexo")).toBeNull();
+    });
+
+    it("erro de rede ao carregar: mensagem honesta, sem pílula, e Tentar novamente carrega a conversa", async () => {
+      let isOffline = true;
+      vi.stubGlobal("fetch", () =>
+        isOffline
+          ? Promise.reject(new TypeError("Failed to fetch"))
+          : Promise.resolve(new Response(JSON.stringify(conversationAt("agent", false)))),
+      );
+      renderChat();
+
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toContain("Não foi possível falar com o servidor");
+      expect(screen.queryByText("Assistente online")).toBeNull();
+      expect(document.activeElement).toBe(document.body);
+
+      isOffline = false;
+      await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+      expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+      expect(screen.getByText("Assistente online")).toBeDefined();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("enquanto tenta de novo, o botão diz Tentando… e fica desabilitado", async () => {
+      let attempts = 0;
+      let release = () => undefined as void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      vi.stubGlobal("fetch", async () => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError("Failed to fetch");
+        await gate;
+        return new Response(JSON.stringify(conversationAt("agent", false)));
+      });
+      renderChat();
+      await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+
+      const busy = await screen.findByRole("button", { name: "Tentando…" });
+      expect(busy).toHaveProperty("disabled", true);
+      await act(() => {
+        release();
+        return gate;
+      });
+      expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+    });
+  });
 });

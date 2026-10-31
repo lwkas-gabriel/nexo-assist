@@ -1,3 +1,6 @@
+/** O polling da conversa falhou: ela continua na tela, e o aviso diz que pode estar velha. */
+export const CONVERSATION_OUT_OF_SYNC =
+  "Não consegui atualizar a conversa agora; tentando de novo.";
 export const GENERIC_CHAT_ERROR = "Não consegui responder agora. Tente novamente em instantes.";
 
 /**

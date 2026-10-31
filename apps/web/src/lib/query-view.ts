@@ -31,14 +31,20 @@ function messageOf(error: Error | null): string {
 /**
  * Traduz o resultado da consulta. Dois detalhes do TanStack Query que a tela não pode adivinhar:
  * - uma consulta sem dados que falhou volta a "pendente" (com o erro apagado) a cada nova
- *   tentativa, e o `placeholderData` reaparece: sem a regra do `errorUpdatedAt`, a lista do filtro
- *   anterior voltaria em silêncio entre uma falha e outra;
+ *   tentativa, e o `placeholderData` reaparece: sem a regra do `errorUpdatedAt` (o instante da
+ *   última falha, que a biblioteca mantém), a lista do filtro anterior voltaria em silêncio entre
+ *   uma falha e outra;
  * - com dados, uma falha vira `error` mas os dados ficam: isso é "desatualizada", não erro.
  */
 export function queryViewOf<T>(query: QuerySnapshot<T>): QueryView<T> {
   const { data, error } = query;
   if (data === undefined) {
-    return error ? { status: "error", message: messageOf(error) } : { status: "loading" };
+    if (error) return { status: "error", message: messageOf(error) };
+    // Nova tentativa depois de uma falha: segue o erro (o botão diz "Tentando…") em vez de piscar
+    // o esqueleto. A mensagem original já foi apagada pela biblioteca; vale a frase genérica.
+    return query.errorUpdatedAt > 0
+      ? { status: "error", message: GENERIC_MESSAGE }
+      : { status: "loading" };
   }
   if (query.isPlaceholderData && query.errorUpdatedAt > 0) {
     return { status: "error", message: messageOf(error) };

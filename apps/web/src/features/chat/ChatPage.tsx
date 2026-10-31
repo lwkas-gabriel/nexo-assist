@@ -5,7 +5,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
-import { Skeleton } from "../../ui/Feedback.tsx";
+import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../ui/Feedback.tsx";
 import { cx } from "../../ui/cx.ts";
 import { SidePanel } from "../../ui/SidePanel.tsx";
 import type { CurrentUser } from "../auth/auth-api.ts";
@@ -22,7 +22,7 @@ import {
   type DraftFields,
   type DraftView,
 } from "./chat-api.ts";
-import { describeChatError } from "./chat-error.ts";
+import { CONVERSATION_OUT_OF_SYNC, describeChatError } from "./chat-error.ts";
 import {
   confirmableDraft,
   lastEmployeeMessage,
@@ -32,6 +32,7 @@ import {
   sessionSummaryIndex,
   textOf,
 } from "./chat-model.ts";
+import { queryViewOf, type QueryView } from "../../lib/query-view.ts";
 import { useHashPage } from "../../lib/use-hash-page.ts";
 import { ProfilePage } from "../profile/ProfilePage.tsx";
 import { ChatShell } from "./ChatShell.tsx";
@@ -77,7 +78,9 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     refetchInterval: (query) =>
       (query.state.data?.conversation?.mode ?? "agent") === "agent" ? false : ANALYST_POLL_MS,
   });
-  const mode = conversation.data?.conversation?.mode ?? "agent";
+  const view = queryViewOf(conversation);
+  // Sem a conversa carregada, a pílula do topo não afirma nada ("Assistente online" seria chute).
+  const mode = view.status === "ready" ? (view.data.conversation?.mode ?? "agent") : null;
   const page = useHashPage();
 
   return (
@@ -96,38 +99,56 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
         rascunho do campo, a edição do card e o "Tentar novamente" também se perderiam.
       */}
       <div hidden={page === "profile"} className="flex min-h-0 flex-1 flex-col">
-        {conversation.isPending ? (
-          <div
-            aria-busy="true"
-            aria-label="Carregando sua conversa"
-            className="flex flex-1 flex-col gap-4 px-4 py-7 md:px-12 xl:px-[200px]"
-          >
-            <Skeleton className="h-10 w-2/3 self-end" />
-            <Skeleton className="h-24 w-3/4" />
-            <Skeleton className="h-10 w-1/2 self-end" />
-          </div>
-        ) : conversation.data === undefined ? (
-          <div
-            role="alert"
-            className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
-          >
-            <p className="text-[14.5px] text-ink-2">{conversation.error?.message}</p>
-            <Button variant="secondary" onClick={() => void conversation.refetch()}>
-              Tentar novamente
-            </Button>
-          </div>
-        ) : (
-          <ChatConversation
-            user={user}
-            view={conversation.data}
-            // Uma consulta do polling falhou: a conversa e o que está sendo digitado ficam na tela.
-            isOutOfSync={conversation.isError}
-          />
-        )}
+        <ConversationArea
+          user={user}
+          view={view}
+          onRetry={() => void conversation.refetch()}
+          isRetrying={conversation.isFetching}
+        />
       </div>
       {page === "profile" && <ProfilePage user={user} />}
     </ChatShell>
   );
+}
+
+/**
+ * Carregando, erro ou a conversa. Depois que a conversa carregou, ela nunca mais sai da árvore: um
+ * erro do polling vira só um aviso (desmontar abortaria o envio e apagaria o que se digita).
+ */
+function ConversationArea({
+  user,
+  view,
+  onRetry,
+  isRetrying,
+}: {
+  user: CurrentUser;
+  view: QueryView<ConversationView>;
+  onRetry: () => void;
+  isRetrying: boolean;
+}) {
+  if (view.status === "loading") {
+    return (
+      <LoadingState
+        label="Carregando sua conversa"
+        className="flex flex-1 flex-col gap-4 px-4 py-7 md:px-12 xl:px-[200px]"
+      >
+        <Skeleton className="h-10 w-2/3 self-end" />
+        <Skeleton className="h-24 w-3/4" />
+        <Skeleton className="h-10 w-1/2 self-end" />
+      </LoadingState>
+    );
+  }
+  if (view.status === "error") {
+    return (
+      <ErrorState
+        message={view.message}
+        onRetry={onRetry}
+        isRetrying={isRetrying}
+        className="flex-1 justify-center"
+      />
+    );
+  }
+  return <ChatConversation user={user} view={view.data} isOutOfSync={view.isOutOfSync} />;
 }
 
 type DraftAction = { draft: DraftView; run: () => Promise<unknown> };
@@ -389,11 +410,7 @@ function ChatConversation({
           </div>
         </div>
 
-        {isOutOfSync && (
-          <p role="status" className="shrink-0 px-4 text-center text-[12.5px] text-ink-3">
-            Não consegui atualizar a conversa agora; tentando de novo.
-          </p>
-        )}
+        <SyncNotice message={isOutOfSync ? CONVERSATION_OUT_OF_SYNC : null} className="shrink-0" />
         <div className={cx("shrink-0 pt-2.5 pb-[18px]", sidePadding)}>
           {isAtLimit ? (
             <SessionLimitNotice

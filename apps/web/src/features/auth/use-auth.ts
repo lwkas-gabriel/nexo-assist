@@ -28,6 +28,9 @@ export function useAuth() {
     user: currentUser.data ?? null,
     isLoading: currentUser.isPending,
     loadError: currentUser.error,
+    /** Tentar de novo a pergunta "quem está logado?" depois de uma falha. */
+    retry: () => void currentUser.refetch(),
+    isRetrying: currentUser.isFetching,
     login: loginMutation,
     logout: logoutMutation,
   };
