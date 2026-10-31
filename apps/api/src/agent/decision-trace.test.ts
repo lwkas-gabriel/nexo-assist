@@ -42,6 +42,52 @@ function responseWith(...tools: { name: string; output?: unknown; error?: true }
 }
 
 describe("registro de decisão (RF05, R09)", () => {
+  it("10.4: o passo traz a entrada resumida e os artigos que serviram de fonte", () => {
+    const response = responseWith({
+      name: "search_knowledge_base",
+      output: { articles: [{ title: "VPN: erro 809" }, { title: "VPN no celular" }] },
+    });
+    const [part] = response.parts;
+    if (part?.type === "tool-search_knowledge_base") part.input = { query: "vpn erro 809" };
+
+    const [step] = buildDecisionTrace(classified, response).steps;
+
+    expect(step).toEqual({
+      tool: "search_knowledge_base",
+      ok: true,
+      outcome: "2 artigo(s) encontrado(s)",
+      input: "busca: vpn erro 809",
+      sources: ["VPN: erro 809", "VPN no celular"],
+    });
+  });
+
+  it("motivo interno de uma ação que não concluiu aparece em português, nunca o código", () => {
+    const trace = buildDecisionTrace(
+      classified,
+      responseWith(
+        { name: "get_ticket", output: { ok: false, reason: "not_found" } },
+        { name: "get_ticket", output: { ok: false, reason: "motivo_novo" } },
+      ),
+    );
+
+    expect(trace.steps.map((step) => step.outcome)).toEqual([
+      "não concluiu: chamado não encontrado entre os seus",
+      "não concluiu",
+    ]);
+  });
+
+  it("a origem da confiança diz quem decidiu: classificador, código ou valor neutro", () => {
+    const plain = responseWith();
+
+    expect(buildDecisionTrace(classified, plain).confidenceSource).toBe("classifier");
+    expect(
+      buildDecisionTrace({ ...classified, decidedBy: "quick_answer" }, plain).confidenceSource,
+    ).toBe("quick_answer");
+    expect(buildDecisionTrace({ ok: false, classification }, plain).confidenceSource).toBe(
+      "neutral",
+    );
+  });
+
   it("RF05: cumpre o contrato que a tela usa para mostrar o detalhe da decisão", () => {
     const trace = buildDecisionTrace(
       { ok: false, classification },
@@ -74,6 +120,7 @@ describe("registro de decisão (RF05, R09)", () => {
       finalConfidence: 0.9,
       isLowConfidence: false,
       reason: "Relata um problema e pede atendimento.",
+      confidenceSource: "classifier",
       steps: [{ tool: "propose_ticket_draft", ok: true, outcome: "concluiu" }],
       rules: ["RN11: somente você + compromisso hoje → Alta"],
       signals: [],

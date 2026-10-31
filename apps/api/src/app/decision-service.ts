@@ -1,12 +1,8 @@
-import type { Clock } from "@nexo/shared/domain";
+import { LOW_CONFIDENCE_THRESHOLD, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { UIMessage } from "ai";
 import type { ClassificationResult, Intent } from "../agent/classifier.ts";
-import {
-  LOW_CONFIDENCE_THRESHOLD,
-  buildDecisionTrace,
-  type DecisionTrace,
-} from "../agent/decision-trace.ts";
+import { buildDecisionTrace, type DecisionTrace } from "../agent/decision-trace.ts";
 import type { DecisionStore } from "../db/decision-store.ts";
 import type { HandoffService } from "./handoff-service.ts";
 
@@ -96,6 +92,7 @@ export function createDecisionService({
       const classification: ClassificationResult = {
         ok: true,
         tokens: undefined,
+        decidedBy: "button",
         classification: {
           intent: action.intent,
           understood: action.description,

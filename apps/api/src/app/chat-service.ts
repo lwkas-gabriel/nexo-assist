@@ -499,7 +499,6 @@ function describeTurnContext(
   return lines.join("\n");
 }
 
-/** Faixas de confiança com os mesmos nomes do prompt do classificador. */
 /**
  * A classificação da etapa 1 como o agent a recebe (R05). Só intenção e confiança: o "entendido"
  * parafraseia o texto do funcionário e não pode entrar no contexto de sistema do agent.

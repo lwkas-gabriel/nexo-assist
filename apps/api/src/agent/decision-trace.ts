@@ -1,5 +1,6 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { LOW_CONFIDENCE_THRESHOLD } from "@nexo/shared/domain";
+import type { DecisionView } from "@nexo/shared/contracts";
 import { z } from "zod";
 import { INTENT_LABELS, type ClassificationResult } from "./classifier.ts";
 
@@ -7,8 +8,6 @@ import { INTENT_LABELS, type ClassificationResult } from "./classifier.ts";
  * Registro de decisão de um turno (RF05): o que o classificador entendeu (etapa 1), o que o agent
  * fez (etapa 2), as regras que o código aplicou e a confiança final, ajustada por sinais (R09, R40).
  */
-
-export { LOW_CONFIDENCE_THRESHOLD };
 
 /** Sinais objetivos que reduzem a confiança declarada pelo classificador (R09). */
 const SIGNALS = {
@@ -21,28 +20,18 @@ const SIGNALS = {
 } as const;
 export type SignalCode = keyof typeof SIGNALS;
 
-export type DecisionStep = { tool: string; ok: boolean; outcome: string };
-export type DecisionSignal = { code: SignalCode; label: string; penalty: number };
+export type DecisionStep = DecisionView["steps"][number];
+export type DecisionSignal = DecisionView["signals"][number] & { code: SignalCode };
 
-export type DecisionTrace = {
-  intent: string;
-  understood: string;
-  extracted: Record<string, string>;
-  classifierConfidence: number;
-  finalConfidence: number;
-  isLowConfidence: boolean;
-  reason: string;
-  steps: DecisionStep[];
-  rules: string[];
-  signals: DecisionSignal[];
-};
+/** O registro como o contrato da tela o define, com os códigos de sinal deste módulo. */
+export type DecisionTrace = Omit<DecisionView, "signals"> & { signals: DecisionSignal[] };
 
 /** Partes das saídas das tools que o registro lê. Tudo opcional: cada tool devolve uma forma. */
 const toolOutputSchema = z
   .object({
     ok: z.boolean(),
     reason: z.string(),
-    articles: z.array(z.unknown()),
+    articles: z.array(z.object({ title: z.string() }).partial()),
     candidates: z.array(z.unknown()),
     draft: z
       .object({ ticket: z.object({ priorityReason: z.string().nullable() }).partial() })
@@ -58,6 +47,19 @@ function readOutput(output: unknown): ToolOutput {
   return toolOutputSchema.safeParse(output).data ?? {};
 }
 
+/**
+ * Por que uma ação não concluiu, em português: o painel de detalhe mostra isto ao funcionário,
+ * nunca o código interno. Motivo novo sem texto aqui aparece só como "não concluiu".
+ */
+const NOT_COMPLETED_REASONS: Record<string, string> = {
+  not_found: "chamado não encontrado entre os seus",
+  invalid_number: "número de chamado inválido",
+  tickets_unavailable: "sistema de chamados indisponível",
+  tickets_error: "erro no sistema de chamados",
+  refused: "recusada pelas regras do service desk",
+  cannot_reopen: "resolvido há mais de 7 dias, não dá para reabrir",
+};
+
 /** Respostas "ok: false" que são o caminho normal da conversa, e não uma falha. */
 const EXPECTED_OUTCOMES: Record<string, string> = {
   incomplete: "pediu as informações que faltam",
@@ -68,7 +70,10 @@ function describeOutcome(tool: string, output: ToolOutput, failed: boolean): str
   if (failed) return "falhou";
   const expected = output.reason ? EXPECTED_OUTCOMES[output.reason] : undefined;
   if (expected) return expected;
-  if (output.ok === false) return `não concluiu (${output.reason ?? "sem motivo"})`;
+  if (output.ok === false) {
+    const reason = output.reason ? NOT_COMPLETED_REASONS[output.reason] : undefined;
+    return reason ? `não concluiu: ${reason}` : "não concluiu";
+  }
   if (tool === "search_knowledge_base")
     return `${output.articles?.length ?? 0} artigo(s) encontrado(s)`;
   return "concluiu";
@@ -98,6 +103,31 @@ function rulesOf(output: ToolOutput): string[] {
   return rules;
 }
 
+/** Entradas que valem mostrar, por nome: a busca feita, o número do chamado, o filtro. */
+const INPUT_SUMMARIES: Record<string, string> = {
+  query: "busca",
+  number: "chamado",
+  filter: "filtro",
+  draftId: "rascunho",
+};
+const INPUT_MAX_CHARS = 120;
+
+/** "O que fiz" com a entrada resumida (10.4); texto livre longo (descrição) fica de fora. */
+function summarizeInput(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const parts = Object.entries(input).flatMap(([key, value]) => {
+    const label = INPUT_SUMMARIES[key];
+    return label && typeof value === "string" ? [`${label}: ${value}`] : [];
+  });
+  const summary = parts.join(" · ");
+  return summary ? summary.slice(0, INPUT_MAX_CHARS) : undefined;
+}
+
+/** A fonte da resposta: os artigos da central de ajuda que a busca trouxe. */
+function articleTitles(output: ToolOutput): string[] {
+  return (output.articles ?? []).flatMap((article) => (article.title ? [article.title] : []));
+}
+
 const round = (value: number) => Math.round(value * 100) / 100;
 
 export function buildDecisionTrace(
@@ -115,10 +145,14 @@ export function buildDecisionTrace(
     const failed = part.state === "output-error";
     const output = part.state === "output-available" ? readOutput(part.output) : {};
     const isExpected = output.reason !== undefined && output.reason in EXPECTED_OUTCOMES;
+    const input = summarizeInput(part.input);
+    const sources = articleTitles(output);
     steps.push({
       tool,
       ok: !failed && (output.ok !== false || isExpected),
       outcome: describeOutcome(tool, output, failed),
+      ...(input ? { input } : {}),
+      ...(sources.length > 0 ? { sources } : {}),
     });
     rules.push(...rulesOf(output));
     for (const code of signalsOf(tool, output)) codes.add(code);
@@ -138,6 +172,7 @@ export function buildDecisionTrace(
       ),
     ),
     classifierConfidence: confidence,
+    confidenceSource: classification.ok ? (classification.decidedBy ?? "classifier") : "neutral",
     finalConfidence,
     isLowConfidence: finalConfidence < LOW_CONFIDENCE_THRESHOLD,
     reason,

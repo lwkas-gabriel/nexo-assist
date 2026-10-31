@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import { intentFromLabel, type ClassificationResult } from "../agent/classifier.ts";
-import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
+import { LOW_CONFIDENCE_THRESHOLD } from "@nexo/shared/domain";
 import type { toTicketDetails } from "../agent/ticket-view.ts";
 import { ASK_WITH_OPTIONS_TOOL_ID } from "../agent/tools/draft-tools.ts";
 import { GET_TICKET_TOOL_ID } from "../agent/tools/ticket-tools.ts";
@@ -55,6 +55,7 @@ export function quickAnswerClassification(
   return {
     ok: true,
     tokens: undefined,
+    decidedBy: "quick_answer",
     classification: {
       intent,
       understood: `Respondeu "${answer}" à pergunta "${asked.question}".`,
