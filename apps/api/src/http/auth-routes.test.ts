@@ -124,7 +124,7 @@ describe("sessão", () => {
 
   it("a sessão sem 'manter conectado' expira depois de um expediente (12 h)", async () => {
     let now = new Date("2026-10-29T09:00:00Z");
-    const container = await createContainer(testConfig(), { now: () => now });
+    const container = await createContainer(testConfig(), { clock: { now: () => now } });
     const { app, login } = await createTestApp(container);
     const cookie = await login(ANA_EMAIL);
 

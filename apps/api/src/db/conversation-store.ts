@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, gte, ne } from "drizzle-orm";
 import type { Database } from "./database.ts";
 import {
   conversations,
@@ -36,6 +36,36 @@ export function createConversationStore(db: Database) {
         where: and(eq(conversations.employeeId, employeeId), ne(conversations.mode, "closed")),
         orderBy: desc(conversations.createdAt),
       });
+    },
+
+    async findById(id: string): Promise<ConversationRow | undefined> {
+      return db.query.conversations.findFirst({ where: eq(conversations.id, id) });
+    },
+
+    /**
+     * Troca o estado só se a conversa ainda estiver na versão lida (R06): de duas trocas
+     * simultâneas (dois analistas assumindo, transferência e devolução juntas), só uma passa.
+     */
+    async changeMode(
+      conversation: Pick<ConversationRow, "id" | "version">,
+      change: { mode: ConversationMode; assignedAnalystId: string | null; now: Date },
+    ): Promise<ConversationRow | undefined> {
+      const [row] = await db
+        .update(conversations)
+        .set({
+          mode: change.mode,
+          assignedAnalystId: change.assignedAnalystId,
+          version: conversation.version + 1,
+          updatedAt: change.now,
+        })
+        .where(
+          and(
+            eq(conversations.id, conversation.id),
+            eq(conversations.version, conversation.version),
+          ),
+        )
+        .returning();
+      return row;
     },
 
     async create(employeeId: string, now: Date): Promise<ConversationRow> {
@@ -76,10 +106,19 @@ export function createConversationStore(db: Database) {
       return rows;
     },
 
-    /** As últimas `limit` mensagens, da mais antiga para a mais nova. */
-    async listRecentMessages(conversationId: string, limit: number): Promise<MessageRow[]> {
+    /**
+     * As últimas `limit` mensagens, da mais antiga para a mais nova. Com `since`, só as a partir
+     * dessa data (por exemplo, as da sessão atual).
+     */
+    async listRecentMessages(
+      conversationId: string,
+      limit: number,
+      since?: Date,
+    ): Promise<MessageRow[]> {
       const newestFirst = await db.query.messages.findMany({
-        where: eq(messages.conversationId, conversationId),
+        where: since
+          ? and(eq(messages.conversationId, conversationId), gte(messages.createdAt, since))
+          : eq(messages.conversationId, conversationId),
         orderBy: desc(messages.createdAt),
         limit,
       });

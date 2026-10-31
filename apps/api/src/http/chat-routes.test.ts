@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { systemClock } from "@nexo/shared/domain";
 import { describe, expect, it } from "vitest";
 import { createContainer } from "../container.ts";
-import { createTestApp, testConfig } from "../test-support.ts";
+import {
+  createFakeTicketGateway,
+  createTestApp,
+  createTestContainer,
+  sampleTicket,
+  testConfig,
+} from "../test-support.ts";
+import { decisionTraces } from "../db/schema.ts";
 import { createRateLimiter } from "./rate-limiter.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
@@ -54,7 +61,12 @@ describe("chat do funcionário", () => {
   it("antes da primeira mensagem, não há conversa", async () => {
     const { conversation } = await loggedInAsAna();
 
-    expect(await conversation()).toEqual({ conversation: null, messages: [] });
+    expect(await conversation()).toEqual({
+      conversation: null,
+      session: null,
+      messages: [],
+      drafts: [],
+    });
   });
 
   it("responde em streaming e grava a mensagem e a resposta (com as ações do agent)", async () => {
@@ -116,6 +128,35 @@ describe("chat do funcionário", () => {
     expect(await blocked.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 
+  it("RN09: a consulta de chamados pelo chat usa o funcionário da sessão (rota → agent → tool)", async () => {
+    const brunoTicket = sampleTicket({ number: "INC-20480", ownerId: "emp-bruno-tavares" });
+    const { ticketGateway, queriedOwners } = createFakeTicketGateway([sampleTicket(), brunoTicket]);
+    const { send } = await loggedInAsAna(await createTestContainer({ ticketGateway }));
+
+    const stream = await (await send({ text: "Qual o status do meu chamado?" })).text();
+
+    expect(stream).toContain("list_my_tickets");
+    expect(stream).toContain("INC-20311");
+    expect(stream).not.toContain("INC-20480");
+    expect(queriedOwners).toEqual(["emp-ana-souza"]);
+  });
+
+  it("ADR-0010: o teto por minuto vale para todos juntos (protege a cota do modelo)", async () => {
+    const container = await createContainer(testConfig({ CHAT_MESSAGES_PER_MINUTE: 1 }));
+    const { app, login } = await createTestApp(container);
+    const sendAs = async (email: string, text: string) =>
+      app.request("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: await login(email) },
+        body: JSON.stringify({ text }),
+      });
+
+    await (await sendAs(ANA_EMAIL, "oi")).text();
+    const otherEmployee = await sendAs("bruno.tavares@nexo.com.br", "oi");
+
+    expect(otherEmployee.status).toBe(429);
+  });
+
   it("R06: um turno por vez; outra mensagem enquanto o agent responde recebe 'aguarde'", async () => {
     const container = await createContainer(testConfig());
     const ana = await container.authService.login({
@@ -124,8 +165,12 @@ describe("chat do funcionário", () => {
       remember: false,
     });
 
-    const firstTurn = await container.chatService.sendMessage(ana.user, "primeira");
-    await expect(container.chatService.sendMessage(ana.user, "segunda")).rejects.toMatchObject({
+    const firstTurn = await container.chatService.sendMessage(ana.user, "primeira", {
+      ip: "local",
+    });
+    await expect(
+      container.chatService.sendMessage(ana.user, "segunda", { ip: "local" }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
 
@@ -134,6 +179,46 @@ describe("chat do funcionário", () => {
     while (!(await reader.read()).done) {
       // lê o stream até o fim: o turno termina
     }
-    await expect(container.chatService.sendMessage(ana.user, "terceira")).resolves.toBeDefined();
+    await expect(
+      container.chatService.sendMessage(ana.user, "terceira", { ip: "local" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("A13: o limite por IP vale para todas as contas que saem dele", async () => {
+    const container = await createContainer(testConfig());
+    container.chatLimits.perIp = createRateLimiter({
+      limit: 1,
+      windowMs: 60_000,
+      clock: systemClock,
+    });
+    const { app, login } = await createTestApp(container);
+    const sendFrom = async (ip: string, email: string) =>
+      app.request("/api/chat/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: await login(email),
+          "X-Forwarded-For": ip,
+        },
+        body: JSON.stringify({ text: "oi" }),
+      });
+
+    await (await sendFrom("203.0.113.7", ANA_EMAIL)).text();
+    const sameIp = await sendFrom("203.0.113.7", "bruno.tavares@nexo.com.br");
+    const otherIp = await sendFrom("198.51.100.4", "carla.mendes@nexo.com.br");
+
+    expect(sameIp.status).toBe(429);
+    expect(otherIp.status).toBe(200);
+  });
+
+  it("RT10: cada turno registra os tokens do classificador e do agent", async () => {
+    const container = await createContainer(testConfig());
+    const { send } = await loggedInAsAna(container);
+
+    await (await send({ text: "Qual o horário do service desk?" })).text();
+
+    // O modelo de teste informa 120 tokens por chamada: 1 do classificador e 2 do agent (tool e resposta).
+    const [trace] = await container.db.select().from(decisionTraces);
+    expect(trace).toMatchObject({ classifierTokens: 120, agentTokens: 240 });
   });
 });

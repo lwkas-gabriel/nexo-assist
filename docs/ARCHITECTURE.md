@@ -41,7 +41,7 @@ nexo-assist/
       ├─ domain/         regras puras e tipos: prioridade, SLA/calendário útil (America/Sao_Paulo), reabertura, duplicidade, status
       └─ contracts/      schemas Zod dos DTOs HTTP (web↔api e api↔tickets-service)
 ```
-- **Direção das dependências:** `http → app → ports ← adapters`; `domain` não depende de nada. O agent chama casos de uso, nunca HTTP nem banco direto.
+- **Direção das dependências:** `http → app → ports ← adapters`; `domain` não depende de nada. As tools do agent usam casos de uso ou portas (ex.: `TicketGateway`, `KnowledgeBase`), nunca HTTP nem banco direto.
 - **Uma fonte de verdade para conversas:** nosso repositório guarda mensagens, estado e traces. O console, as mensagens do analista e os traces precisam disso. Para o agent, passamos o histórico em janela, explicitamente. A memória do Mastra fica desligada para não haver dois históricos.
 - **Composição sem framework de DI:** funções-fábrica (`createChatService({ tickets, conversations, clock })`), montadas num único `container.ts`. Nos testes, basta passar fakes.
 - **`Clock` injetado:** SLA, vencimento e o seed com datas relativas ficam testáveis e determinísticos.
@@ -56,7 +56,7 @@ nexo-assist/
 | Prompt injection ("ignore as regras e crie...", "mostre o chamado do Bruno") | O LLM não grava nada livremente: só propõe rascunhos, e a única escrita (`confirm_draft`) passa pelas checagens de R04 no servidor. Escopo de dados limitado à sessão. Casos na avaliação roteirizada (T27) |
 | Tickets-service exposto | Rede privada do Railway (sem domínio público) + token de serviço em header, comparado em tempo constante |
 | Entrada maliciosa ou malformada | Zod em toda fronteira: corpo HTTP, args das tools, respostas do tickets-service |
-| Abuso e custo (login aceita qualquer senha) | Rate limit por usuário e por IP (mensagens e login), limite de 30 mensagens, teto diário global de chamadas ao LLM, limite de gasto no console da Anthropic |
+| Abuso e custo (login aceita qualquer senha) | Rate limit por usuário e por IP (mensagens e login), limite de 30 mensagens, teto diário global de mensagens (dentro da cota gratuita do Gemini, sem gasto possível; ADR-0010) |
 | Vazamento de segredos | **Regra: nenhuma chave, token, URL de banco ou valor de ambiente escrito no código, nem como fallback** (`process.env.X ?? "valor"` é proibido para segredos). Todo acesso a `process.env` passa por um único `config.ts` por app, validado com Zod: se faltar variável, a app não sobe. `.env` no `.gitignore`; `.env.example` só com nomes e placeholders descritivos. Em produção, valores só nas variáveis do Railway. Varredura de segredos com **gitleaks** no CI e num hook de pre-commit; regra de lint proibindo `process.env` fora de `config.ts`. Front: nada sensível em variáveis `VITE_*` (vão para o bundle); a chave do LLM só existe no servidor. Logs sem segredos nem conteúdo de mensagens em nível info |
 | Headers e CORS | `secureHeaders` do Hono; sem CORS liberado (mesma origem) |
 | Dependências | `pnpm audit` no CI; lockfile commitado |
@@ -77,7 +77,7 @@ Fica explícito no README que senha qualquer é requisito do desafio, não prát
 Princípio: **o LLM interpreta, o código garante as regras.**
 - O LLM (agent Mastra com tools) identifica a intenção e extrai campos (tipo, categoria, impacto, urgência, resumo).
 - Regras determinísticas em código puro e testado: matriz de prioridade (RN11), SLA/vencimento em horário útil (RN12/13), janela de reabertura (RN06), candidatos a duplicidade (RN05).
-- **Turno em duas etapas (R05):** classificador com saída estruturada (intenção, campos, confiança, porquê) → agent com tools, que recebe a classificação.
+- **Turno em duas etapas (R05):** classificador com saída estruturada (intenção, campos, confiança, porquê) → agent com tools, que recebe a classificação como contexto do sistema (`apps/api/src/agent/classifier.ts`). Ao fim do turno, `decision-trace.ts` junta a classificação, os passos do agent, as regras que o código aplicou e os sinais que reduziram a confiança; o registro fica em `decision_traces`, ligado à mensagem. O limiar (R39) é decidido antes do agent falar: segunda mensagem seguida com confiança baixa vai para um analista sem chamar o agent.
 - **Confirmação validada pelo código (RN04, R04):** o agent propõe o rascunho. A criação ou atualização só acontece pelo caso de uso `confirmDraft`, chamado pelo botão, pelo Ctrl/⌘+Enter ou pela tool `confirm_draft`. O servidor recusa se as condições de R04 não forem atendidas.
 - **Pausa por construção (RN08):** se a conversa está com analista, o servidor nem chama o LLM.
 - **Privacidade por construção (RN09):** o `userId` vem da sessão, injetado no contexto das tools; nenhuma tool aceita `userId` do modelo.
@@ -94,6 +94,8 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 | `GET /api/chat` | Sessão atual + histórico + resumo das anteriores | funcionário |
 | `POST /api/chat/messages` | Mensagem livre (stream) **ou** ação estruturada (`{ action: "selectTicket", ticketId }`) | funcionário |
 | `POST /api/chat/drafts/:id/confirm` · `/cancel` · `PATCH /api/chat/drafts/:id` | Rascunho (botões/edição) | funcionário |
+| `POST /api/chat/sessions` | Nova sessão (RN14): encerra a atual com resumo e abre outra | funcionário |
+| `POST /api/chat/handoff` | "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão) | funcionário |
 | `GET /api/chat/updates?since=` | Polling de mensagens do analista e mudanças de estado | funcionário |
 | `GET /api/console/conversations?filter=&q=` | Lista com contagens por filtro | analista |
 | `GET /api/console/conversations/:id` | Histórico + traces + resumo da transferência | analista |
@@ -105,10 +107,10 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 `GET /tickets?ownerId&status` · `GET /tickets/:id?ownerId` · `POST /tickets` (`Idempotency-Key`) · `POST /tickets/:id/updates` (`Idempotency-Key`) · `POST /tickets/:id/reopen` · `POST /tickets/:id/transfer`. Numeração sequencial por tipo (INC-205xx, REQ-104xx). Middleware de falha configurável por env (`FAILURE_RATE`, `FAILURE_LATENCY_MS`).
 
 ### 11.3 Máquinas de estado (explícitas, testadas, num arquivo cada)
-- **Conversa:** `agent` → `waiting_analyst` (transferência) → `analyst` (assumir) → `agent` (devolver) | `closed` (encerrar). `waiting_analyst` → `agent` (devolver sem assumir). Transição inválida = erro tipado.
+- **Conversa:** `agent` → `waiting_analyst` (transferência) → `analyst` (assumir) → `agent` (devolver) | `closed` (encerrar). `waiting_analyst` → `agent` (devolver sem assumir). Transição inválida = erro tipado. A tabela fica em `apps/api/src/app/conversation-state.ts`, e a troca no banco só passa se a versão lida for a atual (R06). Cada transferência grava uma linha em `handoffs`, com o resumo do agent, o nível (A03) e o prazo de contato (A02).
 - **Chamado:** `new` → `in_progress` | `waiting_analyst` → `in_service` (analista assumiu) → `resolved` → `reopened` (≤ 7 dias). REQ: `new` → `approved` → `in_progress` → `resolved`. `cancelled` a partir de qualquer estado aberto.
-- **Rascunho:** `pending` → `confirmed` | `cancelled` | `edited` (volta a `pending` com novo hash).
-- **Sessão:** `active` → `ended` (30 mensagens, 8 h inativa — **exceto** com conversa em `waiting_analyst`/`analyst` — ou encerramento pelo analista).
+- **Rascunho:** `pending` → `confirming` → `confirmed`; `pending` → `cancelled`. Cada transição é um UPDATE condicional ao status esperado, então duas ações simultâneas não passam as duas. Se a escrita no sistema de chamados falha, `confirming` → `confirm_failed`: o chamado pode ter sido criado, então o rascunho congela e só aceita confirmar de novo, com a mesma chave. Pelo chat (R04), só confirma rascunho desta conversa visto antes da mensagem: `shown_at` é gravado quando uma resposta concluída do agent mostra o `D-n`, ou quando o funcionário edita no card. Propor outro rascunho cancela o pendente da conversa.
+- **Sessão:** `active` → `ended` (30 mensagens ao agent e o funcionário pede uma nova; 8 h inativa, **exceto** com a conversa em `waiting_analyst`/`analyst`; ou "Nova sessão"). É um trecho da mesma conversa (`chat_sessions`); ao encerrar, grava um resumo montado pelo código, que abre a sessão seguinte. O agent recebe só as mensagens da sessão atual, mais o resumo e os rascunhos pendentes no contexto de sistema.
 
 ### 11.4 Modelo de dados (resumo)
 - **api.db:** `users` (nome, e-mail, papel, setor, nível N1/N2), `auth_sessions`, `conversations` (estado, `version`, analista), `chat_sessions` (contador, resumo, status), `messages` (autor: employee/agent/analyst/system; partes: texto/cards), `decision_traces` (por turno: classificação, passos, regras, confiança, sinais, tokens, latência), `drafts`, `conversation_tickets` (painel "Desta conversa"), `rate_limits`.

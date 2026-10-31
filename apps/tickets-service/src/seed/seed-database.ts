@@ -1,5 +1,5 @@
 import type { Database } from "../db/database.ts";
-import { ticketUpdates, tickets } from "../db/schema.ts";
+import { idempotencyKeys, ticketUpdates, tickets } from "../db/schema.ts";
 import { buildDemoTickets } from "./demo-tickets.ts";
 
 /** Apaga os chamados e grava os de demonstração, numa transação (tudo ou nada). */
@@ -7,6 +7,8 @@ export async function seedDatabase(db: Database, now: Date): Promise<number> {
   const demoTickets = buildDemoTickets(now);
 
   await db.transaction(async (tx) => {
+    // Chaves de idempotência antigas apontariam para chamados que não existem mais.
+    await tx.delete(idempotencyKeys);
     await tx.delete(ticketUpdates);
     await tx.delete(tickets);
 

@@ -57,6 +57,16 @@ export type SlaStatus =
   { isTracked: false } | { isTracked: true; deadline: Date; isOverdue: boolean };
 
 /**
+ * A partir de quando o prazo conta (RN12, A17): da última atualização da equipe de TI ou,
+ * se ela ainda não respondeu, da abertura (prazo da primeira resposta).
+ */
+export function slaClockStart(
+  ticket: Pick<SlaTrackedTicket, "createdAt" | "lastStaffUpdateAt">,
+): Date {
+  return ticket.lastStaffUpdateAt ?? ticket.createdAt;
+}
+
+/**
  * Situação do prazo de um chamado: só chamados abertos têm prazo.
  * Passado o prazo sem resposta da TI, o chamado está vencido (e pode ser transferido, RN07).
  */
@@ -69,7 +79,6 @@ export function getSlaStatus(
     return { isTracked: false };
   }
 
-  const startedAt = ticket.lastStaffUpdateAt ?? ticket.createdAt;
-  const deadline = computeDeadline(ticket.priority, startedAt, calendar);
+  const deadline = computeDeadline(ticket.priority, slaClockStart(ticket), calendar);
   return { isTracked: true, deadline, isOverdue: now.getTime() > deadline.getTime() };
 }

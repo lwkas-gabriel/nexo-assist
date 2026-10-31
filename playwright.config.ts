@@ -5,7 +5,7 @@ const isCI = Boolean(process.env.CI);
 
 /**
  * Os testes sobem servidores próprios, em portas separadas do `pnpm dev`, sempre com o modelo
- * falso (LLM_MODE=mock): rodar os testes nunca chama o Claude de verdade nem gera custo.
+ * falso (LLM_MODE=mock): rodar os testes nunca chama o modelo real nem gasta a cota gratuita.
  */
 const E2E_TICKETS_PORT = "3101";
 const E2E_API_PORT = "3100";
@@ -55,6 +55,9 @@ export default defineConfig({
         SEED_ON_START: "false",
         TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
         TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
+        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo.
+        CHAT_MESSAGES_PER_MINUTE: "1000",
+        CHAT_MESSAGES_PER_DAY: "1000",
       },
       url: `http://localhost:${E2E_API_PORT}/api/health`,
       reuseExistingServer: false,

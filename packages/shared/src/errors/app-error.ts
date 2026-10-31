@@ -9,6 +9,8 @@ export const ERROR_HTTP_STATUS = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   RATE_LIMITED: 429,
+  /** RN14: a sessão chegou a 30 mensagens; o funcionário começa outra ou fala com um analista. */
+  SESSION_LIMIT: 409,
   INTERNAL: 500,
   TICKETS_UNAVAILABLE: 503,
 } as const;

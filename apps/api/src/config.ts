@@ -2,13 +2,13 @@ import { parseEnv } from "@nexo/shared/config";
 import { z } from "zod";
 
 /**
- * LLM_MODE=anthropic usa o Claude de verdade e exige chave e modelo.
- * LLM_MODE=mock usa um modelo falso roteirizado (testes E2E e CI), sem custo e sem chave.
+ * LLM_MODE=gemini usa o Gemini no plano gratuito do Google e exige chave e modelo (ADR-0010).
+ * LLM_MODE=mock usa um modelo falso roteirizado (testes E2E e CI), sem chave e sem chamadas externas.
  */
 const llmSchema = z.discriminatedUnion("LLM_MODE", [
   z.object({
-    LLM_MODE: z.literal("anthropic"),
-    ANTHROPIC_API_KEY: z.string().min(1),
+    LLM_MODE: z.literal("gemini"),
+    GEMINI_API_KEY: z.string().min(1),
     LLM_MODEL: z.string().min(1),
   }),
   z.object({
@@ -31,6 +31,12 @@ const envSchema = z
     TICKETS_SERVICE_URL: z.url(),
     /** Segredo compartilhado com o serviço de chamados (gerado pelo pnpm setup:env). */
     TICKETS_SERVICE_TOKEN: z.string().min(32),
+    /**
+     * Tetos globais de mensagens ao agent, somando todos os usuários. Dependem da cota da conta
+     * do provedor (cada mensagem usa até 4 chamadas ao modelo); ver .env.example e ADR-0010.
+     */
+    CHAT_MESSAGES_PER_MINUTE: z.coerce.number().int().positive(),
+    CHAT_MESSAGES_PER_DAY: z.coerce.number().int().positive(),
   })
   .and(llmSchema);
 

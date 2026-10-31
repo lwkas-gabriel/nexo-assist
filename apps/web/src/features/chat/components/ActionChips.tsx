@@ -10,7 +10,10 @@ export function ActionChips({ message }: { message: UIMessage }) {
     <ul className="action-chips" aria-label="Ações do assistente">
       {toolParts.map((part) => (
         <li key={part.toolCallId} className="action-chip">
-          {describeToolAction(getToolName(part))}
+          {describeToolAction(
+            getToolName(part),
+            part.state === "output-available" ? part.output : undefined,
+          )}
           {part.state === "output-error" && " (falhou)"}
         </li>
       ))}

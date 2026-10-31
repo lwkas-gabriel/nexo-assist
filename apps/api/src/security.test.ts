@@ -34,7 +34,12 @@ describe("RN09: um funcionário nunca vê a conversa de outro", () => {
 
     const brunoView = await get("/api/chat", bruno);
 
-    expect(await brunoView.json()).toEqual({ conversation: null, messages: [] });
+    expect(await brunoView.json()).toEqual({
+      conversation: null,
+      session: null,
+      messages: [],
+      drafts: [],
+    });
   });
 
   it("não existe rota que receba o id da conversa ou do usuário do navegador", async () => {

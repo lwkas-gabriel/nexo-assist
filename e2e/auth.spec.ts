@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { ANA_EMAIL, loginAs } from "./support/login.ts";
 
@@ -5,7 +6,7 @@ test("e-mail desconhecido mostra a mensagem de erro, sem entrar", async ({ page 
   await page.goto("/");
 
   await page.getByLabel("E-mail corporativo").fill("nao.existe@nexo.com.br");
-  await page.getByLabel("Senha").fill("qualquer-senha");
+  await page.getByLabel("Senha").fill(randomUUID());
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByRole("alert")).toHaveText("E-mail ou senha inválidos.");

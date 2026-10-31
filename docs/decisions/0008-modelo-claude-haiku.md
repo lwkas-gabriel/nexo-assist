@@ -1,6 +1,6 @@
 # ADR-0008: Claude Haiku como modelo do agent
 
-**Status:** Aceita, a validar na T11 (29/10/2026)
+**Status:** Substituída pelo [ADR-0010](0010-gemini-plano-gratuito.md) em 30/10/2026 (sem orçamento para crédito pago). Mantida como registro da decisão original.
 
 ## Contexto
 O PRD aceita qualquer provedor de LLM e pede respostas rápidas e uso consciente do modelo (custo por conversa). O agent depende de tool use confiável.

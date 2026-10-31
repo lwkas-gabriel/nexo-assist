@@ -35,7 +35,7 @@ e2e/                   Testes Playwright
 docs/                  Plano, arquitetura, revisões, ADRs e registro de IA
 ```
 
-- Direção das dependências: `http → app → ports ← adapters`. `domain` não depende de nada. O agent chama casos de uso, nunca banco ou HTTP diretamente.
+- Direção das dependências: `http → app → ports ← adapters`. `domain` não depende de nada. As tools do agent usam casos de uso ou portas (ex.: `TicketGateway`, `KnowledgeBase`), nunca banco ou HTTP diretamente.
 - Cada app tem seu próprio `.env` com **só** as variáveis de que precisa (menor privilégio).
 - Servidores rodam TypeScript **nativamente** no Node 24 (sem build): por isso imports relativos usam extensão explícita (`./app.ts`) e só sintaxe "apagável" (sem `enum`, sem `namespace`, sem parameter properties). Ver ADR-0004.
 

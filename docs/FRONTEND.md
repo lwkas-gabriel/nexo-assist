@@ -15,9 +15,10 @@
 - **Raios:** 6, 8, 12, 16 e 999 (pílulas). Balões de chat com um canto de 4 px (lado de quem fala).
 - **Sombras:** 3 níveis (`sm`, `card`, `cta`) copiados do arquivo.
 - **Ícones:** Lucide (`lucide-react`): bot, headset, check, check-check, chevron-right, search, send-horizontal, log-out, user-round, mail, lock, key-round, rotate-ccw-key, message-square, arrow-right-left, hand, eye, x, ellipsis-vertical.
+- **Implementação (T17):** os valores vêm do próprio `nexo.pen` (as variáveis do arquivo e os nós das telas) e viram o tema do Tailwind 4 em `apps/web/src/styles/tokens.css`. Os tons completos: `success #00BD6C` (suave `#00BD6C14`, texto `#00804A`), `warning #F5A500` (`#F5A50018`, `#946300`) e `danger #EE343B` (`#EE343B12`, `#C4161D`). Também entraram bordas translúcidas (`line` `#1B243117` nos cards, `line-strong` `#1B24311F` em botão secundário, campo e composer), a linha de sistema (`#1B243114`), as bolhas do console (agent `#E6EFFA`, analista `#E3F4EA`) e os 7 pares pastel dos avatares. Sombras: `sm` `0 1px 2px #1B24310D`, `card` com `0 6px 18px #1B24310A` a mais, `cta` `0 1px 2px #0062C433, 0 6px 16px #0062C426`, `bubble` `0 1px 2px #1B243112` (a mais usada), `field` e `rail`. A paleta, os raios e as sombras padrão do Tailwind foram desligados, para não existir cor fora do protótipo.
 - **Layout:** desktop 1440 × 900. Chat: sidebar + área principal com mensagens em coluna central (padding lateral de 200 px). Console: rail 64 + lista 380 + conversa (flex) + painel de chamados 340.
 
-### 10.2 Mapa de status → visual (um único arquivo `statusStyles.ts`)
+### 10.2 Mapa de status → visual (um único arquivo, `apps/web/src/ui/status-styles.ts`)
 | Status / rótulo | Cor |
 |---|---|
 | Aguardando analista, Aguardando atendente, Aguardando confirmação, Agent pediu ajuda · confiança X%, "há N dias" (atrasado) | warning |
@@ -71,6 +72,9 @@ O mock tem 6 frames "(desktop)" e nenhuma variante de tablet ou celular. Medidas
 
 ### 10.7 Requisitos não funcionais do frontend
 - **Acessibilidade:** navegação por teclado (opções 1–4, Ctrl/⌘+Enter conforme o SO), foco visível, `aria-live` nas respostas do agent, contraste dos tokens checado.
+  - **Contraste conferido (T17, WCAG, alfa dos tons suaves já misturado ao fundo):** sobre `paper`, todos os pares de pílula passam de 4,5:1 (de 4,65 a 5,47). Sobre `desk` e `console`, três ficam abaixo: `success-text` 4,14 a 4,36, `warning-text` 4,32 e `primary-text` 4,45. **Regra:** pílula e etiqueta de texto pequeno ficam sobre `paper`; em fundo `desk` ou `console`, a etiqueta ganha fundo `paper` próprio.
+  - **Modais:** a gaveta e a folha do `SidePanel` prendem o Tab, fecham com Esc ou clique fora, travam a rolagem do fundo e devolvem o foco a quem abriu. Uma nova renderização do pai (o polling) não mexe no foco.
+  - **Avisos:** o `Toast` é uma região viva sempre montada, e só o texto muda; erro usa `alert`.
 - **Dados:** TanStack Query para chamadas e polling; nada de store global (só um Context de sessão). Datas e prazos formatados em pt-BR, fuso de São Paulo, numa única função utilitária.
 - **Tempo real:** streaming da resposta do agent; polling de 2–3 s só quando necessário (console aberto, conversa com analista).
 - **Testes:** componentes com regra visual (DraftCard, TicketCard vencido, QuickOptions por teclado, Composer bloqueado) com Testing Library; fluxos com Playwright.

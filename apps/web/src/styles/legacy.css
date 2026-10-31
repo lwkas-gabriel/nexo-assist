@@ -1,0 +1,115 @@
+/*
+ * Estilo das telas do esqueleto, agora com os tokens do protótipo. Sai quando a T19 (chat) refizer a tela com os componentes de ui/.
+ */
+@layer components {
+  .chat {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+
+  .chat__messages {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .message__sender {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .message--employee {
+    align-self: flex-end;
+  }
+
+  /* Registro do sistema (transferência, rascunho confirmado): linha discreta, sem remetente. */
+  .message--system {
+    align-self: center;
+    font-size: 12px;
+    color: var(--color-ink-3);
+  }
+
+  .message__text {
+    margin: 4px 0 0;
+    white-space: pre-wrap;
+  }
+
+  .action-chips {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .action-chip {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--color-primary-soft);
+    color: var(--color-primary-text);
+  }
+
+  .composer {
+    display: flex;
+    gap: 8px;
+  }
+
+  .composer input {
+    flex: 1;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .chat__error {
+    color: var(--color-danger-text);
+  }
+
+  /*
+   * O reset do Tailwind tira borda e fundo de campos e botões e o tamanho dos títulos. Nas telas
+   * do esqueleto, isso deixava os campos invisíveis; aqui eles voltam, com os tokens.
+   */
+  .chat h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .composer input {
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-paper);
+    box-shadow: var(--shadow-field);
+  }
+
+  .composer button,
+  .chat__error button {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    background: var(--color-cta);
+    color: var(--color-paper);
+    font-weight: 600;
+  }
+
+  .composer button:disabled {
+    opacity: 0.5;
+  }
+
+  .chat header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
