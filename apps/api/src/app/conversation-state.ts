@@ -6,7 +6,9 @@ import type { ConversationMode } from "../db/schema.ts";
  * - agent → waiting_analyst: transferência (RN07);
  * - waiting_analyst → analyst: um analista assume;
  * - analyst ou waiting_analyst → agent: o analista devolve ao agent;
- * - qualquer estado aberto → closed: atendimento encerrado.
+ * - qualquer estado aberto → closed: fechamento administrativo. "Encerrar atendimento" no console
+ *   (T24) não usa este evento: devolve a conversa ao agent com sessão nova (ADR-0007), para o
+ *   funcionário não perder o histórico.
  */
 export const CONVERSATION_EVENTS = ["handoff", "assume", "release", "close"] as const;
 export type ConversationEvent = (typeof CONVERSATION_EVENTS)[number];
