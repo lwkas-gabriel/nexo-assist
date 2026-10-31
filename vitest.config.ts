@@ -48,7 +48,9 @@ export default defineConfig({
           include: ["apps/api/src/**/*.test.ts"],
           environment: "node",
           // Turnos do agent com banco e streaming: com a suíte inteira em paralelo, os mais longos
-          // chegavam perto dos 5 s padrão e falhavam por tempo, não por erro.
+          // chegavam perto dos 5 s padrão e falhavam por tempo, não por erro. 15 s é o triplo do
+          // padrão: dá folga ao pior caso em paralelo e ainda barra um travamento de verdade.
+          // Só o teste dos 30 turnos (RN14) tem um limite maior, declarado nele.
           testTimeout: 15_000,
         },
       },

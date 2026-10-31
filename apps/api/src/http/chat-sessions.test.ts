@@ -21,6 +21,12 @@ type ConversationResponse = {
 };
 
 const HOUR_MS = 60 * 60 * 1000;
+/**
+ * O teste do limite faz 30 turnos do agent (com banco e streaming) antes da 31ª mensagem. Com a
+ * suíte inteira em paralelo ele passa do limite global de 15 s da api (vitest.config.ts), então
+ * tem o seu, 5 s acima.
+ */
+const THIRTY_TURNS_TIMEOUT_MS = 20_000;
 
 /** App com relógio controlado, modelo que grava os prompts e sem o limite por hora (tem teste próprio). */
 async function setup() {
@@ -80,7 +86,7 @@ describe("sessões de atendimento (RF10, RN14)", () => {
 
   it(
     "RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota",
-    { timeout: 20_000 },
+    { timeout: THIRTY_TURNS_TIMEOUT_MS },
     async () => {
       const { container, recording, send, say, conversation } = await setup();
       for (let index = 0; index < SESSION_MESSAGE_LIMIT; index += 1) {
