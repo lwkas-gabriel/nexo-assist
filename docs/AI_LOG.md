@@ -654,3 +654,16 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **Lista e card no mesmo turno** mostravam o seletor ativo abaixo da resposta já dada. Com o chamado consultado, o seletor não aparece.
 - **Menores, todos tratados:** "Adicionar informação" no limite da sessão (sem campo de mensagem, não fazia nada); erro antigo aparecendo numa resposta nova; o campo de mensagem não esperava a ação do chamado; "Não, obrigado" sem nome no detalhe da decisão; cor de "prazo vencido" diferente do FRONTEND.md sem registro (o desvio, que segue o protótipo, foi registrado; o `ticketTone` sem uso saiu).
 - **Lição:** o "Não, obrigado" repetiu um padrão que a resposta rápida (T19b) já tinha resolvido: o servidor aceitar o que o cliente diz que foi oferecido. Toda ação estruturada que responde a uma oferta precisa conferir a oferta gravada, não o pedido.
+
+---
+
+## T22: transferida, com analista e encerrada, no chat do funcionário (31/10/2026)
+
+### 65. T22: o funcionário sabe com quem está falando
+- **IA gerou:** a identidade do analista na conversa e nas mensagens dele (api), a pílula "Com Rafael Lima · Suporte N2", as bolhas do analista com nome e setor, o campo de mensagem para o analista com o contador pausado, o polling curto e os testes (inclusive o polling com relógio falso e um E2E do pedido de analista).
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **"Encerrar atendimento" (T24) devolve a conversa ao agent e abre sessão nova, em vez de fechá-la de vez.** No modelo atual, a conversa `closed` sai da tela do funcionário (só a conversa em aberto aparece) e a próxima mensagem começaria outra conversa, sem o histórico: contra o RF11 e o R03, e contra o "SystemLine + início de nova sessão com resumo" do 10.5. Registrado no ARCHITECTURE (11.3). O estado `closed` fica para um fechamento administrativo.
+  - **Polling só enquanto a conversa está com os analistas** (3 s, dentro dos 2 a 3 s do plano); com o agent, a tela recarrega ao fim de cada resposta, como antes. As mensagens novas só entram quando nada está a caminho: com um envio em curso ou uma falha na tela, esperam o próximo ciclo, para não apagar a bolha do funcionário.
+  - **O analista é identificado pelo nome e setor do cadastro** (os dois analistas da demonstração), carregados de uma vez por consulta; o id do analista não vai para a tela.
+  - **O estado "com analista" ainda não se alcança pela interface:** o "Assumir" é do console (T24). Os testes chegam a ele direto pelo banco.
+- **Conferência visual:** a conversa transferida no desktop e no celular.
