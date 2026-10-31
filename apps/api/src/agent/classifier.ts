@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import { AFFECTED_SCOPES, TICKET_CATEGORIES, URGENCY_LEVELS } from "@nexo/shared/domain";
 import { z } from "zod";
+import { RETRY_SETTINGS } from "./model-settings.ts";
 
 /**
  * Etapa 1 do turno (R05): antes do agent, um classificador com saída estruturada diz o que entendeu
@@ -120,7 +121,7 @@ export function createClassifier(model: MastraModelConfig) {
     name: "Classificador do Nexo Assist",
     instructions: CLASSIFIER_INSTRUCTIONS,
     model,
-    maxRetries: 1,
+    ...RETRY_SETTINGS,
     defaultOptions: {
       providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },
     },

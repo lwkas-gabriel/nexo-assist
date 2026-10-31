@@ -9,6 +9,7 @@ import type { LlmConfig } from "../config.ts";
 import type { KnowledgeBase } from "../ports/knowledge-base.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { NEXO_INSTRUCTIONS } from "./instructions.ts";
+import { RETRY_SETTINGS } from "./model-settings.ts";
 import { createMockModel } from "./mock-model.ts";
 import { createDraftTools } from "./tools/draft-tools.ts";
 import { createHandoffTool, HANDOFF_TO_ANALYST_TOOL_ID } from "./tools/handoff-tool.ts";
@@ -16,12 +17,6 @@ import { createSearchKnowledgeBaseTool } from "./tools/search-knowledge-base.ts"
 import { createTicketTools } from "./tools/ticket-tools.ts";
 
 export const NEXO_AGENT_ID = "nexo-assist";
-
-/**
- * Uma nova tentativa cobre uma falha passageira do provedor. Mais que isso só atrasa a resposta
- * quando a cota gratuita por minuto acabou (o padrão do AI SDK são 2 tentativas, ~6 s de espera).
- */
-const MODEL_MAX_RETRIES = 1;
 
 /**
  * No máximo 3 chamadas ao modelo por resposta (ex.: duas tools e a resposta). Com o classificador,
@@ -64,7 +59,7 @@ export function createNexoAgent({
     name: "Nexo Assist",
     instructions: NEXO_INSTRUCTIONS,
     model,
-    maxRetries: MODEL_MAX_RETRIES,
+    ...RETRY_SETTINGS,
     tools: {
       search_knowledge_base: createSearchKnowledgeBaseTool(knowledgeBase),
       ...createTicketTools({ ticketGateway, clock }),
