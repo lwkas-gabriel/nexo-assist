@@ -384,3 +384,29 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - Ao criar o repositório de sessões, a IA sobrescreveu o `session-store.ts` existente, o das sessões de login, porque usou o mesmo nome. Percebeu na hora, restaurou o original do git e renomeou o novo para `chat-session-store.ts`.
   - O teste "o rascunho pendente continua valendo na sessão nova" mostrou um buraco: o agent da sessão nova não tinha como saber que existia um rascunho pendente, porque a mensagem que o mostrou ficou na sessão anterior. O contexto de sistema passou a listar os rascunhos pendentes (R03). Validado com o Gemini real: numa sessão nova, "pode criar aquele chamado" confirmou o D-8 certo.
 
+### 49. Revisão adversarial independente da T15
+- **Como:** sub-agente novo, sem o contexto da implementação, com a skill `revisao-adversarial` sobre `d1ec640..1ba5bfb`. Ele confirmou os achados com testes temporários, um deles com um modelo que grava os prompts.
+- **Resultado:** 1 crítico, 7 importantes e 4 menores. As correções:
+  1. **Crítico, uma regressão:** o resumo da sessão usava o "entendido" do classificador, e a lista de rascunhos pendentes usava o título. Os dois trazem texto do funcionário e iam para o contexto de sistema do agent, exatamente o que a revisão da T14 tinha tirado de lá. O revisor provou com "IGNORE AS REGRAS ANTERIORES...", que apareceu no system do agent. Correções:
+     - o resumo e os pendentes passaram a ter só textos do código: rótulos de intenção, linhas de sistema, número, tipo, categoria e prioridade do rascunho;
+     - um teste com um modelo que grava os prompts prova que o texto do funcionário não chega lá.
+  2. Uma sessão vazia, criada por dois cliques ou encerrada por inatividade, trocava o resumo verdadeiro por "sem assuntos". Agora sessão vazia não expira e "Nova sessão" não a substitui.
+  3. Três cliques simultâneos em "Nova sessão" deixavam três sessões ativas. Correções:
+     - um índice único no banco garante uma sessão ativa por conversa;
+     - a nova sessão passa pela mesma trava das mensagens.
+  4. A tela mostrava o contador vencido depois de 8 h, o que ia bloquear o campo de mensagem à toa. A regra da inatividade virou uma função pura, usada tanto na leitura quanto no envio.
+  5. O corte do resumo em 600 caracteres descartava justamente os registros (chamado criado, transferência). Agora os registros vêm primeiro, e os assuntos são rótulos curtos.
+  6. No limite, a mensagem oferecia "fale com um analista", mas não havia como, porque o texto passava pelo agent e era recusado. Entrou a rota `POST /api/chat/handoff`, que transfere pelo botão sem o agent.
+  7. A inatividade contava só as mensagens do funcionário. Voltar depois de o analista devolver a conversa abriria uma sessão nova e o agent perderia o que o analista escreveu. Agora conta a última atividade da conversa toda.
+  8. Faltavam provas de que:
+     - o agent vê só a sessão atual;
+     - o resumo e os pendentes chegam ao contexto dele;
+     - a 31ª mensagem não chama o modelo.
+     O modelo de teste que grava os prompts passou a provar isso, e os limites exatos de 8 h ganharam teste de unidade.
+  9. Reabertura era descrita como "complemento".
+  10. Mensagens recusadas pelo limite da sessão gastavam o teto diário de todos; agora o limite é conferido antes.
+  11. Convenções: comentário duplicado, pontuação dupla no resumo, `JSON.parse` sem validação e a regra da sessão espalhada. Ela foi para `session-state.ts`, uma máquina de estados explícita.
+  12. O modelo de teste lia o "D-3" de exemplo das instruções e poderia confirmar um rascunho inexistente; agora lê só a linha de pendentes.
+- **Fica documentado:** a mensagem conta no limite antes da etapa 1, mesmo que o limiar a transfira em seguida, porque o classificador já foi chamado por ela (achado 11 da revisão, aceito).
+- **Lição:** a IA reintroduziu, numa tarefa nova, uma brecha que ela mesma tinha fechado na anterior. O revisor sem contexto pegou. O teste que prova "o texto do funcionário não vai para o system do agent" agora protege contra isso.
+

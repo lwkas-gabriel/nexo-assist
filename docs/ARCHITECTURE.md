@@ -94,6 +94,8 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 | `GET /api/chat` | Sessão atual + histórico + resumo das anteriores | funcionário |
 | `POST /api/chat/messages` | Mensagem livre (stream) **ou** ação estruturada (`{ action: "selectTicket", ticketId }`) | funcionário |
 | `POST /api/chat/drafts/:id/confirm` · `/cancel` · `PATCH /api/chat/drafts/:id` | Rascunho (botões/edição) | funcionário |
+| `POST /api/chat/sessions` | Nova sessão (RN14): encerra a atual com resumo e abre outra | funcionário |
+| `POST /api/chat/handoff` | "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão) | funcionário |
 | `GET /api/chat/updates?since=` | Polling de mensagens do analista e mudanças de estado | funcionário |
 | `GET /api/console/conversations?filter=&q=` | Lista com contagens por filtro | analista |
 | `GET /api/console/conversations/:id` | Histórico + traces + resumo da transferência | analista |
