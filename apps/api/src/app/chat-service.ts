@@ -3,12 +3,7 @@ import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
 import { confidenceLevel, parseTicketNumber, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
-import {
-  createUIMessageStream,
-  safeValidateUIMessages,
-  type UIMessage,
-  type UIMessageChunk,
-} from "ai";
+import { createUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
 import { createAgentRequestContext } from "../agent/agent-context.ts";
 import { describeAgentError } from "../agent/agent-errors.ts";
 import {
@@ -32,6 +27,12 @@ import {
 import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView } from "./draft-service.ts";
+import {
+  createConversationReader,
+  readMessages,
+  toUIMessage,
+  type AnalystView,
+} from "./conversation-reader.ts";
 import type { HandoffService } from "./handoff-service.ts";
 import { isSessionAtLimit } from "./session-state.ts";
 import {
@@ -43,11 +44,6 @@ import {
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
-/**
- * Quantas mensagens a tela recebe: bem mais que o agent, para o histórico das sessões anteriores
- * continuar visível (R03, RF11). Uma sessão inteira tem umas 60 mensagens.
- */
-const DISPLAY_WINDOW = 200;
 /**
  * Teto de texto do histórico que o agent recebe. Sem ele, 20 mensagens de 2.000 caracteres,
  * reenviadas a cada passo do agent, chegariam perto dos 250 mil tokens por minuto do plano gratuito.
@@ -70,8 +66,7 @@ type ChatServiceDependencies = {
   clock: Clock;
 };
 
-/** Quem atende, como o funcionário vê ("Rafael Lima · Suporte N2"). */
-export type AnalystView = { name: string; department: string };
+export type { AnalystView };
 
 export type ConversationView = {
   conversation: (Pick<ConversationRow, "id" | "mode"> & { analyst: AnalystView | null }) | null;
@@ -99,6 +94,11 @@ export function createChatService({
   userStore,
   clock,
 }: ChatServiceDependencies) {
+  const conversationReader = createConversationReader({
+    conversationStore,
+    decisionService,
+    userStore,
+  });
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
   const busyConversations = new Set<string>();
 
@@ -173,15 +173,7 @@ export function createChatService({
     since?: Date,
     limit: number = HISTORY_WINDOW,
   ): Promise<UIMessage[]> {
-    const rows = await conversationStore.listRecentMessages(conversationId, limit, since);
-    // Conversa sem mensagens (a primeira foi recusada, por exemplo) é válida: o AI SDK recusa a
-    // lista vazia, então ela nem passa pela validação.
-    if (rows.length === 0) return [];
-    const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
-    if (!result.success) {
-      throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
-    }
-    return result.data;
+    return readMessages(conversationStore, conversationId, toMessage, limit, since);
   }
 
   /** Uma ação por vez em cada conversa (R06): mensagens, nova sessão e pedido de analista. */
@@ -203,27 +195,8 @@ export function createChatService({
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
       // R27: quem atende aparece pelo nome e setor, na pílula do topo e nas bolhas do analista.
-      const analysts = new Map(
-        (await userStore.listAnalysts()).map((analyst) => [
-          analyst.id,
-          { name: analyst.name, department: analyst.department },
-        ]),
-      );
-      const toDisplayMessage = (row: MessageRow): UIMessage => {
-        const message = toUIMessage(row);
-        const analyst =
-          row.author === "analyst" && row.authorId ? analysts.get(row.authorId) : undefined;
-        return analyst
-          ? { ...message, metadata: { ...authorMetadata(message), analyst } }
-          : message;
-      };
-      const messages = await loadHistory(
-        conversation.id,
-        toDisplayMessage,
-        undefined,
-        DISPLAY_WINDOW,
-      );
-      const decisions = await decisionService.forMessages(messages.map((message) => message.id));
+      const analysts = await conversationReader.analysts();
+      const messages = await conversationReader.messages(conversation.id, analysts);
       // Só com a conversa no analista: devolvida ao agent, quem atendeu não aparece mais no topo.
       const assignedAnalyst =
         conversation.mode === "analyst" && conversation.assignedAnalystId
@@ -237,12 +210,7 @@ export function createChatService({
         },
         session: await chatSessionService.view(conversation),
         drafts: await draftService.listForConversation(employee.id, conversation.id),
-        messages: messages.map((message) => {
-          const decision = decisions.get(message.id);
-          return decision
-            ? { ...message, metadata: { ...authorMetadata(message), decision } }
-            : message;
-        }),
+        messages,
       };
     },
 
@@ -622,24 +590,8 @@ function describeClassification({ classification }: ClassificationResult): strin
   return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; confiança ${confidenceLevel(classification.confidence)} (${classification.confidence}).`;
 }
 
-function authorMetadata(message: UIMessage): Record<string, unknown> {
-  return typeof message.metadata === "object" && message.metadata !== null
-    ? { ...message.metadata }
-    : {};
-}
-
 function textOf(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
-}
-
-/** Mensagem como a tela mostra; o autor vai junto, para a tela distinguir agent, analista e sistema. */
-function toUIMessage(row: MessageRow): UIMessage {
-  return {
-    id: row.id,
-    role: row.author === "employee" ? "user" : "assistant",
-    metadata: { author: row.author, createdAt: row.createdAt.toISOString() },
-    parts: JSON.parse(row.parts) as UIMessage["parts"],
-  };
 }
 
 /** Como o agent identifica o que não foi ele que escreveu (R18). */
