@@ -493,3 +493,28 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - o número do chamado na prévia usava a fonte monoespaçada, mas o protótipo usa a de interface.
 - **Erro pego pelo E2E:** o teste de fumaça procurava o título antigo "Nexo Assist". O título da tela agora é "Entrar", como no protótipo, e o teste confere a marca visível em cada largura.
 
+### 55. Revisão adversarial independente da T18
+- **Como:** sub-agente novo, sem o contexto da implementação, com a skill `revisao-adversarial` sobre `1338c7f..6cf6cb8`. O revisor tirou capturas em seis larguras, mediu os elementos, conferiu a ordem do Tab e desenhou a marca a partir do `nexo.pen`.
+- **Resultado:** 1 crítico, 5 importantes e 7 menores. As correções:
+  1. **Crítico:** no desktop, "Privacidade e uso de dados" abria o `SidePanel` como terceira coluna: o formulário encolhia para 263 px e o texto do painel saía da tela. A IA tinha conferido as capturas da tela fechada, não com o painel aberto. O `SidePanel` ganhou `inlineFrom="never"`, e a nota abre sempre sobreposta.
+  2. **A marca não era a do protótipo.** A IA desenhou um bloco com um balão a partir de um retângulo do arquivo que estava desligado (`enabled: false`). A marca real é um "N", cujo path agora é usado.
+  3. a 5. **Os três números prometiam mais do que mediam:**
+     - "online agora", com ponto verde, contava sessões de login de até 30 dias;
+     - "resolvidos sem fila" contava qualquer conversa ainda não transferida;
+     - "primeira resposta" media o turno inteiro de qualquer mensagem.
+
+     Os rótulos passaram a dizer o que é medido: analistas conectados, atendidas sem analista e resposta do assistente em média. A conta de transferências usa o mesmo conjunto de conversas, com percentual limitado a 0–100. O desvio dos rótulos do protótipo ficou registrado no plano.
+  6. Os testes não provavam o cache, a janela de 7 dias, a sessão vencida nem a média (com o relógio fixo, a latência era sempre 0). Ganharam testes com registros gravados direto no banco.
+  7. a 13. Os menores:
+     - em 1280 × 800 a tela rolava;
+     - faltavam o espaçamento de letras e a altura de linha do protótipo;
+     - o checkbox era o nativo;
+     - a dica de senha não era anunciada;
+     - o botão de mostrar a senha tinha anúncio duplo;
+     - havia um título `h2` antes do `h1`, e o rodapé estava dentro do `main`;
+     - os travessões eram lidos como "travessão", sem contexto;
+     - os números eram buscados até no celular;
+     - um teste de responsividade passava com a lógica invertida;
+     - o texto de privacidade prometia um reset periódico que não existe e omitia que o plano gratuito do Gemini pode usar o conteúdo.
+- **Lição:** a conferência visual da IA olhou só o estado inicial da tela. Estados abertos (painel, erro, dica) também precisam de captura. E número de painel é dado: o rótulo tem de dizer exatamente o que é medido.
+
