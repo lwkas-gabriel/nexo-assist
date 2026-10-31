@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { ArrowLeft, Hand, Ticket } from "lucide-react";
+import { ArrowLeft, Ticket } from "lucide-react";
 import { Fragment, useEffect, useRef } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
@@ -24,8 +24,9 @@ import { TicketPickerList } from "../../chat/components/TicketPickerList.tsx";
 import { decisionOf } from "../../chat/decision-model.ts";
 import { consultedTicketOf, listedTicketsOf } from "../../chat/ticket-model.ts";
 import type { ConsoleConversation } from "../console-api.ts";
-import { dayLabel, describeContactDue, headerTag, messageTime } from "../console-model.ts";
+import { dayLabel, headerTag, messageTime } from "../console-model.ts";
 import { SeenTicks } from "./ConversationList.tsx";
+import { ServiceBar, ServiceHeaderActions, type ServiceActions } from "./ServiceBar.tsx";
 
 type ConsoleConversationViewProps = {
   data: ConsoleConversation;
@@ -39,6 +40,8 @@ type ConsoleConversationViewProps = {
   decisionPanelId: string;
   /** Ao abrir a conversa no celular, o foco vai para o título dela (a lista some da tela). */
   focusTitleOnOpen: boolean;
+  /** Tela 5: assumir, responder, devolver e encerrar. */
+  actions: ServiceActions;
 };
 
 const noop = () => undefined;
@@ -92,11 +95,16 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
           </h2>
           <p className="truncate text-[12.5px] text-ink-3">{meta}</p>
         </div>
-        <span role="status" className="shrink-0">
-          <Pill tone={tag.tone} withDot>
-            {tag.label}
-          </Pill>
-        </span>
+        {/* Atendimento assumido por quem está logado: no lugar da pílula, as ações (tela 5). */}
+        {state.kind === "analyst" && state.byMe ? (
+          <ServiceHeaderActions actions={props.actions} />
+        ) : (
+          <span role="status" className="shrink-0">
+            <Pill tone={tag.tone} withDot>
+              {tag.label}
+            </Pill>
+          </span>
+        )}
         {props.onOpenTickets && (
           <IconButton
             label={`Chamados de ${employee.name}`}
@@ -127,33 +135,7 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
         </div>
       </div>
 
-      {conversation.mode === "waiting_analyst" && handoff && (
-        <div className="shrink-0 border-t border-rule bg-paper px-5 pt-3 pb-3.5">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning-text">
-              <Hand aria-hidden size={17} />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <p className="text-[14.5px] font-semibold text-ink">
-                {employee.name.split(" ")[0]} espera um atendente
-              </p>
-              <p className="text-[12.5px] text-ink-3">
-                Agent pausado · Suporte {handoff.supportLevel} ·{" "}
-                {describeContactDue(handoff.responseDueAt, props.now)}
-              </p>
-              {/* R17: o resumo para o analista não precisar reler a conversa. */}
-              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
-                <dt className="text-ink-3">Motivo</dt>
-                <dd className="text-ink">{handoff.reason}</dd>
-                <dt className="text-ink-3">Problema</dt>
-                <dd className="text-ink">{handoff.problem}</dd>
-                <dt className="text-ink-3">Já tentado</dt>
-                <dd className="text-ink">{handoff.attempted}</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      )}
+      <ServiceBar data={props.data} now={props.now} actions={props.actions} />
     </section>
   );
 }
@@ -246,6 +228,11 @@ function ConsoleMessage({
         {author === "agent" && (
           // 10.7: etiqueta de texto pequeno sobre fundo paper próprio, não sobre o fundo do console.
           <span className="rounded-sm bg-paper px-1.5 py-px text-[11px] text-primary-text">IA</span>
+        )}
+        {analyst && (
+          <span className="rounded-sm bg-paper px-1.5 py-px text-[11px] text-success-text">
+            {analyst.department}
+          </span>
         )}
       </span>
       {author === "agent" && (

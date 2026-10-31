@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, MessageSquare } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useBreakpoint } from "../../lib/use-breakpoint.ts";
@@ -12,11 +12,16 @@ import type { CurrentUser } from "../auth/auth-api.ts";
 import { DecisionPanel } from "../chat/components/DecisionPanel.tsx";
 import { decisionOf } from "../chat/decision-model.ts";
 import {
+  assumeConversation,
+  closeService,
   fetchConsoleConversation,
   fetchConsoleList,
   fetchConsoleTickets,
+  releaseConversation,
+  replyToConversation,
   type ConsoleFilter,
 } from "./console-api.ts";
+import type { ServiceActions } from "./components/ServiceBar.tsx";
 import { ConsoleConversationView } from "./components/ConsoleConversationView.tsx";
 import { ConversationList } from "./components/ConversationList.tsx";
 import { TicketHistoryPanel } from "./components/TicketHistoryPanel.tsx";
@@ -97,6 +102,22 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     refetchInterval: TICKETS_POLL_MS,
   });
 
+  // Tela 5: cada ação recarrega a conversa, a lista e os chamados (o status do chamado muda ao
+  // assumir, R31). O erro fica na barra de baixo da conversa.
+  const queryClient = useQueryClient();
+  const service = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["console"] }),
+  });
+  const serviceActions: ServiceActions = {
+    isWorking: service.isPending,
+    error: service.error ? service.error.message : null,
+    assume: () => service.mutate(() => assumeConversation(selectedId ?? "")),
+    release: () => service.mutate(() => releaseConversation(selectedId ?? "")),
+    close: () => service.mutate(() => closeService(selectedId ?? "")),
+    reply: (text) => service.mutateAsync(() => replyToConversation(selectedId ?? "", text)),
+  };
+
   const decisionMessage = conversation.data?.messages.find((message) => message.id === decisionId);
   const decision = decisionMessage ? decisionOf(decisionMessage) : undefined;
   // A resposta do detalhe saiu da janela da conversa: o painel volta aos chamados.
@@ -118,6 +139,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   });
 
   const selectConversation = (id: string) => {
+    service.reset();
     setSelectedId(id);
     setDecisionId(null);
     setPanel("auto");
@@ -231,6 +253,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
               openDecisionId={effectivePanel === "decision" ? decisionId : null}
               decisionPanelId={decisionPanelId}
               focusTitleOnOpen={isMobile}
+              actions={serviceActions}
             />
           ) : conversation.isError ? (
             <div

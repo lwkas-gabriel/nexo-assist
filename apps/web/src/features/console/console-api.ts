@@ -83,3 +83,30 @@ export function fetchConsoleConversation(id: string): Promise<ConsoleConversatio
 export function fetchConsoleTickets(id: string): Promise<ConsoleTickets> {
   return apiRequest<ConsoleTickets>(`/console/conversations/${encodeURIComponent(id)}/tickets`);
 }
+
+/** Tela 5 (RF20): assumir, responder, devolver ao agent e encerrar o atendimento. */
+export function assumeConversation(id: string) {
+  return apiRequest<unknown>(`/console/conversations/${encodeURIComponent(id)}/assume`, {
+    method: "POST",
+  });
+}
+
+export function replyToConversation(id: string, text: string) {
+  return apiRequest<unknown>(`/console/conversations/${encodeURIComponent(id)}/messages`, {
+    method: "POST",
+    body: { text },
+  });
+}
+
+export function releaseConversation(id: string) {
+  return apiRequest<unknown>(`/console/conversations/${encodeURIComponent(id)}/release`, {
+    method: "POST",
+  });
+}
+
+/** A08: encerra o atendimento (não o chamado); a conversa volta ao agent com sessão nova. */
+export function closeService(id: string) {
+  return apiRequest<unknown>(`/console/conversations/${encodeURIComponent(id)}/close`, {
+    method: "POST",
+  });
+}

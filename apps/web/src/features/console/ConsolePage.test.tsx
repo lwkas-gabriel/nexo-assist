@@ -281,4 +281,113 @@ describe("console do analista (tela 4)", () => {
     expect(within(log).getByRole("region", { name: "Chamado INC-20311" })).toBeDefined();
     expect(within(log).queryByRole("button", { name: "Não, obrigado" })).toBeNull();
   });
+
+  describe("tela 5: assumir, responder, devolver e encerrar (RF20)", () => {
+    /** A api do console que guarda os POSTs; `failing` responde 409 a uma ação. */
+    function stubActions(conversation: ConsoleConversation, failing?: string) {
+      const posts: { path: string; body: unknown }[] = [];
+      vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          posts.push({
+            path: input,
+            body: typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : null,
+          });
+          if (failing && input.endsWith(failing)) {
+            const error = {
+              error: { code: "CONFLICT", message: "Outro analista já assumiu esta conversa." },
+            };
+            return Promise.resolve(new Response(JSON.stringify(error), { status: 409 }));
+          }
+          return Promise.resolve(new Response("{}", { status: 200 }));
+        }
+        const body = input.startsWith("/api/console/conversations?")
+          ? LIST
+          : input.endsWith("/tickets")
+            ? TICKETS
+            : conversation;
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      });
+      return posts;
+    }
+    const mine: ConsoleConversation = {
+      ...CONVERSATION,
+      conversation: {
+        ...CONVERSATION.conversation,
+        mode: "analyst",
+        state: {
+          kind: "analyst",
+          byMe: true,
+          analyst: { name: "Rafael Lima", department: "Suporte N2" },
+        },
+      },
+    };
+    const open = async () => {
+      renderConsole();
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+    };
+
+    it("aguardando: assumir e devolver ao agent, com o campo trancado até assumir", async () => {
+      const posts = stubActions(CONVERSATION);
+      await open();
+
+      expect(await screen.findByText("Assuma o atendimento para responder")).toBeDefined();
+      await userEvent.click(screen.getByRole("button", { name: "Assumir atendimento" }));
+
+      await waitFor(() =>
+        expect(posts.map((post) => post.path)).toContain("/api/console/conversations/c-ana/assume"),
+      );
+    });
+
+    it("conflito ao assumir aparece na barra", async () => {
+      stubActions(CONVERSATION, "/assume");
+      await open();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Assumir atendimento" }));
+
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Outro analista já assumiu esta conversa.",
+      );
+    });
+
+    it("assumida por mim: responder esvazia o campo; devolver e encerrar ficam no topo", async () => {
+      const posts = stubActions(mine);
+      await open();
+
+      const field = await screen.findByLabelText("Resposta para Ana");
+      await userEvent.type(field, "Oi, Ana. Já estou vendo.{Enter}");
+      await waitFor(() => expect(field).toHaveProperty("value", ""));
+      await userEvent.click(screen.getByRole("button", { name: "Encerrar atendimento" }));
+      await userEvent.click(screen.getByRole("button", { name: "Devolver ao agent" }));
+
+      await waitFor(() =>
+        expect(posts).toEqual([
+          {
+            path: "/api/console/conversations/c-ana/messages",
+            body: { text: "Oi, Ana. Já estou vendo." },
+          },
+          { path: "/api/console/conversations/c-ana/close", body: null },
+          { path: "/api/console/conversations/c-ana/release", body: null },
+        ]),
+      );
+    });
+
+    it("com outro analista, o campo fica trancado e não há ações", async () => {
+      stubActions({
+        ...mine,
+        conversation: {
+          ...mine.conversation,
+          state: {
+            kind: "analyst",
+            byMe: false,
+            analyst: { name: "Juliana Costa", department: "Suporte N1" },
+          },
+        },
+      });
+      await open();
+
+      expect(await screen.findByText("Juliana Costa está atendendo")).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Encerrar atendimento" })).toBeNull();
+      expect(screen.queryByLabelText("Resposta para Ana")).toBeNull();
+    });
+  });
 });
