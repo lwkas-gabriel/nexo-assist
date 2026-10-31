@@ -1,4 +1,5 @@
 import type { UserRole } from "@nexo/shared/demo";
+import type { HandoffReason, SupportLevel } from "@nexo/shared/domain";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
@@ -92,3 +93,20 @@ export const drafts = sqliteTable("drafts", {
 });
 
 export type DraftRow = typeof drafts.$inferSelect;
+
+export const handoffs = sqliteTable("handoffs", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  reason: text("reason").$type<HandoffReason>().notNull(),
+  supportLevel: text("support_level").$type<SupportLevel>().notNull(),
+  problem: text("problem").notNull(),
+  attempted: text("attempted").notNull(),
+  ticketNumber: text("ticket_number"),
+  ticketTransferred: integer("ticket_transferred", { mode: "boolean" }).notNull(),
+  responseDueAt: integer("response_due_at", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type HandoffRow = typeof handoffs.$inferSelect;

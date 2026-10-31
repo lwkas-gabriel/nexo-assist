@@ -38,6 +38,36 @@ export function createConversationStore(db: Database) {
       });
     },
 
+    async findById(id: string): Promise<ConversationRow | undefined> {
+      return db.query.conversations.findFirst({ where: eq(conversations.id, id) });
+    },
+
+    /**
+     * Troca o estado só se a conversa ainda estiver na versão lida (R06): de duas trocas
+     * simultâneas (dois analistas assumindo, transferência e devolução juntas), só uma passa.
+     */
+    async changeMode(
+      conversation: Pick<ConversationRow, "id" | "version">,
+      change: { mode: ConversationMode; assignedAnalystId: string | null; now: Date },
+    ): Promise<ConversationRow | undefined> {
+      const [row] = await db
+        .update(conversations)
+        .set({
+          mode: change.mode,
+          assignedAnalystId: change.assignedAnalystId,
+          version: conversation.version + 1,
+          updatedAt: change.now,
+        })
+        .where(
+          and(
+            eq(conversations.id, conversation.id),
+            eq(conversations.version, conversation.version),
+          ),
+        )
+        .returning();
+      return row;
+    },
+
     async create(employeeId: string, now: Date): Promise<ConversationRow> {
       const [row] = await db
         .insert(conversations)

@@ -5,6 +5,7 @@ import { isOpenStatus, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import { createApp } from "./app.ts";
 import { createDraftService } from "./app/draft-service.ts";
+import { createHandoffService } from "./app/handoff-service.ts";
 import {
   createContainer,
   type Container,
@@ -14,6 +15,7 @@ import {
 import { createConversationStore } from "./db/conversation-store.ts";
 import { openDatabase } from "./db/database.ts";
 import { createDraftStore } from "./db/draft-store.ts";
+import { createHandoffStore } from "./db/handoff-store.ts";
 import { createUserStore } from "./db/user-store.ts";
 import type { TicketGateway } from "./ports/ticket-gateway.ts";
 
@@ -67,7 +69,6 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
   const queriedOwners: string[] = [];
   const resultsByKey = new Map<string, TicketDto>();
   const ownedBy = (ownerId: string) => tickets.filter((ticket) => ticket.ownerId === ownerId);
-  const notYetSupported = () => Promise.reject(new Error("Escrita não usada nestes testes"));
 
   function findOwned(ownerId: string, number: string): TicketDto {
     const ticket = ownedBy(ownerId).find((candidate) => candidate.number === number);
@@ -132,29 +133,46 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
         ticket.resolvedAt = null;
         return ticket;
       }),
-    transferTicket: notYetSupported,
+    transferTicket: (ownerId, number, summary, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        ticket.status = "waiting_analyst";
+        ticket.updates.push({
+          author: "system",
+          message: `Transferido para um analista. Resumo: ${summary}`,
+          createdAt: new Date().toISOString(),
+        });
+        return ticket;
+      }),
   };
   return { ticketGateway, queriedOwners, tickets };
 }
 
 /**
- * Caso de uso de rascunhos sobre um banco em memória, com as pessoas de demonstração e uma
- * conversa já aberta para o funcionário (os rascunhos pertencem a uma conversa).
+ * Casos de uso que as tools do agent usam (rascunhos e transferência), sobre um banco em memória
+ * com as pessoas de demonstração e uma conversa já aberta para o funcionário.
  */
-export async function createTestDraftService(
+export async function createTestAgentServices(
   ticketGateway: TicketGateway,
   clock: Clock,
   employeeId = "emp-ana-souza",
 ) {
   const { db } = await openDatabase(":memory:");
   await createUserStore(db).upsertAll(DEMO_USERS);
-  const conversation = await createConversationStore(db).create(employeeId, clock.now());
+  const conversationStore = createConversationStore(db);
+  const conversation = await conversationStore.create(employeeId, clock.now());
   const draftService = createDraftService({
     draftStore: createDraftStore(db),
     ticketGateway,
     clock,
   });
-  return { draftService, conversationId: conversation.id };
+  const handoffService = createHandoffService({
+    conversationStore,
+    handoffStore: createHandoffStore(db),
+    ticketGateway,
+    clock,
+  });
+  return { draftService, handoffService, conversationStore, conversationId: conversation.id };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */
