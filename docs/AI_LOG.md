@@ -274,3 +274,26 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
      - checagens opcionais que falhavam abertas viraram origem explícita (botão ou chat) e conversa obrigatória;
      - o tipo do rascunho garante o chamado alvo do complemento.
 - **Lição:** a idempotência estava testada só em sequência. O revisor, sem o viés de quem escreveu, testou o caso simultâneo e achou a duplicação que a regra R01 existia para evitar. O registro também tinha uma afirmação que nenhum teste provava, e ela foi corrigida.
+
+---
+
+## T13: transferência para analista (30/10/2026)
+
+### 44. T13: o agent decide transferir, o código decide para onde e até quando
+- **IA gerou:**
+  - a tool `handoff_to_analyst`, em que o agent escreve o resumo (problema e o que já foi tentado, R17) e escolhe o motivo numa lista fixa (RN07);
+  - a máquina de estados da conversa, numa tabela só. A troca de estado é condicionada à versão: de duas transferências simultâneas, só uma passa (R06);
+  - a pausa por construção: com a conversa fora do modo agent, a mensagem do funcionário é gravada para o analista e o LLM nem é chamado (RN08);
+  - o histórico do agent com as mensagens do analista e os registros do sistema marcados, para o modelo não tomá-los como respostas dele (R18).
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - Com o sistema de chamados fora, a conversa vai para o analista mesmo assim, e o resultado avisa que o chamado não foi atualizado: falar com uma pessoa importa mais.
+  - Caso crítico transfere direto (A04): confirmar um chamado Crítico, pelo chat ou pelo botão, leva a conversa para o N2 no código, sem depender de o agent lembrar.
+  - O limiar numérico de confiança fica para a T14, junto com o classificador que produz a confiança. Na T13, o prompt manda perguntar antes de transferir por falta de segurança (R39).
+- **Erros pegos pelo Gemini real** (3 conversas, cerca de 10 chamadas da cota gratuita):
+  1. Ao transferir um chamado vencido, o modelo registrou o motivo "o funcionário pediu" e a conversa foi para o N1. O nível passou a ser decidido pelo chamado ligado (vencido ou crítico → N2), não só pelo motivo que o modelo escolhe. É o princípio do projeto: o LLM interpreta, o código garante.
+  2. O prazo de contato saiu "até 04/11", porque seguia os 3 dias úteis da prioridade Média, num chamado que já estava vencido. A suposição A02 foi revista: crítico, 1 hora; os demais, 4 horas úteis. O protótipo mostra "em até 2 h úteis", o que também aponta para um prazo curto.
+- **Validação final com o modelo real:**
+  - ofereceu um analista para o chamado vencido e transferiu para o N2 com o resumo certo;
+  - depois da transferência, ficou calado ("obrigada" não teve resposta do agent);
+  - "a VPN caiu para todo o Financeiro" virou rascunho Crítico e, confirmado, foi transferido sozinho para o N2, com contato em 1 hora.
+

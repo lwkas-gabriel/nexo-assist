@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T12 concluídas; próxima T13 (transferência para analista). Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T13 concluídas; próxima T14 (classificador e registro de decisão). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -150,7 +150,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 **Fase 3 — Agent**
 - [x] T11 Agent Mastra: prompt, tools de leitura (KB, meus chamados, chamado), escopo TI (RF12, RF13, RN10). Ajuste do prompt com o Gemini no plano gratuito (cota já conferida e tetos calibrados, ADR-0010) — **concluída**. Tools list_my_tickets e get_ticket com o funcionário vindo da sessão (falha fechada); prazo e datas calculados pelo domínio; prompt validado com o Gemini real (listar e perguntar qual, prazo vencido, recusa de chamado alheio, redirecionamento para o RH). Revisão adversarial independente: 9 achados (1 importante), todos corrigidos (AI_LOG 40).
 - [x] T12 Tools de proposta: rascunho, atualização, opções rápidas; endpoint de confirmação (RF06, RF07, RF14, RF15, RN04, RN05) — **concluída**. Caso de uso único para tools e botões; confirmação pelo chat validada pelo servidor (R04: rascunho desta conversa, pendente e mostrado antes do turno); chave de idempotência por rascunho (R01); botões confirmar/cancelar/editar sem LLM, registrados na conversa; prompt validado com o Gemini real (AI_LOG 41–42). Revisão adversarial independente: 9 achados (1 crítico: confirmações simultâneas duplicavam o chamado), todos corrigidos (AI_LOG 43). O card visual do rascunho fica na T19.
-- [ ] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08)
+- [x] T13 Transferência + pausa + resumo + confiança/limiar (RF16, RF17, RN07, RN08) — **concluída**. Tool `handoff_to_analyst` com resumo do agent (R17); nível (A03) e prazo de contato (A02, revista) calculados pelo código a partir do chamado ligado; troca de estado da conversa condicionada à versão (R06); agent pausado fora do modo agent (RN08); chamado crítico confirmado transfere sozinho (A04); histórico do agent com mensagens do analista marcadas (R18); prompt validado com o Gemini real (AI_LOG 44). **Desvio:** o limiar numérico de confiança depende do classificador e entra na T14; aqui, a baixa confiança é decidida pelo agent, que pergunta antes de transferir (R39). As rotas do console para assumir, devolver e encerrar ficam na T24, que é onde a tela delas nasce.
 - [ ] T14 Classificador estruturado (etapa 1) + registro de decisão por turno + confiança ajustada por sinais (RF04, RF05, R05, R09)
 - [ ] T15 Sessões: limite de 30 mensagens, fim por inatividade, resumo e herança de pendências na nova sessão (RF10, RF11, RN14, A05, R03)
 - [ ] T16 Rate limit e teto de custo (RT10, RT13, A13)
