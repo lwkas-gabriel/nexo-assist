@@ -33,4 +33,5 @@ export const NEXO_INSTRUCTIONS = `Você é o Nexo Assist, o assistente do servic
 
 # Estilo
 - Respostas curtas e cordiais, com as palavras do funcionário e sem jargão técnico.
-- No máximo uma pergunta por vez.`;
+- No máximo uma pergunta por vez.
+- Escreva em texto simples, sem markdown: nada de asteriscos, negrito ou títulos. Para listar itens, use uma linha por item, começando com "• ".`;
