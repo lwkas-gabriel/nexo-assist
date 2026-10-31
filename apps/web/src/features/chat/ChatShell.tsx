@@ -6,6 +6,8 @@ import { IconButton } from "../../ui/IconButton.tsx";
 import { Pill } from "../../ui/Pill.tsx";
 import { CONVERSATION_MODE_TONES } from "../../ui/status-styles.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
+import { PAGE_HREFS, type EmployeePage } from "../../lib/use-hash-page.ts";
+import { cx } from "../../ui/cx.ts";
 import type { AnalystView } from "./chat-api.ts";
 import { NexoMark } from "../auth/NexoMark.tsx";
 
@@ -22,6 +24,8 @@ const MODE_LABELS: Record<ConversationMode, string> = {
 
 type ChatShellProps = {
   user: CurrentUser;
+  /** Atendimento ou "Meu perfil" (10.3): a navegação marca a atual e o título acompanha. */
+  page: EmployeePage;
   mode: ConversationMode;
   /** Quem atende, com a conversa num analista: a pílula diz o nome e o setor (R27). */
   analyst: AnalystView | null;
@@ -36,6 +40,7 @@ type ChatShellProps = {
  */
 export function ChatShell({
   user,
+  page,
   mode,
   analyst,
   isLoggingOut,
@@ -60,27 +65,14 @@ export function ChatShell({
         </div>
         <ul className="mt-[22px] flex flex-col gap-0.5">
           <li>
-            <a
-              href="/"
-              aria-current="page"
-              title="Atendimento"
-              className="flex h-9 items-center gap-2.5 rounded-md bg-primary-soft px-2.5 text-[13.5px] font-semibold text-primary-text"
-            >
+            <NavLink href={PAGE_HREFS.chat} isCurrent={page === "chat"} label="Atendimento">
               <MessageSquare size={16} aria-hidden />
-              <span className="hidden lg:inline">Atendimento</span>
-            </a>
+            </NavLink>
           </li>
           <li>
-            {/* A tela "Meu perfil" chega na T25. */}
-            <span
-              aria-disabled="true"
-              title="Meu perfil (em breve)"
-              className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-ink-3"
-            >
+            <NavLink href={PAGE_HREFS.profile} isCurrent={page === "profile"} label="Meu perfil">
               <UserRound size={16} aria-hidden />
-              <span className="hidden lg:inline">Meu perfil</span>
-              <span className="sr-only">(em breve)</span>
-            </span>
+            </NavLink>
           </li>
         </ul>
         <div className="flex-1" />
@@ -113,7 +105,7 @@ export function ChatShell({
             <span className="hidden text-ink-3 md:inline">Service desk de TI</span>
             <ChevronRight size={14} aria-hidden className="hidden text-ink-3 md:block" />
             {/* O título da página; no celular, só para o leitor de tela (a marca ocupa o topo). */}
-            <h1 className="sr-only font-semibold text-ink md:not-sr-only">Atendimento</h1>
+            <h1 className="sr-only font-semibold text-ink md:not-sr-only">{PAGE_TITLES[page]}</h1>
           </div>
           {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta). */}
           <span role="status">
@@ -121,6 +113,18 @@ export function ChatShell({
               {modeLabel}
             </Pill>
           </span>
+          {/* No celular, a barra do topo faz o papel da lateral: perfil (ou volta) e sair. */}
+          <a
+            href={page === "chat" ? PAGE_HREFS.profile : PAGE_HREFS.chat}
+            aria-label={page === "chat" ? "Meu perfil" : "Voltar ao atendimento"}
+            className="flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-desk md:hidden"
+          >
+            {page === "chat" ? (
+              <UserRound size={16} aria-hidden />
+            ) : (
+              <MessageSquare size={16} aria-hidden />
+            )}
+          </a>
           <IconButton
             label="Sair"
             icon={<LogOut size={16} />}
@@ -132,5 +136,43 @@ export function ChatShell({
         {children}
       </div>
     </div>
+  );
+}
+
+const PAGE_TITLES: Record<EmployeePage, string> = {
+  chat: "Atendimento",
+  profile: "Meu perfil",
+};
+
+function NavLink({
+  href,
+  isCurrent,
+  label,
+  children,
+}: {
+  href: string;
+  isCurrent: boolean;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      aria-current={isCurrent ? "page" : undefined}
+      aria-label={label}
+      title={label}
+      className={cx(
+        "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13.5px]",
+        isCurrent
+          ? "bg-primary-soft font-semibold text-primary-text"
+          : "font-medium text-ink-2 hover:bg-desk",
+      )}
+    >
+      {children}
+      {/* No trilho (tablet), só o ícone: o nome vem do aria-label. */}
+      <span aria-hidden className="hidden lg:inline">
+        {label}
+      </span>
+    </a>
   );
 }

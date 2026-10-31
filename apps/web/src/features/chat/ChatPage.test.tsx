@@ -698,4 +698,23 @@ describe("tela do chat (tela 2)", () => {
       }
     });
   });
+
+  describe("navegação para Meu perfil (T25, 10.3)", () => {
+    it("o link da navegação abre o perfil e marca a página atual; voltar reabre o chat", async () => {
+      window.location.hash = "";
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      await screen.findByLabelText("Mensagem para o Nexo");
+
+      await userEvent.click(screen.getAllByRole("link", { name: "Meu perfil" })[0] as HTMLElement);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Meu perfil" })).toBeDefined();
+      expect(
+        screen.getAllByRole("link", { name: "Meu perfil" })[0]?.getAttribute("aria-current"),
+      ).toBe("page");
+      await userEvent.click(screen.getAllByRole("link", { name: "Atendimento" })[0] as HTMLElement);
+      expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+      window.location.hash = "";
+    });
+  });
 });

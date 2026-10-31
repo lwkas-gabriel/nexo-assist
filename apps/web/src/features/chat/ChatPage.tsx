@@ -32,6 +32,8 @@ import {
   sessionSummaryIndex,
   textOf,
 } from "./chat-model.ts";
+import { useHashPage } from "../../lib/use-hash-page.ts";
+import { ProfilePage } from "../profile/ProfilePage.tsx";
 import { ChatShell } from "./ChatShell.tsx";
 import { DecisionPanel } from "./components/DecisionPanel.tsx";
 import { decisionOf } from "./decision-model.ts";
@@ -76,16 +78,20 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       (query.state.data?.conversation?.mode ?? "agent") === "agent" ? false : ANALYST_POLL_MS,
   });
   const mode = conversation.data?.conversation?.mode ?? "agent";
+  const page = useHashPage();
 
   return (
     <ChatShell
       user={user}
+      page={page}
       mode={mode}
       analyst={conversation.data?.conversation?.analyst ?? null}
       isLoggingOut={isLoggingOut}
       onLogout={onLogout}
     >
-      {conversation.isPending ? (
+      {page === "profile" ? (
+        <ProfilePage user={user} />
+      ) : conversation.isPending ? (
         <div
           aria-busy="true"
           aria-label="Carregando sua conversa"
