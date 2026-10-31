@@ -40,6 +40,7 @@ describe("registro de decisão na tela (RF05)", () => {
   it("os passos usam o texto dos chips; os botões aparecem pelo nome", () => {
     expect(stepLabel("search_knowledge_base")).toBe("buscou na central de ajuda");
     expect(stepLabel("draft_button")).toBe("botão do card do rascunho");
+    expect(stepLabel("decline_button")).toBe('botão "Não, obrigado"');
   });
 
   it("a frase da confiança diz quem decidiu, sem inventar nota do classificador", () => {

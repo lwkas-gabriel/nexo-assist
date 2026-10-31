@@ -27,6 +27,8 @@
 | Em andamento, Aprovado, Em atendimento, Agent atendendo, Você está atendendo | primary/neutro |
 | Resolvido, Resolvida pelo agent | neutro (ink-3) |
 
+**Desvio na tela 3 (T21), seguindo o protótipo:** no chat do funcionário, o status do chamado fica na cor do próprio status (o ponto e o texto), e o vencimento aparece escrito: no card, "há N dias" em warning e "· prazo vencido" em ink-3, como no `nexo.pen`; na lista de chamados, "· prazo vencido" em warning, para o vencido se destacar entre os outros. O danger de "prazo vencido" da tabela fica para o console (T23), onde o analista prioriza.
+
 ### 10.3 Rotas e telas
 | Rota | Tela | Papel |
 |---|---|---|

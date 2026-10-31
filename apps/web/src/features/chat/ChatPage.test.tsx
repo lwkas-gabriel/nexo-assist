@@ -287,14 +287,24 @@ describe("tela do chat (tela 2)", () => {
 
   describe("tela 3: escolher um chamado e a oferta de analista (RF08, RF09, RN07)", () => {
     /** Conversa com a resposta dada e a api que guarda o corpo de cada POST. */
-    function stubWithBodies(messages: ConversationView["messages"]) {
+    function stubWithBodies(
+      messages: ConversationView["messages"],
+      base: ConversationView = conversationAt("agent", false),
+      failingPost?: string,
+    ) {
       const posts: { path: string; body: unknown }[] = [];
       vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
         if (init?.method === "POST") {
           const body = typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : null;
           posts.push({ path: input, body });
+          if (input === failingPost) {
+            const error = {
+              error: { code: "CONFLICT", message: "Essa oferta não está mais valendo." },
+            };
+            return Promise.resolve(new Response(JSON.stringify(error), { status: 409 }));
+          }
         }
-        const view = { ...conversationAt("agent", false), messages };
+        const view = { ...base, messages };
         const body = input === "/api/chat" ? view : {};
         return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
       });
@@ -374,6 +384,68 @@ describe("tela do chat (tela 2)", () => {
 
       await screen.findByText("Em dia.");
       expect(screen.queryByRole("button", { name: "Não, obrigado" })).toBeNull();
+    });
+
+    it("lista e chamado consultados no mesmo turno: o card basta, sem seletor", async () => {
+      const both = agentWithTool(
+        "a-1",
+        "get_ticket",
+        { ok: true, ticket: overdueTicket },
+        "Venceu.",
+      );
+      both.parts.unshift({
+        type: "tool-list_my_tickets",
+        toolCallId: "c-list",
+        state: "output-available",
+        input: {},
+        output: { ok: true, tickets: [overdueTicket, onTimeTicket] },
+      });
+      stubWithBodies([both]);
+      renderChat();
+
+      await screen.findByRole("region", { name: "Chamado INC-20311" });
+      expect(screen.queryByRole("list", { name: "Seus chamados" })).toBeNull();
+    });
+
+    it("RN14: no limite da sessão, a oferta não tem Adicionar informação", async () => {
+      stubWithBodies(
+        [agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu.")],
+        conversationAt("agent", true),
+      );
+      renderChat();
+
+      await screen.findByRole("button", { name: "Não, obrigado" });
+      expect(screen.queryByRole("button", { name: "Adicionar informação" })).toBeNull();
+    });
+
+    it("RN08: com a conversa no analista, nem oferta nem seletor", async () => {
+      stubWithBodies(
+        [
+          agentWithTool("a-1", "list_my_tickets", { ok: true, tickets: [onTimeTicket] }),
+          agentWithTool("a-2", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+        ],
+        conversationAt("analyst", false),
+      );
+      renderChat();
+
+      await screen.findByText("Venceu.");
+      expect(screen.queryByRole("button", { name: "Não, obrigado" })).toBeNull();
+      expect(screen.getByRole("button", { name: /INC-20298/ })).toHaveProperty("disabled", true);
+    });
+
+    it("o erro de uma ação aparece na resposta em que ela foi feita", async () => {
+      stubWithBodies(
+        [agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu.")],
+        conversationAt("agent", false),
+        "/api/chat/actions/decline-offer",
+      );
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Não, obrigado" }));
+
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Essa oferta não está mais valendo.",
+      );
     });
   });
 });

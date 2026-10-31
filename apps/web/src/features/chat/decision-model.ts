@@ -46,6 +46,7 @@ const CODE_STEP_LABELS: Record<string, string> = {
   draft_button: "botão do card do rascunho",
   analyst_button: 'botão "Falar com um analista"',
   ticket_selection: "escolha na lista de chamados",
+  decline_button: 'botão "Não, obrigado"',
 };
 
 /** "O que fiz": o mesmo texto do chip, ou o nome do botão quando a ação foi do código. */

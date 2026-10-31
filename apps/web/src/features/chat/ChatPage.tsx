@@ -150,7 +150,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
 
   // Tela 3: escolher um chamado e responder à oferta de analista, sem o modelo (11.5).
   const ticketAction = useMutation({
-    mutationFn: (run: () => Promise<unknown>) => run(),
+    mutationFn: ({ run }: { messageId: string; run: () => Promise<unknown> }) => run(),
     onSuccess: async () => {
       await refresh();
       composerRef.current?.focus();
@@ -164,7 +164,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
   }, [composerSeed]);
-  const suggest = (action: SuggestedAction, ticket: TicketSummaryView) => {
+  const suggest = (messageId: string, action: SuggestedAction, ticket: TicketSummaryView) => {
     if (action === "add_info") {
       setComposerSeed((seed) => ({
         key: seed.key + 1,
@@ -172,14 +172,22 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
       }));
       return;
     }
-    ticketAction.mutate(() =>
-      action === "analyst" ? requestAnalyst(ticket.number) : declineOffer(ticket.number),
-    );
+    ticketAction.mutate({
+      messageId,
+      run: () =>
+        action === "analyst" ? requestAnalyst(ticket.number) : declineOffer(ticket.number),
+    });
   };
   const ticketActions: TicketActions = {
     isWorking: ticketAction.isPending || isBusy,
-    error: ticketAction.error ? ticketAction.error.message : null,
-    select: (ticket) => ticketAction.mutate(() => selectTicket(ticket.number)),
+    errorFor: (messageId) =>
+      ticketAction.error && ticketAction.variables?.messageId === messageId
+        ? ticketAction.error.message
+        : null,
+    // RN14: no limite, não há campo de mensagem para completar.
+    canAddInfo: !(mode === "agent" && view.session?.isAtLimit === true),
+    select: (messageId, ticket) =>
+      ticketAction.mutate({ messageId, run: () => selectTicket(ticket.number) }),
     suggest,
   };
 
@@ -282,7 +290,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
                       decisionPanelId={decisionPanelId}
                       onPickOption={pickOption}
                       draftActions={draftActions}
-                      isLatestAgentTurn={message === lastMessage && !isBusy && mode === "agent"}
+                      isLatestAgentTurn={message === lastMessage && mode === "agent"}
                       ticketActions={ticketActions}
                     />
                   </MessageWithSummary>
@@ -342,7 +350,8 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
               key={composerSeed.key}
               initialText={composerSeed.text}
               ref={composerRef}
-              isBusy={isBusy}
+              // A ação de um chamado também grava na conversa: o campo espera ela terminar.
+              isBusy={isBusy || ticketAction.isPending}
               onSend={send}
               onPickOption={pickOption}
               counter={{

@@ -19,9 +19,11 @@ import { QuickOptions } from "./QuickOptions.tsx";
 /** Tela 3: escolher um chamado da lista e responder à oferta de analista (11.5, sem o modelo). */
 export type TicketActions = {
   isWorking: boolean;
-  error: string | null;
-  select: (ticket: TicketSummaryView) => void;
-  suggest: (action: SuggestedAction, ticket: TicketSummaryView) => void;
+  /** O erro da última ação, só na resposta em que ela foi feita. */
+  errorFor: (messageId: string) => string | null;
+  canAddInfo: boolean;
+  select: (messageId: string, ticket: TicketSummaryView) => void;
+  suggest: (messageId: string, action: SuggestedAction, ticket: TicketSummaryView) => void;
 };
 
 export type DraftActions = {
@@ -50,8 +52,9 @@ type MessageBubbleProps = {
   /** Id do painel de detalhe (aria-controls do botão). */
   decisionPanelId: string;
   /**
-   * A resposta mais recente, com o agent livre e a conversa com ele: só ela aceita escolher um
-   * chamado ou responder à oferta de analista; as antigas ficam como registro.
+   * A resposta mais recente, com a conversa com o agent: só ela mostra a oferta de analista e
+   * aceita escolher um chamado; as antigas ficam como registro. Enquanto o agent responde, a
+   * mais recente passa a ser a nova, e a oferta antiga some de uma vez.
    */
   isLatestAgentTurn: boolean;
   ticketActions: TicketActions;
@@ -122,8 +125,10 @@ function AgentMessage({
   const hasDecision = useMemo(() => decisionOf(message) !== undefined, [message]);
   const proposal = proposedDraft(message);
   const draft = proposal ? liveDraft(proposal, drafts) : undefined;
-  const listed = listedTicketsOf(message);
   const consulted = consultedTicketOf(message);
+  // Com o chamado já consultado no mesmo turno, a lista vira só o caminho até ele: nada a escolher.
+  const listed = consulted ? undefined : listedTicketsOf(message);
+  const actionError = ticketActions.errorFor(message.id);
   const offersAnalyst = consulted !== undefined && isOverdueAndOpen(consulted);
   const canAct = isLatestAgentTurn && !ticketActions.isWorking;
 
@@ -144,10 +149,11 @@ function AgentMessage({
           {options && (
             <QuickOptions data={options} isActive={optionsActive} onPick={onPickOption} />
           )}
-          {offersAnalyst && (isLatestAgentTurn || ticketActions.isWorking) && (
+          {offersAnalyst && isLatestAgentTurn && (
             <SuggestedActions
               isActive={canAct}
-              onAction={(action) => ticketActions.suggest(action, consulted)}
+              canAddInfo={ticketActions.canAddInfo}
+              onAction={(action) => ticketActions.suggest(message.id, action, consulted)}
             />
           )}
         </div>
@@ -156,12 +162,12 @@ function AgentMessage({
         <TicketPickerList
           tickets={listed}
           isActive={canAct}
-          onSelect={(ticket) => ticketActions.select(ticket)}
+          onSelect={(ticket) => ticketActions.select(message.id, ticket)}
         />
       )}
-      {isLatestAgentTurn && ticketActions.error && (listed || offersAnalyst) && (
+      {actionError && (
         <p role="alert" className="text-[13px] text-danger-text">
-          {ticketActions.error}
+          {actionError}
         </p>
       )}
       {draft && (

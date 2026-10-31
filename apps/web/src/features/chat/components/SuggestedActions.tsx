@@ -14,14 +14,20 @@ const ACTION_LABELS: Record<SuggestedAction, string> = {
  */
 export function SuggestedActions({
   isActive,
+  canAddInfo,
   onAction,
 }: {
   isActive: boolean;
+  /** No limite da sessão (RN14) não há campo de mensagem: "Adicionar informação" some. */
+  canAddInfo: boolean;
   onAction: (action: SuggestedAction) => void;
 }) {
+  const actions = (Object.keys(ACTION_LABELS) as SuggestedAction[]).filter(
+    (action) => action !== "add_info" || canAddInfo,
+  );
   return (
     <ul aria-label="O que fazer agora" className="flex flex-wrap gap-1.5">
-      {(Object.keys(ACTION_LABELS) as SuggestedAction[]).map((action) => (
+      {actions.map((action) => (
         <li key={action}>
           <button
             type="button"

@@ -59,8 +59,3 @@ const PRIORITY_DOT_CLASSES: Record<string, string> = {
 export function priorityDotClass(priorityLabel: string): string {
   return PRIORITY_DOT_CLASSES[priorityLabel] ?? "bg-ink-3";
 }
-
-/** Prazo vencido é sempre perigo, qualquer que seja o status (RN12). */
-export function ticketTone(status: TicketStatus, isOverdue: boolean): Tone {
-  return isOverdue ? "danger" : TICKET_STATUS_TONES[status];
-}
