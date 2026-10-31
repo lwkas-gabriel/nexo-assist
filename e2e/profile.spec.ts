@@ -8,9 +8,9 @@ test("o funcionário abre o perfil e volta ao atendimento", async ({ page }) => 
   await page.getByRole("link", { name: "Meu perfil" }).click();
 
   await expect(page.getByRole("heading", { name: "Meu perfil", level: 2 })).toBeVisible();
-  await expect(
-    page.getByText(ANA_EMAIL, { exact: true }).filter({ visible: true }).first(),
-  ).toBeVisible();
+  // Só os dados do perfil: no desktop o mesmo e-mail também aparece no rodapé da lateral.
+  await expect(page.locator("dl").getByText(ANA_EMAIL, { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Mensagem para o Nexo" })).toBeHidden();
   await page.getByRole("button", { name: "Redefinir senha" }).click();
   await expect(page.getByText(/qualquer senha entra/)).toBeVisible();
   await page.goBack();
