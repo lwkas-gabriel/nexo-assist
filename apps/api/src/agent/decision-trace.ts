@@ -58,8 +58,16 @@ function readOutput(output: unknown): ToolOutput {
   return toolOutputSchema.safeParse(output).data ?? {};
 }
 
+/** Respostas "ok: false" que são o caminho normal da conversa, e não uma falha. */
+const EXPECTED_OUTCOMES: Record<string, string> = {
+  incomplete: "pediu as informações que faltam",
+  possible_duplicate: "apontou chamado parecido",
+};
+
 function describeOutcome(tool: string, output: ToolOutput, failed: boolean): string {
   if (failed) return "falhou";
+  const expected = output.reason ? EXPECTED_OUTCOMES[output.reason] : undefined;
+  if (expected) return expected;
   if (output.ok === false) return `não concluiu (${output.reason ?? "sem motivo"})`;
   if (tool === "search_knowledge_base")
     return `${output.articles?.length ?? 0} artigo(s) encontrado(s)`;
@@ -106,9 +114,10 @@ export function buildDecisionTrace(
     const tool = getToolName(part);
     const failed = part.state === "output-error";
     const output = part.state === "output-available" ? readOutput(part.output) : {};
+    const isExpected = output.reason !== undefined && output.reason in EXPECTED_OUTCOMES;
     steps.push({
       tool,
-      ok: !failed && output.ok !== false,
+      ok: !failed && (output.ok !== false || isExpected),
       outcome: describeOutcome(tool, output, failed),
     });
     rules.push(...rulesOf(output));

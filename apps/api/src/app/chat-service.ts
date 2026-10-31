@@ -28,6 +28,8 @@ import type { DraftService } from "./draft-service.ts";
 const HISTORY_WINDOW = 40;
 /** Quantas mensagens anteriores o classificador vê: só o bastante para entender a nova. */
 const CLASSIFIER_CONTEXT = 6;
+/** A partir daqui a confiança é alta; entre o limiar e isto, média (como no prompt do classificador). */
+const HIGH_CONFIDENCE = 0.8;
 
 type ChatServiceDependencies = {
   mastra: Mastra;
@@ -75,15 +77,6 @@ export function createChatService({
       throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
     }
     return result.data;
-  }
-
-  /** O registro de decisão não pode derrubar a resposta, que já chegou ao funcionário. */
-  async function recordDecision(outcome: Parameters<DecisionService["record"]>[0]) {
-    try {
-      await decisionService.record(outcome);
-    } catch (error) {
-      console.error("Falha ao gravar o registro de decisão do turno", error);
-    }
   }
 
   return {
@@ -148,16 +141,28 @@ export function createChatService({
           parts: [{ type: "text", text }],
           createdAt: turnStartedAt,
         });
-        // R39: segunda mensagem seguida sem dar para entender vai para um analista, sem o agent.
-        const escalation = await decisionService.escalateLowConfidence({
+        // A classificação leva segundos: a conversa pode ter sido transferida nesse meio-tempo
+        // (por exemplo, um chamado crítico confirmado pelo botão). Aí a mensagem fica para o
+        // analista e o agent não responde (RN08).
+        const current = await conversationStore.findById(conversation.id);
+        if (!current || !agentMayReply(current.mode)) {
+          release();
+          return createUIMessageStream({ execute: () => undefined });
+        }
+        const turn = {
           employeeId: employee.id,
           conversationId: conversation.id,
+          conversationVersion: current.version,
           classification,
           startedAt: turnStartedAt,
-        });
-        if (escalation) {
+        };
+        // R39: segunda mensagem seguida sem dar para entender vai para um analista, sem o agent.
+        const route = await decisionService.routeTurn(turn);
+        if (route.kind !== "agent") {
           release();
-          return systemNoticeStream(escalation.notice);
+          return route.kind === "escalated"
+            ? systemNoticeStream(route.notice)
+            : createUIMessageStream({ execute: () => undefined });
         }
 
         const history = await loadHistory(conversation.id, toAgentHistoryMessage);
@@ -201,13 +206,10 @@ export function createChatService({
                 });
                 // R04: só o rascunho que a resposta gravada mostra ("D-12") conta como visto.
                 await draftService.markShownInReply(conversation.id, textOf(responseMessage));
-                await recordDecision({
-                  employeeId: employee.id,
-                  conversationId: conversation.id,
+                await decisionService.record({
+                  ...turn,
                   messageId: saved.id,
                   response: responseMessage,
-                  classification,
-                  startedAt: turnStartedAt,
                 });
               }
             } finally {
@@ -249,10 +251,18 @@ function toTranscriptLine(row: MessageRow): TranscriptLine {
   return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row)) };
 }
 
-/** A classificação da etapa 1 como o agent a recebe (R05). */
+/** Faixas de confiança com os mesmos nomes do prompt do classificador. */
+function confidenceLevel(confidence: number): string {
+  if (confidence < LOW_CONFIDENCE_THRESHOLD) return "baixa";
+  return confidence < HIGH_CONFIDENCE ? "média" : "alta";
+}
+
+/**
+ * A classificação da etapa 1 como o agent a recebe (R05). Só intenção e confiança: o "entendido"
+ * parafraseia o texto do funcionário e não pode entrar no contexto de sistema do agent.
+ */
 function describeClassification({ classification }: ClassificationResult): string {
-  const level = classification.confidence < LOW_CONFIDENCE_THRESHOLD ? "baixa" : "alta";
-  return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; entendido: "${classification.understood}"; confiança ${level} (${classification.confidence}).`;
+  return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; confiança ${confidenceLevel(classification.confidence)} (${classification.confidence}).`;
 }
 
 function authorMetadata(message: UIMessage): Record<string, unknown> {

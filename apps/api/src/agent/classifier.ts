@@ -33,14 +33,15 @@ export const INTENT_LABELS: Record<Intent, string> = {
   unclear: "não ficou claro",
 };
 
+/** Até onde o "entendido" e o "porquê" ficam no registro. */
 const TEXT_MAX_CHARS = 300;
 
 export const classificationSchema = z.object({
   intent: z.enum(INTENTS),
   understood: z
     .string()
-    .max(TEXT_MAX_CHARS)
-    .describe("O que o funcionário quer, em uma frase, nas palavras dele"),
+    .min(1)
+    .describe("O que o funcionário quer, em uma frase curta, nas palavras dele"),
   extracted: z
     .object({
       ticketNumber: z.string().max(40).optional(),
@@ -54,7 +55,7 @@ export const classificationSchema = z.object({
     .min(0)
     .max(1)
     .describe("De 0 a 1: quanto a mensagem deixa claro o que fazer"),
-  reason: z.string().max(TEXT_MAX_CHARS).describe("Por que essa intenção e essa confiança"),
+  reason: z.string().describe("Por que essa intenção e essa confiança, em uma frase"),
 });
 export type Classification = z.infer<typeof classificationSchema>;
 
@@ -109,6 +110,10 @@ function toPrompt(previous: TranscriptLine[], newMessage: string): string {
   return `Conversa recente:\n${context || "(início da conversa)"}\n\nMensagem nova do funcionário: ${newMessage}`;
 }
 
+function truncate(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
+}
+
 export function createClassifier(model: MastraModelConfig) {
   const agent = new Agent({
     id: "nexo-classifier",
@@ -127,7 +132,13 @@ export function createClassifier(model: MastraModelConfig) {
         const result = await agent.generate(toPrompt(previous, newMessage), {
           structuredOutput: { schema: classificationSchema },
         });
-        const classification = classificationSchema.parse(result.object);
+        const parsed = classificationSchema.parse(result.object);
+        // Texto longo é cortado, não descartado: perder a classificação por isso seria desperdício.
+        const classification = {
+          ...parsed,
+          understood: truncate(parsed.understood, TEXT_MAX_CHARS),
+          reason: truncate(parsed.reason, TEXT_MAX_CHARS),
+        };
         return { ok: true, classification, tokens: result.usage.totalTokens };
       } catch (error) {
         console.error("Classificador falhou; o turno segue só com o agent", error);

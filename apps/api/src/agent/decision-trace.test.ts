@@ -113,6 +113,10 @@ describe("registro de decisão (RF05, R09)", () => {
     );
 
     expect(one.signals).toEqual([]);
+    // Apontar duplicado é o caminho normal: o passo aparece como concluído, não como falha.
+    expect(one.steps).toEqual([
+      { tool: "propose_ticket_draft", ok: true, outcome: "apontou chamado parecido" },
+    ]);
     expect(several.signals).toMatchObject([{ code: "several_duplicates" }]);
   });
 

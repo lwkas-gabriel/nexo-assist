@@ -24,6 +24,12 @@ export const NEXO_AGENT_ID = "nexo-assist";
 const MODEL_MAX_RETRIES = 1;
 
 /**
+ * No máximo 3 chamadas ao modelo por resposta (ex.: duas tools e a resposta). Com o classificador,
+ * são até 4 por mensagem, a conta dos tetos de uso do ADR-0010.
+ */
+export const AGENT_MAX_STEPS = 3;
+
+/**
  * A chave vem do config.ts (nunca lida aqui de process.env), passada explicitamente ao Mastra.
  * No modo mock, um modelo falso roteirizado substitui o Gemini.
  */
@@ -66,6 +72,7 @@ export function createNexoAgent({
       [HANDOFF_TO_ANALYST_TOOL_ID]: createHandoffTool({ handoffService }),
     },
     defaultOptions: {
+      maxSteps: AGENT_MAX_STEPS,
       // Raciocínio baixo: chat de service desk não precisa de raciocínio longo; menos tokens
       // por chamada rende mais dentro da cota gratuita e responde mais rápido (ADR-0010).
       providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },

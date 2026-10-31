@@ -3,6 +3,10 @@ import { transferTicketRequestSchema, type TicketDto } from "@nexo/shared/contra
 import { DEMO_USERS } from "@nexo/shared/demo";
 import { isOpenStatus, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
+import type { LanguageModelV4Prompt } from "@ai-sdk/provider";
+import { MockLanguageModelV4 } from "ai/test";
+import { CLASSIFIER_MARKER } from "./agent/classifier.ts";
+import { createMockModel } from "./agent/mock-model.ts";
 import { createApp } from "./app.ts";
 import { createDraftService } from "./app/draft-service.ts";
 import { createHandoffService } from "./app/handoff-service.ts";
@@ -184,6 +188,28 @@ export async function createTestAgentServices(
     conversationStore,
     conversationId: conversation.id,
   };
+}
+
+/**
+ * Modelo de teste que deixa o teste agir na chamada do classificador (etapa 1): simular algo que
+ * acontece enquanto ele pensa, ou fazê-lo falhar. As demais chamadas seguem o roteiro de sempre.
+ */
+export function mockModelWithClassifier(onClassifier: () => Promise<void> | void) {
+  const scripted = createMockModel();
+  const isClassifierCall = (prompt: LanguageModelV4Prompt) =>
+    prompt.some(
+      (message) => message.role === "system" && message.content.includes(CLASSIFIER_MARKER),
+    );
+  return new MockLanguageModelV4({
+    doGenerate: async (options) => {
+      if (isClassifierCall(options.prompt)) await onClassifier();
+      return scripted.doGenerate(options);
+    },
+    doStream: async (options) => {
+      if (isClassifierCall(options.prompt)) await onClassifier();
+      return scripted.doStream(options);
+    },
+  });
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */

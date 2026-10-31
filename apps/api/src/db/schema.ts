@@ -120,6 +120,8 @@ export const decisionTraces = sqliteTable("decision_traces", {
     .references(() => conversations.id, { onDelete: "cascade" }),
   trace: text("trace").notNull(),
   finalConfidence: real("final_confidence").notNull(),
+  classifierConfidence: real("classifier_confidence"),
+  conversationVersion: integer("conversation_version"),
   classifierTokens: integer("classifier_tokens"),
   latencyMs: integer("latency_ms").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),

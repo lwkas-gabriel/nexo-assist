@@ -19,12 +19,20 @@ type DecisionServiceDependencies = {
 export type TurnOutcome = {
   employeeId: string;
   conversationId: string;
+  /** Versão da conversa no turno: muda a cada transferência ou devolução. */
+  conversationVersion: number;
   /** A resposta do agent, já gravada. */
   messageId: string;
   response: UIMessage;
   classification: ClassificationResult;
   startedAt: Date;
 };
+
+/** O que o turno faz depois da etapa 1: o agent responde, o código transfere ou a conversa já saiu do agent. */
+export type TurnRoute =
+  { kind: "agent" } | { kind: "escalated"; notice: string } | { kind: "paused" };
+
+const isLow = (confidence: number) => confidence < LOW_CONFIDENCE_THRESHOLD;
 
 /**
  * Registro de decisão de cada turno (RF05) e o limiar de confiança (R39): com confiança baixa, o
@@ -42,6 +50,7 @@ export function createDecisionService({
     await decisionStore.create({
       messageId: outcome.messageId,
       conversationId: outcome.conversationId,
+      conversationVersion: outcome.conversationVersion,
       trace,
       classifierTokens: outcome.classification.ok ? (outcome.classification.tokens ?? null) : null,
       latencyMs: now.getTime() - outcome.startedAt.getTime(),
@@ -49,22 +58,80 @@ export function createDecisionService({
     });
   }
 
+  /** O registro não pode derrubar a resposta, que já foi dada (ou o aviso, já gravado). */
+  async function saveSafely(outcome: TurnOutcome, trace: DecisionTrace) {
+    try {
+      await save(outcome, trace);
+    } catch (error) {
+      console.error("Falha ao gravar o registro de decisão do turno", error);
+    }
+  }
+
   return {
     async record(outcome: TurnOutcome): Promise<DecisionTrace> {
       const trace = buildDecisionTrace(outcome.classification, outcome.response);
-      await save(outcome, trace);
+      await saveSafely(outcome, trace);
       return trace;
     },
 
     /**
-     * R39: segunda mensagem seguida com confiança baixa vai para um analista, sem o agent.
-     * Devolve o aviso que o funcionário recebe, ou null se o agent deve responder normalmente.
+     * Botão da tela (confirmar, cancelar, editar): ação determinística, sem LLM, com confiança 100%
+     * (11.5, ADR-0006). Conta como turno para o limiar: um clique no meio zera a sequência.
      */
-    async escalateLowConfidence(turn: Omit<TurnOutcome, "messageId" | "response">) {
+    async recordButtonAction(action: {
+      conversationId: string;
+      conversationVersion: number;
+      messageId: string;
+      description: string;
+      at: Date;
+    }) {
+      const classification: ClassificationResult = {
+        ok: true,
+        tokens: undefined,
+        classification: {
+          intent: "confirm_draft",
+          understood: action.description,
+          extracted: {},
+          confidence: 1,
+          reason: "Ação pelo botão do card: determinística, sem passar pelo LLM.",
+        },
+      };
+      const response: UIMessage = {
+        id: action.messageId,
+        role: "assistant",
+        parts: [{ type: "text", text: action.description }],
+      };
+      const trace = buildDecisionTrace(classification, response, {
+        steps: [{ tool: "draft_button", ok: true, outcome: action.description }],
+        rules: ["11.5: ação do card tratada pelo código, sem o LLM"],
+      });
+      await saveSafely(
+        {
+          employeeId: "",
+          conversationId: action.conversationId,
+          conversationVersion: action.conversationVersion,
+          messageId: action.messageId,
+          response,
+          classification,
+          startedAt: action.at,
+        },
+        trace,
+      );
+    },
+
+    /**
+     * R39: depois da etapa 1, decide quem responde. Segunda mensagem seguida com o classificador
+     * em confiança baixa (a mesma medida que o agent recebe, no mesmo período com o agent) vai
+     * para um analista, sem o agent.
+     */
+    async routeTurn(turn: Omit<TurnOutcome, "messageId" | "response">): Promise<TurnRoute> {
       const { classification } = turn.classification;
-      if (classification.confidence >= LOW_CONFIDENCE_THRESHOLD) return null;
-      const previous = await decisionStore.latestConfidence(turn.conversationId);
-      if (previous === undefined || previous >= LOW_CONFIDENCE_THRESHOLD) return null;
+      if (!turn.classification.ok || !isLow(classification.confidence)) return { kind: "agent" };
+      const previous = await decisionStore.previousClassifierConfidence(
+        turn.conversationId,
+        turn.conversationVersion,
+      );
+      if (previous === undefined || !isLow(previous)) return { kind: "agent" };
 
       let transfer: Awaited<ReturnType<HandoffService["transfer"]>>;
       try {
@@ -79,8 +146,8 @@ export function createDecisionService({
           },
         });
       } catch (error) {
-        // Outra ação já tirou a conversa do agent: o turno segue como pausa.
-        if (error instanceof AppError && error.code === "CONFLICT") return null;
+        // Outra ação já tirou a conversa do agent: a mensagem fica para o analista (RN08).
+        if (error instanceof AppError && error.code === "CONFLICT") return { kind: "paused" };
         throw error;
       }
 
@@ -98,8 +165,8 @@ export function createDecisionService({
           `A03: ${transfer.view.reason} → Suporte ${transfer.view.supportLevel}`,
         ],
       });
-      await save({ ...turn, messageId: transfer.notice.id, response }, trace);
-      return { notice: transfer.notice.text, handoff: transfer.view };
+      await saveSafely({ ...turn, messageId: transfer.notice.id, response }, trace);
+      return { kind: "escalated", notice: transfer.notice.text };
     },
 
     /** Registros das respostas do agent, para a tela mostrar o detalhe da decisão. */

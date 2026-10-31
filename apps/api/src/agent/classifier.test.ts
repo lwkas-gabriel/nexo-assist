@@ -42,4 +42,30 @@ describe("classificador (etapa 1, R05)", () => {
       classification: { intent: "unclear", confidence: 0.5 },
     });
   });
+
+  it("texto longo do modelo é cortado, sem perder a classificação", async () => {
+    const answer = JSON.stringify({
+      intent: "it_question",
+      understood: "a".repeat(500),
+      extracted: {},
+      confidence: 0.8,
+      reason: "b".repeat(500),
+    });
+    const text = [{ type: "text" as const, text: answer }];
+    const finish = { unified: "stop" as const, raw: undefined };
+    const usage = {
+      inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, text: 1, reasoning: 0 },
+    };
+    const verbose = new MockLanguageModelV4({
+      doGenerate: () =>
+        Promise.resolve({ content: text, finishReason: finish, usage, warnings: [] }),
+    });
+
+    const result = await createClassifier(verbose).classify([], "oi");
+
+    expect(result.ok).toBe(true);
+    expect(result.classification.understood).toHaveLength(300);
+    expect(result.classification.reason).toHaveLength(300);
+  });
 });

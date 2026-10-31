@@ -1,12 +1,14 @@
 import type { Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { ConversationStore } from "../db/conversation-store.ts";
+import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView, NewTicketInput } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
 
 type DraftActionsDependencies = {
   draftService: DraftService;
   handoffService: HandoffService;
+  decisionService: DecisionService;
   conversationStore: ConversationStore;
   clock: Clock;
 };
@@ -31,6 +33,7 @@ function confirmedLine(draft: DraftView): string {
 export function createDraftActions({
   draftService,
   handoffService,
+  decisionService,
   conversationStore,
   clock,
 }: DraftActionsDependencies) {
@@ -40,13 +43,26 @@ export function createDraftActions({
     return conversation.id;
   }
 
+  /**
+   * Linha de sistema na conversa, com o registro de decisão de uma ação determinística (11.5).
+   * Lida depois da ação, a versão da conversa é a do momento em que o clique aconteceu.
+   */
   async function recordInConversation(conversationId: string, text: string) {
-    await conversationStore.appendMessage({
+    const at = clock.now();
+    const line = await conversationStore.appendMessage({
       conversationId,
       author: "system",
       authorId: null,
       parts: [{ type: "text", text }],
-      createdAt: clock.now(),
+      createdAt: at,
+    });
+    const conversation = await conversationStore.findById(conversationId);
+    await decisionService.recordButtonAction({
+      conversationId,
+      conversationVersion: conversation?.version ?? 0,
+      messageId: line.id,
+      description: text,
+      at,
     });
   }
 

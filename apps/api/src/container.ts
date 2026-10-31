@@ -102,6 +102,11 @@ export async function createContainer(
     ticketGateway,
     clock,
   });
+  const decisionService = createDecisionService({
+    decisionStore: createDecisionStore(db),
+    handoffService,
+    clock,
+  });
   const mastra = createNexoMastra({
     model,
     knowledgeBase,
@@ -123,14 +128,16 @@ export async function createContainer(
       draftService,
       // Etapa 1 do turno (R05): o mesmo modelo, numa chamada curta e com saída estruturada.
       classifier: createClassifier(model),
-      decisionService: createDecisionService({
-        decisionStore: createDecisionStore(db),
-        handoffService,
-        clock,
-      }),
+      decisionService,
       clock,
     }),
-    draftActions: createDraftActions({ draftService, handoffService, conversationStore, clock }),
+    draftActions: createDraftActions({
+      draftService,
+      handoffService,
+      decisionService,
+      conversationStore,
+      clock,
+    }),
     conversationStore,
     chatLimits: {
       perUser: createRateLimiter({
