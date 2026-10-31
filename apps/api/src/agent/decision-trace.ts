@@ -1,4 +1,5 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { LOW_CONFIDENCE_THRESHOLD } from "@nexo/shared/domain";
 import { z } from "zod";
 import { INTENT_LABELS, type ClassificationResult } from "./classifier.ts";
 
@@ -7,8 +8,7 @@ import { INTENT_LABELS, type ClassificationResult } from "./classifier.ts";
  * fez (etapa 2), as regras que o código aplicou e a confiança final, ajustada por sinais (R09, R40).
  */
 
-/** Abaixo disto, a confiança é baixa: o agent pergunta antes e, se continuar baixa, transfere (R39). */
-export const LOW_CONFIDENCE_THRESHOLD = 0.5;
+export { LOW_CONFIDENCE_THRESHOLD };
 
 /** Sinais objetivos que reduzem a confiança declarada pelo classificador (R09). */
 const SIGNALS = {

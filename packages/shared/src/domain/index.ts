@@ -1,5 +1,6 @@
 export * from "./business-calendar.ts";
 export * from "./clock.ts";
+export * from "./confidence.ts";
 export * from "./conversation.ts";
 export * from "./date-format.ts";
 export * from "./duplicates.ts";

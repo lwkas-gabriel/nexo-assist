@@ -1,3 +1,4 @@
+import { decisionViewSchema } from "@nexo/shared/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import type { Classification, ClassificationResult } from "./classifier.ts";
@@ -41,6 +42,18 @@ function responseWith(...tools: { name: string; output?: unknown; error?: true }
 }
 
 describe("registro de decisão (RF05, R09)", () => {
+  it("RF05: cumpre o contrato que a tela usa para mostrar o detalhe da decisão", () => {
+    const trace = buildDecisionTrace(
+      { ok: false, classification },
+      responseWith(
+        { name: "search_knowledge_base", output: { articles: [] } },
+        { name: "get_ticket", error: true },
+      ),
+    );
+
+    expect(decisionViewSchema.parse(trace)).toEqual(trace);
+  });
+
   it("junta o que o classificador entendeu, o que o agent fez e as regras aplicadas", () => {
     const trace = buildDecisionTrace(
       classified,

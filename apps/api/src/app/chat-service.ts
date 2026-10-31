@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
-import { parseTicketNumber, type Clock } from "@nexo/shared/domain";
+import { confidenceLevel, parseTicketNumber, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import {
   createUIMessageStream,
@@ -17,7 +17,6 @@ import {
   type Classifier,
   type TranscriptLine,
 } from "../agent/classifier.ts";
-import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import { toTicketDetails } from "../agent/ticket-view.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
@@ -50,8 +49,6 @@ const DISPLAY_WINDOW = 200;
 const HISTORY_MAX_CHARS = 16_000;
 /** Quantas mensagens anteriores o classificador vê: só o bastante para entender a nova. */
 const CLASSIFIER_CONTEXT = 6;
-/** A partir daqui a confiança é alta; entre o limiar e isto, média (como no prompt do classificador). */
-const HIGH_CONFIDENCE = 0.8;
 
 type ChatServiceDependencies = {
   mastra: Mastra;
@@ -503,11 +500,6 @@ function describeTurnContext(
 }
 
 /** Faixas de confiança com os mesmos nomes do prompt do classificador. */
-function confidenceLevel(confidence: number): string {
-  if (confidence < LOW_CONFIDENCE_THRESHOLD) return "baixa";
-  return confidence < HIGH_CONFIDENCE ? "média" : "alta";
-}
-
 /**
  * A classificação da etapa 1 como o agent a recebe (R05). Só intenção e confiança: o "entendido"
  * parafraseia o texto do funcionário e não pode entrar no contexto de sistema do agent.
