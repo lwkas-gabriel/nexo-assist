@@ -1,6 +1,6 @@
 import type { ConversationMode } from "@nexo/shared/domain";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
@@ -84,7 +84,7 @@ describe("tela do chat (tela 2)", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
 
-    expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+    expect(await screen.findByLabelText("Mensagem para o analista")).toBeDefined();
     expect(screen.queryByText(/Limite desta sessão atingido/)).toBeNull();
     expect(calls).toContain("POST /api/chat/handoff");
   });
@@ -93,7 +93,7 @@ describe("tela do chat (tela 2)", () => {
     stubApi(conversationAt("analyst", true));
     renderChat();
 
-    expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+    expect(await screen.findByLabelText("Mensagem para o analista")).toBeDefined();
     expect(screen.queryByText(/Limite desta sessão atingido/)).toBeNull();
   });
 
@@ -464,8 +464,10 @@ describe("tela do chat (tela 2)", () => {
       renderChat();
 
       expect(await screen.findByText("Com Rafael Lima · Suporte N2")).toBeDefined();
-      expect(screen.getByText("Rafael Lima")).toBeDefined();
-      expect(screen.getByLabelText("Mensagem para o Nexo").getAttribute("placeholder")).toBe(
+      expect(screen.getByText("Rafael Lima").parentElement?.textContent).toBe(
+        "Rafael Lima · Suporte N2",
+      );
+      expect(screen.getByLabelText("Mensagem para o analista").getAttribute("placeholder")).toBe(
         "Escreva para o analista…",
       );
       expect(
@@ -493,6 +495,204 @@ describe("tela do chat (tela 2)", () => {
 
         expect(await screen.findByText("Oi, Ana. Já estou com seu chamado.")).toBeDefined();
         expect(screen.getByText("Com Rafael Lima · Suporte N2")).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("sincronia com o servidor: nada some, nada se perde (revisão da T22)", () => {
+    const employeeSays = (id: string, text: string) => ({
+      id,
+      role: "user" as const,
+      metadata: { author: "employee" },
+      parts: [{ type: "text" as const, text }],
+    });
+    const analystSays = (id: string, text: string) => ({
+      id,
+      role: "assistant" as const,
+      metadata: { author: "analyst", analyst: RAFAEL },
+      parts: [{ type: "text" as const, text }],
+    });
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+    /** Resposta do agent em streaming, no formato do AI SDK. */
+    const stream = (chunks: unknown[]) =>
+      new Response(
+        chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n",
+        {
+          status: 200,
+          headers: { "content-type": "text/event-stream", "x-vercel-ai-ui-message-stream": "v1" },
+        },
+      );
+
+    it("fim do turno com o recarregamento ainda a caminho: pergunta e resposta ficam na tela", async () => {
+      let gets = 0;
+      let sentId = "";
+      let releaseRefresh = () => undefined as void;
+      const refreshGate = new Promise<void>((resolve) => (releaseRefresh = resolve));
+      vi.stubGlobal("fetch", async (_input: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          sentId = (JSON.parse(typeof init.body === "string" ? init.body : "{}") as { id: string })
+            .id;
+          return stream([
+            { type: "start", messageId: "a-1" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Resposta do agent" },
+            { type: "text-end", id: "t1" },
+            { type: "finish" },
+          ]);
+        }
+        gets += 1;
+        if (gets === 1) return json(conversationAt("agent", false));
+        await refreshGate;
+        return json({
+          ...conversationAt("agent", false),
+          messages: [
+            employeeSays(sentId, "Minha VPN caiu"),
+            { ...analystSays("a-1", "Resposta do agent"), metadata: { author: "agent" } },
+          ],
+        });
+      });
+      renderChat();
+
+      await userEvent.type(
+        await screen.findByLabelText("Mensagem para o Nexo"),
+        "Minha VPN caiu{Enter}",
+      );
+      await waitFor(() => expect(gets).toBe(2));
+
+      expect(screen.getByText("Minha VPN caiu")).toBeDefined();
+      expect(screen.getByText("Resposta do agent")).toBeDefined();
+      await act(() => {
+        releaseRefresh();
+        return refreshGate;
+      });
+      expect(screen.getByText("Minha VPN caiu")).toBeDefined();
+    });
+
+    it("um polling antigo em curso não apaga a mensagem que acabou de ser enviada", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let saved: unknown[] = [analystSays("m-1", "Oi, Ana.")];
+        let gets = 0;
+        let releasePoll = () => undefined as void;
+        const pollGate = new Promise<void>((resolve) => (releasePoll = resolve));
+        vi.stubGlobal("fetch", async (_input: string, init?: RequestInit) => {
+          if (init?.method === "POST") {
+            const { id, text } = JSON.parse(typeof init.body === "string" ? init.body : "{}") as {
+              id: string;
+              text: string;
+            };
+            saved = [...saved, employeeSays(id, text)];
+            return stream([]);
+          }
+          gets += 1;
+          const snapshot = { ...conversationAt("analyst", false), messages: saved };
+          if (gets === 2) await pollGate;
+          return json(snapshot);
+        });
+        renderChat();
+        await screen.findByText("Oi, Ana.");
+        await vi.advanceTimersByTimeAsync(3050);
+
+        await userEvent.type(screen.getByLabelText("Mensagem para o analista"), "Alô{Enter}");
+        await act(() => {
+          releasePoll();
+          return pollGate;
+        });
+        await vi.advanceTimersByTimeAsync(50);
+
+        expect(screen.getByText("Alô")).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("com uma falha de envio na tela, as respostas do analista continuam chegando", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let current = {
+          ...conversationAt("analyst", false),
+          messages: [analystSays("m-1", "Oi, Ana.")],
+        };
+        vi.stubGlobal("fetch", (_input: string, init?: RequestInit) =>
+          Promise.resolve(
+            init?.method === "POST"
+              ? json(
+                  { error: { code: "RATE_LIMITED", message: "Muitas mensagens em pouco tempo." } },
+                  429,
+                )
+              : json(current),
+          ),
+        );
+        renderChat();
+        await screen.findByText("Oi, Ana.");
+        await userEvent.type(screen.getByLabelText("Mensagem para o analista"), "Alô{Enter}");
+        await screen.findByText("Muitas mensagens em pouco tempo.");
+
+        current = {
+          ...current,
+          messages: [analystSays("m-1", "Oi, Ana."), analystSays("m-2", "Pode reiniciar?")],
+        };
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(await screen.findByText("Pode reiniciar?")).toBeDefined();
+        expect(screen.getByText("Alô")).toBeDefined();
+        expect(screen.getByText("Não enviada")).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("polling que falha mantém a conversa e o que estava sendo digitado", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let gets = 0;
+        vi.stubGlobal("fetch", () => {
+          gets += 1;
+          return Promise.resolve(
+            gets === 2
+              ? json({ error: { code: "INTERNAL", message: "Falhou." } }, 502)
+              : json({
+                  ...conversationAt("analyst", false),
+                  messages: [analystSays("m-1", "Oi, Ana.")],
+                }),
+          );
+        });
+        renderChat();
+        await screen.findByText("Oi, Ana.");
+        await userEvent.type(
+          screen.getByLabelText("Mensagem para o analista"),
+          "texto em andamento",
+        );
+
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(screen.getByText("Oi, Ana.")).toBeDefined();
+        expect(screen.getByLabelText("Mensagem para o analista")).toHaveProperty(
+          "value",
+          "texto em andamento",
+        );
+        expect(await screen.findByText(/Não consegui atualizar a conversa agora/)).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("RT10: com o agent, não há polling", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let gets = 0;
+        vi.stubGlobal("fetch", () => {
+          gets += 1;
+          return Promise.resolve(json(conversationAt("agent", false)));
+        });
+        renderChat();
+        await screen.findByLabelText("Mensagem para o Nexo");
+
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        expect(gets).toBe(1);
       } finally {
         vi.useRealTimers();
       }

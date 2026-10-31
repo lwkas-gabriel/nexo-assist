@@ -26,6 +26,7 @@ import { describeChatError } from "./chat-error.ts";
 import {
   confirmableDraft,
   lastEmployeeMessage,
+  mergeServerMessages,
   messageAuthor,
   quickOptionsOf,
   sessionSummaryIndex,
@@ -94,18 +95,23 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
           <Skeleton className="h-24 w-3/4" />
           <Skeleton className="h-10 w-1/2 self-end" />
         </div>
-      ) : conversation.error ? (
+      ) : conversation.data === undefined ? (
         <div
           role="alert"
           className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
         >
-          <p className="text-[14.5px] text-ink-2">{conversation.error.message}</p>
+          <p className="text-[14.5px] text-ink-2">{conversation.error?.message}</p>
           <Button variant="secondary" onClick={() => void conversation.refetch()}>
             Tentar novamente
           </Button>
         </div>
       ) : (
-        <ChatConversation user={user} view={conversation.data} />
+        <ChatConversation
+          user={user}
+          view={conversation.data}
+          // Uma consulta do polling falhou: a conversa e o que está sendo digitado ficam na tela.
+          isOutOfSync={conversation.isError}
+        />
       )}
     </ChatShell>
   );
@@ -113,7 +119,15 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
 
 type DraftAction = { draft: DraftView; run: () => Promise<unknown> };
 
-function ChatConversation({ user, view }: { user: CurrentUser; view: ConversationView }) {
+function ChatConversation({
+  user,
+  view,
+  isOutOfSync,
+}: {
+  user: CurrentUser;
+  view: ConversationView;
+  isOutOfSync: boolean;
+}) {
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
@@ -124,7 +138,8 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
   const decisionPanelId = useId();
 
   /** Recarrega do servidor: contador, rascunhos, modo e registros de decisão ficam em dia. */
-  function reloadView() {
+  async function reloadView() {
+    await queryClient.cancelQueries({ queryKey: CONVERSATION_KEY });
     return queryClient.fetchQuery({
       queryKey: CONVERSATION_KEY,
       queryFn: fetchConversation,
@@ -248,12 +263,15 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
-  // O polling traz mensagens novas do analista: entram na conversa quando nada está a caminho
-  // (com um envio em curso ou uma falha na tela, esperam para não apagar a bolha do funcionário).
+  // O polling traz mensagens novas do analista. Elas entram quando a conversa do servidor já tem
+  // tudo o que está na tela; senão, ela é de antes do último envio e apagaria bolhas (ex.: o turno
+  // terminou e o recarregamento ainda não voltou). A única exceção é a bolha que falhou ao
+  // enviar: fica no fim, para o "Tentar novamente".
   useEffect(() => {
-    if (status !== "ready" || sameMessageIds(messages, view.messages)) return;
-    setMessages(view.messages);
-  }, [status, messages, view.messages, setMessages]);
+    if (isBusy) return;
+    const merged = mergeServerMessages(messages, view.messages, unsentMessageId);
+    if (merged && !sameMessageIds(merged, messages)) setMessages(merged);
+  }, [isBusy, messages, view.messages, unsentMessageId, setMessages]);
 
   const openDecisionMessage = messages.find((message) => message.id === openDecisionId);
   const openDecision = openDecisionMessage ? decisionOf(openDecisionMessage) : undefined;
@@ -320,7 +338,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
                   <SessionSummaryCard summary={view.session.previousSummary} />
                 )}
               </ol>
-              {status === "submitted" && (
+              {status === "submitted" && mode === "agent" && (
                 <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
                   <LoaderCircle size={12} aria-hidden className="animate-spin" />
                   Nexo Assist está pensando…
@@ -358,6 +376,11 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
           </div>
         </div>
 
+        {isOutOfSync && (
+          <p role="status" className="shrink-0 px-4 text-center text-[12.5px] text-ink-3">
+            Não consegui atualizar a conversa agora; tentando de novo.
+          </p>
+        )}
         <div className={cx("shrink-0 pt-2.5 pb-[18px]", sidePadding)}>
           {isAtLimit ? (
             <SessionLimitNotice

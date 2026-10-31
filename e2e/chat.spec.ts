@@ -60,7 +60,7 @@ test("RF11: a conversa continua depois de recarregar a página", async ({ page }
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByText("Aguardando analista", { exact: true })).toBeVisible();
   await expect(page.getByText(/^Conversa transferida para o Suporte N1/)).toBeVisible();
-  await expect(page.getByLabel("Mensagem para o Nexo")).toHaveAttribute(
+  await expect(page.getByLabel("Mensagem para o analista")).toHaveAttribute(
     "placeholder",
     "Escreva para o analista…",
   );

@@ -62,6 +62,7 @@ function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {})
     isBusy: false,
     onSend: vi.fn(),
     onPickOption: vi.fn(),
+    recipient: "agent" as const,
     counter: { used: 18, limit: 30 },
     quickOptions: ["Só eu", "Minha equipe", "Toda a empresa"],
     onConfirmDraft: vi.fn(),

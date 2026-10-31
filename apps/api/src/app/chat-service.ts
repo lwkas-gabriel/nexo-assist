@@ -224,9 +224,11 @@ export function createChatService({
         DISPLAY_WINDOW,
       );
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
-      const assignedAnalyst = conversation.assignedAnalystId
-        ? analysts.get(conversation.assignedAnalystId)
-        : undefined;
+      // Só com a conversa no analista: devolvida ao agent, quem atendeu não aparece mais no topo.
+      const assignedAnalyst =
+        conversation.mode === "analyst" && conversation.assignedAnalystId
+          ? analysts.get(conversation.assignedAnalystId)
+          : undefined;
       return {
         conversation: {
           id: conversation.id,

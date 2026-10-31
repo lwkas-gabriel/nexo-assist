@@ -20,7 +20,7 @@ type ComposerProps = {
    * Para quem a mensagem vai. Com os analistas (RF17), o agent está pausado: o campo diz isso e
    * o contador fica congelado, porque só mensagens ao agent contam (R42).
    */
-  recipient?: "agent" | "analyst";
+  recipient: "agent" | "analyst";
   /** Respostas rápidas ativas: as teclas 1 a 4 escolhem, com o campo vazio (R34). */
   quickOptions: readonly string[];
   /** R33: Ctrl/⌘+Enter confirma o rascunho pendente, se houver. */
@@ -35,7 +35,7 @@ export function Composer({
   onSend,
   onPickOption,
   counter,
-  recipient = "agent",
+  recipient,
   quickOptions,
   onConfirmDraft,
 }: ComposerProps) {
@@ -72,7 +72,7 @@ export function Composer({
     <form onSubmit={handleSubmit} className="flex flex-col gap-1.5">
       <div className="flex h-12 items-center gap-2 rounded-lg border border-line-strong bg-paper pr-1.5 pl-4 shadow-field focus-within:border-cta">
         <label htmlFor="composer-input" className="sr-only">
-          Mensagem para o Nexo
+          {recipient === "agent" ? "Mensagem para o Nexo" : "Mensagem para o analista"}
         </label>
         <input
           id="composer-input"

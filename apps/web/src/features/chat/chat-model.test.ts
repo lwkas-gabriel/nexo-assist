@@ -4,6 +4,7 @@ import type { DraftView, SessionView } from "./chat-api.ts";
 import {
   confirmableDraft,
   lastEmployeeMessage,
+  mergeServerMessages,
   liveDraft,
   messageAuthor,
   proposedDraft,
@@ -114,5 +115,25 @@ describe("leitura das mensagens do chat", () => {
       employee("3"),
     );
     expect(lastEmployeeMessage([message("1")])).toBeUndefined();
+  });
+
+  it("a conversa do servidor só substitui a da tela quando já tem tudo o que está nela", () => {
+    const sent: UIMessage = { id: "u-1", role: "user", parts: [{ type: "text", text: "Alô" }] };
+    const old = [message("a-1")];
+
+    expect(mergeServerMessages([...old, sent], old, undefined)).toBeUndefined();
+    expect(mergeServerMessages([...old, sent], [...old, sent, message("a-2")], undefined)).toEqual([
+      ...old,
+      sent,
+      message("a-2"),
+    ]);
+    // A bolha que falhou fica no fim; respostas vazias (agent pausado) não contam.
+    expect(mergeServerMessages([...old, sent], [...old, message("a-2")], "u-1")).toEqual([
+      ...old,
+      message("a-2"),
+      sent,
+    ]);
+    const empty: UIMessage = { id: "x", role: "assistant", parts: [] };
+    expect(mergeServerMessages([...old, empty], old, undefined)).toEqual(old);
   });
 });

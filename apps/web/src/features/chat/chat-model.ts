@@ -1,5 +1,5 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
-import type { DraftView, SessionView } from "./chat-api.ts";
+import type { AnalystView, DraftView, SessionView } from "./chat-api.ts";
 
 /**
  * Leitura das mensagens do chat, sem React: quem falou, o rascunho e as opções que vieram das
@@ -29,9 +29,7 @@ export function messageCreatedAt(message: UIMessage): string | undefined {
 }
 
 /** Nome e setor de quem escreveu, nas mensagens de um analista (R27). */
-export function messageAnalyst(
-  message: UIMessage,
-): { name: string; department: string } | undefined {
+export function messageAnalyst(message: UIMessage): AnalystView | undefined {
   const analyst = metadataOf(message).analyst;
   if (typeof analyst !== "object" || analyst === null) return undefined;
   const { name, department } = analyst as Record<string, unknown>;
@@ -122,4 +120,22 @@ export function sessionSummaryIndex(
     return createdAt !== undefined && createdAt >= startedAt;
   });
   return index === -1 ? messages.length : index;
+}
+
+/**
+ * A conversa do servidor com o que só existe na tela. Devolve undefined quando falta no servidor
+ * alguma mensagem além da que falhou ao enviar: aí a conversa recebida é velha e não serve.
+ * Respostas vazias (o agent pausado não responde) não contam: só existem na tela.
+ */
+export function mergeServerMessages(
+  onScreen: readonly UIMessage[],
+  fromServer: readonly UIMessage[],
+  unsentId: string | undefined,
+): UIMessage[] | undefined {
+  const serverIds = new Set(fromServer.map((message) => message.id));
+  const onlyOnScreen = onScreen.filter(
+    (message) => !serverIds.has(message.id) && message.parts.length > 0,
+  );
+  if (onlyOnScreen.some((message) => message.id !== unsentId)) return undefined;
+  return [...fromServer, ...onlyOnScreen];
 }

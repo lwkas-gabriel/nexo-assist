@@ -9,7 +9,10 @@ import type { CurrentUser } from "../auth/auth-api.ts";
 import type { AnalystView } from "./chat-api.ts";
 import { NexoMark } from "../auth/NexoMark.tsx";
 
-/** O que a pílula do topo diz em cada estado da conversa (os estados de analista ganham detalhe na T22). */
+/**
+ * O que a pílula do topo diz em cada estado da conversa; com um analista, o nome e o setor dele
+ * (R27). "closed" é o fechamento administrativo (11.3): a tela do funcionário não o recebe.
+ */
 const MODE_LABELS: Record<ConversationMode, string> = {
   agent: "Assistente online",
   waiting_analyst: "Aguardando analista",
@@ -112,9 +115,12 @@ export function ChatShell({
             {/* O título da página; no celular, só para o leitor de tela (a marca ocupa o topo). */}
             <h1 className="sr-only font-semibold text-ink md:not-sr-only">Atendimento</h1>
           </div>
-          <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
-            {modeLabel}
-          </Pill>
+          {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta). */}
+          <span role="status">
+            <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
+              {modeLabel}
+            </Pill>
+          </span>
           <IconButton
             label="Sair"
             icon={<LogOut size={16} />}
