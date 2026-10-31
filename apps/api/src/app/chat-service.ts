@@ -183,7 +183,7 @@ const AUTHOR_PREFIXES: Partial<Record<MessageRow["author"], string>> = {
  * Mensagem como o agent recebe no histórico. Mensagens do analista e registros do sistema chegam
  * marcadas: sem isso, o modelo as tomaria como respostas dele mesmo (R18).
  */
-function toAgentHistoryMessage(row: MessageRow): UIMessage {
+export function toAgentHistoryMessage(row: MessageRow): UIMessage {
   const message = toUIMessage(row);
   const prefix = AUTHOR_PREFIXES[row.author];
   if (!prefix) return message;

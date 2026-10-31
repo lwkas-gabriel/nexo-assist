@@ -7,13 +7,14 @@ import { GENERIC_AGENT_ERROR_MESSAGE, QUOTA_EXCEEDED_MESSAGE } from "../agent/ag
 import { createNexoMastra } from "../agent/nexo-agent.ts";
 import { createConversationStore } from "../db/conversation-store.ts";
 import { openDatabase } from "../db/database.ts";
+import type { MessageRow } from "../db/schema.ts";
 import { createDraftStore } from "../db/draft-store.ts";
 import { createHandoffStore } from "../db/handoff-store.ts";
 import { createUserStore } from "../db/user-store.ts";
 import { createFakeTicketGateway } from "../test-support.ts";
 import { createDraftService } from "./draft-service.ts";
 import { createHandoffService } from "./handoff-service.ts";
-import { createChatService } from "./chat-service.ts";
+import { createChatService, toAgentHistoryMessage } from "./chat-service.ts";
 
 /** Modelo que sempre falha como o provedor falharia (chave inválida, cota esgotada...). */
 function failingModel(statusCode: number, message: string) {
@@ -95,4 +96,35 @@ describe("falhas do modelo no chat", () => {
       expect(errorTexts(chunks)).toEqual([QUOTA_EXCEEDED_MESSAGE]);
     },
   );
+});
+
+describe("histórico que o agent recebe (R18)", () => {
+  const row = (author: MessageRow["author"], text: string): MessageRow => ({
+    id: `m-${author}`,
+    conversationId: "c-1",
+    author,
+    authorId: null,
+    parts: JSON.stringify([{ type: "text", text }]),
+    createdAt: new Date("2026-10-27T12:00:00Z"),
+  });
+
+  it("R18: mensagens do analista e registros do sistema chegam marcados para o agent", () => {
+    expect(toAgentHistoryMessage(row("analyst", "Reinstalei o cliente de VPN."))).toMatchObject({
+      role: "assistant",
+      parts: [{ type: "text", text: "[Mensagem do analista] Reinstalei o cliente de VPN." }],
+    });
+    expect(toAgentHistoryMessage(row("system", "Conversa transferida."))).toMatchObject({
+      parts: [{ type: "text", text: "[Registro do sistema] Conversa transferida." }],
+    });
+  });
+
+  it("mensagens do funcionário e do agent chegam como foram escritas", () => {
+    expect(toAgentHistoryMessage(row("employee", "oi"))).toMatchObject({
+      role: "user",
+      parts: [{ type: "text", text: "oi" }],
+    });
+    expect(toAgentHistoryMessage(row("agent", "Olá!"))).toMatchObject({
+      parts: [{ type: "text", text: "Olá!" }],
+    });
+  });
 });

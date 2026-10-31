@@ -9,6 +9,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
 import { CONFIRM_DRAFT_TOOL_ID, PROPOSE_TICKET_DRAFT_TOOL_ID } from "./tools/draft-tools.ts";
+import { HANDOFF_TO_ANALYST_TOOL_ID } from "./tools/handoff-tool.ts";
 import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "./tools/search-knowledge-base.ts";
 import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tools.ts";
 
@@ -17,6 +18,7 @@ import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tool
  *
  * Roteiro, imitando o que o modelo real faz:
  * 1. Mensagem do funcionário → escolhe a tool pelo texto:
+ *    "analista"/"atendente" → handoff_to_analyst;
  *    "confirmo"/"pode criar" → confirm_draft do último rascunho mostrado; "abrir chamado" →
  *    propose_ticket_draft com o próprio texto; número de chamado → get_ticket;
  *    "chamado"/"status" → list_my_tickets; o resto → central de ajuda.
@@ -61,6 +63,7 @@ const TICKET_NUMBER_IN_TEXT = /\b(INC|REQ)[\s_-]?\d{5}\b/i;
 const CONFIRMATION_IN_TEXT = /\b(confirmo|pode criar|pode abrir|pode enviar)\b/i;
 const OPEN_TICKET_IN_TEXT = /\b(abrir|abre|abra)\b.*\bchamado\b/i;
 const DRAFT_ID_IN_TEXT = /\bD-\d+\b/g;
+const ANALYST_IN_TEXT = /\b(analista|atendente)\b/i;
 
 function nextStep(prompt: LanguageModelV4Prompt): Step {
   const lastMessage = prompt.at(-1);
@@ -71,6 +74,13 @@ function nextStep(prompt: LanguageModelV4Prompt): Step {
 }
 
 function chooseTool(userText: string, draftId: string | undefined): Step {
+  if (ANALYST_IN_TEXT.test(userText)) {
+    return {
+      kind: "call",
+      toolName: HANDOFF_TO_ANALYST_TOOL_ID,
+      input: { reason: "employee_request", problem: userText, attempted: "nada ainda" },
+    };
+  }
   if (draftId && CONFIRMATION_IN_TEXT.test(userText)) {
     return { kind: "call", toolName: CONFIRM_DRAFT_TOOL_ID, input: { draftId } };
   }
@@ -187,6 +197,10 @@ const draftResultSchema = z.object({
     ticket: z.object({ title: z.string(), priority: z.string() }).optional(),
   }),
 });
+const handoffResultSchema = z.object({
+  ok: z.literal(true),
+  handoff: z.object({ supportLevel: z.string(), responseBy: z.string() }),
+});
 const confirmResultSchema = z.object({
   ok: z.literal(true),
   ticket: z.object({ number: z.string() }),
@@ -225,6 +239,7 @@ function answerFromToolResult(content: unknown): string {
 
   if (toolName === PROPOSE_TICKET_DRAFT_TOOL_ID) return answerDraft(output.value);
   if (toolName === CONFIRM_DRAFT_TOOL_ID) return answerConfirmation(output.value);
+  if (toolName === HANDOFF_TO_ANALYST_TOOL_ID) return answerHandoff(output.value);
   if (toolName === LIST_MY_TICKETS_TOOL_ID) return answerTicketList(output.value);
   if (toolName === GET_TICKET_TOOL_ID) return answerTicket(output.value);
   return answerArticleSearch(output.value);
@@ -262,6 +277,13 @@ function answerConfirmation(value: unknown): string {
   return ticket
     ? `Pronto, chamado ${ticket.number} criado. ${TEST_MODEL_NOTE}`
     : `Não consegui confirmar o rascunho. ${TEST_MODEL_NOTE}`;
+}
+
+function answerHandoff(value: unknown): string {
+  const handoff = handoffResultSchema.safeParse(value).data?.handoff;
+  return handoff
+    ? `Transferi para o Suporte ${handoff.supportLevel}. Um analista fala com você até ${handoff.responseBy}. ${TEST_MODEL_NOTE}`
+    : `Não consegui transferir agora. ${TEST_MODEL_NOTE}`;
 }
 
 function answerArticleSearch(value: unknown): string {
