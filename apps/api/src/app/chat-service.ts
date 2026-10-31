@@ -1,6 +1,6 @@
 import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
-import type { Clock } from "@nexo/shared/domain";
+import { parseTicketNumber, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import {
   createUIMessageStream,
@@ -18,6 +18,8 @@ import {
 } from "../agent/classifier.ts";
 import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
+import { toTicketDetails } from "../agent/ticket-view.ts";
+import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
@@ -30,6 +32,7 @@ import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
+import { quickAnswerClassification, selectedTicketParts } from "./structured-actions.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
@@ -57,6 +60,7 @@ type ChatServiceDependencies = {
   decisionService: DecisionService;
   chatSessionService: ChatSessionService;
   quota: AgentQuota;
+  ticketGateway: TicketGateway;
   clock: Clock;
 };
 
@@ -82,6 +86,7 @@ export function createChatService({
   decisionService,
   chatSessionService,
   quota,
+  ticketGateway,
   clock,
 }: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
@@ -117,6 +122,17 @@ export function createChatService({
       parts,
       createdAt,
     });
+  }
+
+  /** R38: resposta rápida clicada, classificada pelo código (ou undefined, se não confere). */
+  async function classifyQuickAnswer(
+    previous: MessageRow[],
+    answer: string,
+  ): Promise<ClassificationResult | undefined> {
+    const last = previous.at(-1);
+    if (!last) return undefined;
+    const asked = (await decisionService.forMessages([last.id])).get(last.id);
+    return quickAnswerClassification(toUIMessage(last), asked?.intent, answer);
   }
 
   /** Histórico da conversa; com `since`, só a partir dessa data (a sessão atual, para o agent). */
@@ -205,8 +221,50 @@ export function createChatService({
           messageId: transfer.notice.id,
           description: "Funcionário pediu um analista pelo botão.",
           at: clock.now(),
+          intent: "talk_to_analyst",
+          step: "analyst_button",
         });
         return transfer.view;
+      });
+    },
+
+    /**
+     * Clique num chamado da lista (tela 3, 11.5): a resposta é montada pelo código, sem o modelo.
+     * O chamado é buscado com o funcionário da sessão, então só os dele aparecem (RN09). Com a
+     * conversa num analista, o clique fica registrado para ele e ninguém responde (RN08).
+     */
+    async selectTicket(employee: UserRow, number: string) {
+      const ticketNumber = parseTicketNumber(number);
+      if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      const conversation = await openConversationFor(employee);
+      return withConversationLock(conversation.id, async () => {
+        const now = clock.now();
+        if (!agentMayReply(conversation.mode)) {
+          await saveEmployeeMessage(conversation.id, employee.id, ticketNumber, now, undefined);
+          return;
+        }
+        // Busca antes de gravar: se o chamado não é dele ou o sistema caiu, nada fica pela metade.
+        const ticket = toTicketDetails(
+          await ticketGateway.getTicket(employee.id, ticketNumber),
+          now,
+        );
+        await saveEmployeeMessage(conversation.id, employee.id, ticketNumber, now, undefined);
+        const reply = await conversationStore.appendMessage({
+          conversationId: conversation.id,
+          author: "agent",
+          authorId: null,
+          parts: selectedTicketParts(ticket, `select-${ticketNumber}`),
+          createdAt: now,
+        });
+        await decisionService.recordButtonAction({
+          conversationId: conversation.id,
+          conversationVersion: conversation.version,
+          messageId: reply.id,
+          description: `Funcionário escolheu o chamado ${ticketNumber} na lista.`,
+          at: now,
+          intent: "ticket_status",
+          step: "ticket_selection",
+        });
       });
     },
 
@@ -217,7 +275,7 @@ export function createChatService({
     async sendMessage(
       employee: UserRow,
       text: string,
-      client: { ip: string; messageId?: string },
+      client: { ip: string; messageId?: string; quickOption?: boolean },
     ): Promise<ReadableStream<UIMessageChunk>> {
       const conversation = await openConversationFor(employee);
       if (!agentMayReply(conversation.mode)) {
@@ -264,7 +322,9 @@ export function createChatService({
           conversation.id,
           CLASSIFIER_CONTEXT,
         );
-        const classification = await classifier.classify(previous.map(toTranscriptLine), text);
+        const classification =
+          (client.quickOption && (await classifyQuickAnswer(previous, text))) ||
+          (await classifier.classify(previous.map(toTranscriptLine), text));
         await saveEmployeeMessage(
           conversation.id,
           employee.id,

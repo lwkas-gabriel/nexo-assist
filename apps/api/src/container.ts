@@ -170,6 +170,7 @@ export async function createContainer(
       classifier: createClassifier(model),
       decisionService,
       quota,
+      ticketGateway,
       chatSessionService: createChatSessionService({
         chatSessionStore: createChatSessionStore(db),
         conversationStore,

@@ -9,7 +9,11 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
 import { CLASSIFIER_MARKER, type Classification } from "./classifier.ts";
-import { CONFIRM_DRAFT_TOOL_ID, PROPOSE_TICKET_DRAFT_TOOL_ID } from "./tools/draft-tools.ts";
+import {
+  ASK_WITH_OPTIONS_TOOL_ID,
+  CONFIRM_DRAFT_TOOL_ID,
+  PROPOSE_TICKET_DRAFT_TOOL_ID,
+} from "./tools/draft-tools.ts";
 import { HANDOFF_TO_ANALYST_TOOL_ID } from "./tools/handoff-tool.ts";
 import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "./tools/search-knowledge-base.ts";
 import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tools.ts";
@@ -68,6 +72,12 @@ const CONFIRMATION_IN_TEXT = /\b(confirmo|pode criar|pode abrir|pode enviar)\b/i
 const OPEN_TICKET_IN_TEXT = /\b(abrir|abre|abra)\b.*\bchamado\b/i;
 const DRAFT_ID_IN_TEXT = /\bD-\d+\b/g;
 const ANALYST_IN_TEXT = /\b(analista|atendente)\b/i;
+/** Lentidão: o modelo de teste pergunta quem é afetado, com respostas rápidas (RF06). */
+const SLOWNESS_IN_TEXT = /\blent[oa]\b/i;
+export const MOCK_IMPACT_QUESTION = {
+  question: "Quem está sendo afetado?",
+  options: ["Só eu", "Minha equipe", "Toda a empresa"],
+};
 
 function nextStep(prompt: LanguageModelV4Prompt): Step {
   if (isClassifierCall(prompt)) {
@@ -93,6 +103,9 @@ function chooseTool(userText: string, draftId: string | undefined): Step {
   }
   if (OPEN_TICKET_IN_TEXT.test(userText)) {
     return { kind: "call", toolName: PROPOSE_TICKET_DRAFT_TOOL_ID, input: draftFrom(userText) };
+  }
+  if (SLOWNESS_IN_TEXT.test(userText)) {
+    return { kind: "call", toolName: ASK_WITH_OPTIONS_TOOL_ID, input: MOCK_IMPACT_QUESTION };
   }
   const ticketNumber = TICKET_NUMBER_IN_TEXT.exec(userText)?.[0];
   if (ticketNumber) {
@@ -284,6 +297,9 @@ function answerFromToolResult(content: unknown): string {
   if (toolName === HANDOFF_TO_ANALYST_TOOL_ID) return answerHandoff(output.value);
   if (toolName === LIST_MY_TICKETS_TOOL_ID) return answerTicketList(output.value);
   if (toolName === GET_TICKET_TOOL_ID) return answerTicket(output.value);
+  // A tela mostra a pergunta e as opções; o texto só introduz (como o prompt pede).
+  if (toolName === ASK_WITH_OPTIONS_TOOL_ID)
+    return `Para eu entender o impacto: ${TEST_MODEL_NOTE}`;
   return answerArticleSearch(output.value);
 }
 

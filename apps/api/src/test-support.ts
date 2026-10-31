@@ -255,7 +255,9 @@ export function recordingMockModel() {
         ),
     };
   };
-  return { model, counter, lastAgentPrompt };
+  /** Quantas chamadas foram do agent (as demais, do classificador). */
+  const agentCalls = () => agentPrompts.length;
+  return { model, counter, lastAgentPrompt, agentCalls };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */

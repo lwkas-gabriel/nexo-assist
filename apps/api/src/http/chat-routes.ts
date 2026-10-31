@@ -1,4 +1,4 @@
-import { sendMessageRequestSchema } from "@nexo/shared/contracts";
+import { selectTicketRequestSchema, sendMessageRequestSchema } from "@nexo/shared/contracts";
 import { AppError } from "@nexo/shared/errors";
 import { parseInput, readJson } from "@nexo/shared/http";
 import { createUIMessageStreamResponse } from "ai";
@@ -64,10 +64,11 @@ export function createChatRoutes({
   // travada, se a mensagem vai para o modelo ou para o analista.
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
-    const { text, id } = parseInput(sendMessageRequestSchema, await readJson(c.req));
+    const { text, id, quickOption } = parseInput(sendMessageRequestSchema, await readJson(c.req));
     const stream = await chatService.sendMessage(employee, text, {
       ip: clientIp(c),
       ...(id ? { messageId: id } : {}),
+      ...(quickOption ? { quickOption } : {}),
     });
     return createUIMessageStreamResponse({ stream });
   });
@@ -85,6 +86,14 @@ export function createChatRoutes({
   routes.use("/drafts/*", limitButtonActions);
   routes.use("/sessions", limitButtonActions);
   routes.use("/handoff", limitButtonActions);
+  routes.use("/actions/*", limitButtonActions);
+
+  // Clique num chamado da lista (tela 3): resposta montada pelo código, sem o modelo (11.5).
+  routes.post("/actions/select-ticket", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(selectTicketRequestSchema, await readJson(c.req));
+    await chatService.selectTicket(currentUser(c, "employee"), ticketNumber);
+    return c.json({ ok: true });
+  });
 
   // "Falar com um analista" pelo botão: transfere sem o agent (11.5), inclusive no limite da sessão.
   routes.post("/handoff", async (c) => {
