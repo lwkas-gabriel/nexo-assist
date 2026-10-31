@@ -592,3 +592,18 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - tabela de endpoints desatualizada; expressão `&&`/`||` com `await` reescrita; exports sem uso removidos.
 - **Validado com o Gemini real** (uma seleção e uma mensagem): o modelo aceitou no histórico a parte `get_ticket` montada pelo código e respondeu usando o chamado escolhido. Na primeira tentativa, a seleção deu 503 (o sistema de chamados ainda subia, com a falha simulada de 10%) e a conversa ficou sem nada pela metade, como o teste prevê.
 - **Lição:** o `sendMessage` já tinha a releitura da conversa depois de uma espera; o caminho novo copiou o resto e esqueceu essa parte. Ao criar um caminho paralelo a um existente, vale listar as proteções do original uma a uma.
+
+---
+
+## T20: detalhe da decisão (31/10/2026)
+
+### 61. T20: o painel que mostra por que o assistente fez o que fez
+- **IA gerou:** o contrato do registro de decisão no pacote shared (com um teste na api provando que o registro gerado o cumpre), o modelo da tela (`decision-model.ts`, funções puras), o `DecisionPanel`, o botão "detalhes" na linha de chips e os testes de componente, de página e E2E.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **Um botão "detalhes" ao fim da linha de chips**, em vez de transformar os chips em botão. A lista "Ações do assistente" continua sendo lista para o leitor de tela, e o HTML fica válido (lista não cabe dentro de botão). Respostas sem nenhuma tool também ganham o botão: o painel diz "Respondi direto, sem consultar nada".
+  - **Só respostas já gravadas têm o botão:** o registro chega nos metadados quando a conversa é recarregada, ao fim do turno; durante o streaming não há o que mostrar.
+  - **Os cortes de confiança foram para o domínio** (`confidence.ts`): o painel diz "baixa/média/alta" com os mesmos números que o agent recebe da etapa 1 e que o limiar do R39 usa.
+  - **Com o painel aberto como coluna (≥ 1280 px), a conversa usa o recuo do notebook** (48 px em vez de 200 px). A conferência visual mostrou o card do rascunho espremido ao lado do painel, com o prazo quebrado em três linhas.
+  - **Ações de botão** (seleção de chamado) dizem no painel que foram decididas pelo código, sem o modelo; as linhas de sistema dos botões do card continuam sem botão de detalhe (o registro delas aparece no console, T23).
+- **Conferência visual:** capturas em 1440 px (coluna), 1024 px (gaveta) e 390 px (folha que sobe).
+- **Achado no caminho:** o jsdom calcula o nome acessível de "detalhes" + `<span class="sr-only"> da decisão</span>` sem o espaço; o nome passou a vir de um `aria-label` que contém o texto visível (WCAG 2.5.3), igual em qualquer ambiente.
