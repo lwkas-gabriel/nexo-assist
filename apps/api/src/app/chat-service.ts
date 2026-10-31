@@ -33,7 +33,11 @@ import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
 import { isSessionAtLimit } from "./session-state.ts";
-import { quickAnswerClassification, selectedTicketParts } from "./structured-actions.ts";
+import {
+  declinedOfferText,
+  quickAnswerClassification,
+  selectedTicketParts,
+} from "./structured-actions.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
@@ -201,15 +205,20 @@ export function createChatService({
      * "Falar com um analista" pelo botão (11.5): transfere sem passar pelo agent. É o caminho
      * quando a sessão chegou ao limite e a mensagem por texto já não é aceita.
      */
-    async requestAnalyst(employee: UserRow) {
+    async requestAnalyst(employee: UserRow, options: { ticketNumber?: string } = {}) {
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
+        // Com o chamado (oferta de um chamado vencido, tela 3), o motivo é o prazo; o handoff
+        // confere com o chamado de verdade e volta para "pedido do funcionário" se não venceu.
         const transfer = await handoffService.transfer({
           employeeId: employee.id,
           conversationId: conversation.id,
-          reason: "employee_request",
+          reason: options.ticketNumber ? "overdue" : "employee_request",
+          ...(options.ticketNumber ? { ticketNumber: options.ticketNumber } : {}),
           summary: {
-            problem: "O funcionário pediu um analista pelo botão do chat.",
+            problem: options.ticketNumber
+              ? `O funcionário pediu um analista para o chamado ${options.ticketNumber}, sem atualização dentro do prazo.`
+              : "O funcionário pediu um analista pelo botão do chat.",
             attempted: await chatSessionService.describeCurrent(conversation),
           },
         });
@@ -239,23 +248,18 @@ export function createChatService({
       if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
-        const saveClick = () =>
-          saveEmployeeMessage(conversation.id, employee.id, ticketNumber, clock.now(), undefined);
-        if (!agentMayReply(conversation.mode)) {
-          await chatSessionService.touch(conversation);
-          await saveClick();
-          return;
-        }
-        // Busca antes de gravar: se o chamado não é dele ou o sistema caiu, nada fica pela metade.
+        // Busca antes de gravar: se o chamado não é dele (RN09) ou o sistema caiu, nada fica
+        // pela metade. A bolha do clique leva número e título, como no protótipo.
         const ticket = toTicketDetails(
           await ticketGateway.getTicket(employee.id, ticketNumber),
           clock.now(),
         );
+        const clickText = `${ticket.number} · ${ticket.title}`;
         // A busca pode levar segundos (novas tentativas): a conversa pode ter sido transferida
         // nesse meio-tempo, por um chamado crítico confirmado pelo card (A04, RN08).
         const current = await conversationStore.findById(conversation.id);
         await chatSessionService.touch(conversation);
-        await saveClick();
+        await saveEmployeeMessage(conversation.id, employee.id, clickText, clock.now(), undefined);
         if (!current || !agentMayReply(current.mode)) return;
         const session = await chatSessionService.current(current);
         const replyId = randomUUID();
@@ -277,6 +281,43 @@ export function createChatService({
           at: reply.createdAt,
           intent: "ticket_status",
           step: "ticket_selection",
+        });
+      });
+    },
+
+    /**
+     * "Não, obrigado" à oferta de analista de um chamado vencido (tela 3, 11.5): resposta pelo
+     * código, sem o modelo. Só repete o número que o próprio funcionário recebeu na oferta.
+     */
+    async declineOffer(employee: UserRow, number: string) {
+      const ticketNumber = parseTicketNumber(number);
+      if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      const conversation = await openConversationFor(employee);
+      return withConversationLock(conversation.id, async () => {
+        await chatSessionService.touch(conversation);
+        await saveEmployeeMessage(
+          conversation.id,
+          employee.id,
+          "Não, obrigado",
+          clock.now(),
+          undefined,
+        );
+        if (!agentMayReply(conversation.mode)) return;
+        const reply = await conversationStore.appendMessage({
+          conversationId: conversation.id,
+          author: "agent",
+          authorId: null,
+          parts: [{ type: "text", text: declinedOfferText(ticketNumber) }],
+          createdAt: clock.now(),
+        });
+        await decisionService.recordButtonAction({
+          conversationId: conversation.id,
+          conversationVersion: conversation.version,
+          messageId: reply.id,
+          description: `Funcionário recusou a oferta de analista para o ${ticketNumber}.`,
+          at: reply.createdAt,
+          intent: "ticket_status",
+          step: "decline_button",
         });
       });
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeElapsed, formatBrasiliaDateTime } from "./date-format.ts";
+import { describeElapsed, formatBrasiliaDateTime, formatBrasiliaDayMonth } from "./date-format.ts";
 
 describe("formatBrasiliaDateTime", () => {
   it("mostra no horário de Brasília, mesmo com a data em UTC (R02)", () => {
@@ -33,5 +33,15 @@ describe("describeElapsed", () => {
 
   it("data no futuro (relógios dessincronizados) não vira tempo negativo", () => {
     expect(describeElapsed(before(-3), now)).toBe("menos de 1 hora");
+  });
+});
+
+describe("formatBrasiliaDayMonth", () => {
+  it("dia e mês curtos no horário de Brasília, como na lista do protótipo", () => {
+    expect(formatBrasiliaDayMonth(new Date("2026-10-16T17:20:00Z"))).toBe("16 out");
+  });
+
+  it("R02: perto da meia-noite UTC, vale o dia de Brasília", () => {
+    expect(formatBrasiliaDayMonth(new Date("2026-01-01T02:00:00Z"))).toBe("31 dez");
   });
 });

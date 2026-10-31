@@ -102,6 +102,11 @@ export function describeSelectedTicket(
   return lines.join(" ");
 }
 
+/** "Não, obrigado" à oferta de analista: o chamado segue na fila, e a porta fica aberta. */
+export function declinedOfferText(ticketNumber: string): string {
+  return `Combinado. O ${ticketNumber} continua com a equipe de TI; se mudar de ideia, é só me pedir um analista.`;
+}
+
 /**
  * A resposta gravada tem a mesma parte de tool que o agent produziria ao consultar o chamado:
  * a tela mostra o chip "consultou o INC-…" e o card do chamado sem saber que o modelo não rodou.

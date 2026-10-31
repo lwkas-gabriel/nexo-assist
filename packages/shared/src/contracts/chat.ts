@@ -22,7 +22,15 @@ export const sendMessageRequestSchema = z.object({
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
-/** Clique num chamado da lista (tela 3): respondido pelo código, sem o modelo (11.5). */
-export const selectTicketRequestSchema = z.object({
+/**
+ * Ações da tela 3 sobre um chamado: escolher na lista e recusar a oferta de analista, respondidas
+ * pelo código (11.5); e "Falar com um analista" com o chamado vencido.
+ */
+export const ticketActionRequestSchema = z.object({
   ticketNumber: z.string().trim().min(1).max(40),
+});
+
+/** "Falar com um analista" pelo botão; com o chamado, quando é a oferta de um chamado vencido. */
+export const requestAnalystSchema = z.object({
+  ticketNumber: z.string().trim().min(1).max(40).optional(),
 });

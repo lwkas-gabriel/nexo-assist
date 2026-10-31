@@ -1,6 +1,10 @@
-import { selectTicketRequestSchema, sendMessageRequestSchema } from "@nexo/shared/contracts";
+import {
+  requestAnalystSchema,
+  sendMessageRequestSchema,
+  ticketActionRequestSchema,
+} from "@nexo/shared/contracts";
 import { AppError } from "@nexo/shared/errors";
-import { parseInput, readJson } from "@nexo/shared/http";
+import { parseInput, readJson, readOptionalJson } from "@nexo/shared/http";
 import { createUIMessageStreamResponse } from "ai";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -90,14 +94,26 @@ export function createChatRoutes({
 
   // Clique num chamado da lista (tela 3): resposta montada pelo código, sem o modelo (11.5).
   routes.post("/actions/select-ticket", smallBody, async (c) => {
-    const { ticketNumber } = parseInput(selectTicketRequestSchema, await readJson(c.req));
+    const { ticketNumber } = parseInput(ticketActionRequestSchema, await readJson(c.req));
     await chatService.selectTicket(currentUser(c, "employee"), ticketNumber);
     return c.json({ ok: true });
   });
 
+  // "Não, obrigado" à oferta de analista (tela 3): resposta pelo código, sem o modelo.
+  routes.post("/actions/decline-offer", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(ticketActionRequestSchema, await readJson(c.req));
+    await chatService.declineOffer(currentUser(c, "employee"), ticketNumber);
+    return c.json({ ok: true });
+  });
+
   // "Falar com um analista" pelo botão: transfere sem o agent (11.5), inclusive no limite da sessão.
-  routes.post("/handoff", async (c) => {
-    return c.json({ handoff: await chatService.requestAnalyst(currentUser(c, "employee")) });
+  // Com o número do chamado, é a oferta de um chamado vencido (tela 3).
+  routes.post("/handoff", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(requestAnalystSchema, await readOptionalJson(c.req));
+    const handoff = await chatService.requestAnalyst(currentUser(c, "employee"), {
+      ...(ticketNumber ? { ticketNumber } : {}),
+    });
+    return c.json({ handoff });
   });
 
   // RN14: "Nova sessão", quando a atual chega ao limite ou o funcionário quer recomeçar.

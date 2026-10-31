@@ -20,6 +20,35 @@ export function formatBrasiliaDateTime(date: Date): string {
   return dateTimeFormatter.format(date);
 }
 
+const MONTH_ABBREVIATIONS = [
+  "jan",
+  "fev",
+  "mar",
+  "abr",
+  "mai",
+  "jun",
+  "jul",
+  "ago",
+  "set",
+  "out",
+  "nov",
+  "dez",
+] as const;
+
+const dayMonthFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: BUSINESS_TIME_ZONE,
+  day: "2-digit",
+  month: "numeric",
+});
+
+/** Dia e mês curtos no horário de Brasília, como na lista de chamados do protótipo ("16 out"). */
+export function formatBrasiliaDayMonth(date: Date): string {
+  const parts = dayMonthFormatter.formatToParts(date);
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  return `${day} ${MONTH_ABBREVIATIONS[month - 1] ?? ""}`.trim();
+}
+
 /**
  * Tempo decorrido em texto ("2 horas", "5 dias"), para frases como "sem resposta há 5 dias".
  * Abaixo de um dia conta em horas: os prazos de Crítica (1 h) e Alta (4 h úteis) vencem antes disso.

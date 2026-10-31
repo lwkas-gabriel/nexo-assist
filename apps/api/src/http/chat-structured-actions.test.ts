@@ -93,7 +93,9 @@ describe("seleção de um chamado na lista (11.5, tela 3)", () => {
     expect(response.status).toBe(200);
     expect(recording.counter.calls).toBe(0);
     const [click, reply] = (await conversation()).messages;
-    expect(click?.parts).toEqual([{ type: "text", text: "INC-20311" }]);
+    expect(click?.parts).toEqual([
+      { type: "text", text: "INC-20311 · Notebook lento após atualização do Windows" },
+    ]);
     expect(reply?.parts.map((part) => part.type)).toEqual(["tool-get_ticket", "text"]);
     expect(reply?.parts[1]?.text).toMatch(/^INC-20311 · /);
     expect(reply?.metadata?.decision).toMatchObject({
@@ -119,7 +121,9 @@ describe("seleção de um chamado na lista (11.5, tela 3)", () => {
     await post("/actions/select-ticket", { ticketNumber: "INC-20311" });
 
     const { messages } = await conversation();
-    expect(messages.at(-1)?.parts).toEqual([{ type: "text", text: "INC-20311" }]);
+    expect(messages.at(-1)?.parts).toEqual([
+      { type: "text", text: "INC-20311 · Notebook lento após atualização do Windows" },
+    ]);
     expect(messages.some((message) => message.metadata?.author === "agent")).toBe(false);
     expect(recording.counter.calls).toBe(0);
   });
@@ -170,5 +174,57 @@ describe("seleção de um chamado na lista (11.5, tela 3)", () => {
 
     expect(statuses.slice(0, 60).every((status) => status === 400)).toBe(true);
     expect(statuses.at(-1)).toBe(429);
+  });
+});
+
+describe("oferta de analista para um chamado vencido (tela 3, RN07)", () => {
+  it("Não, obrigado é respondido pelo código, sem chamar o modelo", async () => {
+    const { post, conversation, recording } = await setup();
+
+    const response = await post("/actions/decline-offer", { ticketNumber: "INC-20311" });
+
+    expect(response.status).toBe(200);
+    expect(recording.counter.calls).toBe(0);
+    const [decline, reply] = (await conversation()).messages;
+    expect(decline?.parts).toEqual([{ type: "text", text: "Não, obrigado" }]);
+    expect(reply?.parts[0]?.text).toMatch(/^Combinado\. O INC-20311 continua com a equipe de TI/);
+    expect(reply?.metadata?.decision).toMatchObject({ confidenceSource: "button" });
+  });
+
+  it("RN08: com a conversa num analista, o Não, obrigado fica para ele, sem resposta", async () => {
+    const { post, conversation } = await setup();
+    await post("/handoff", {});
+
+    await post("/actions/decline-offer", { ticketNumber: "INC-20311" });
+
+    const { messages } = await conversation();
+    expect(messages.at(-1)?.parts).toEqual([{ type: "text", text: "Não, obrigado" }]);
+  });
+
+  it("Falar com um analista com o chamado vencido transfere pelo prazo, ligado ao chamado", async () => {
+    const { post } = await setup();
+
+    const response = await post("/handoff", { ticketNumber: "INC-20311" });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      handoff: { reason: "chamado com prazo vencido", ticketNumber: "INC-20311" },
+    });
+  });
+
+  it("sem corpo, o Falar com um analista continua sendo o pedido do funcionário", async () => {
+    const { container } = await setup();
+    const { app, login } = await createTestApp(container);
+    const cookie = await login("ana.souza@nexo.com.br");
+
+    const response = await app.request("/api/chat/handoff", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      handoff: { reason: "o funcionário pediu um analista" },
+    });
   });
 });
