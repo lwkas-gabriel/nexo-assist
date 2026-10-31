@@ -410,3 +410,16 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Fica documentado:** a mensagem conta no limite antes da etapa 1, mesmo que o limiar a transfira em seguida, porque o classificador já foi chamado por ela (achado 11 da revisão, aceito).
 - **Lição:** a IA reintroduziu, numa tarefa nova, uma brecha que ela mesma tinha fechado na anterior. O revisor sem contexto pegou. O teste que prova "o texto do funcionário não vai para o system do agent" agora protege contra isso.
 
+---
+
+## T16: rate limit e custo (31/10/2026)
+
+### 50. T16: fechar o que faltava e medir o custo de verdade
+- **IA gerou:**
+  - um limite de 60 mensagens ao agent por IP por hora. Como o login aceita qualquer senha, uma pessoa podia entrar com as 8 contas de demonstração e somar 8 × 30 mensagens por hora, gastando a cota de todos (A13);
+  - a gravação dos tokens do agent (etapa 2) em cada turno, pendente desde a T14. O Mastra os informa no `onFinish` do stream, antes de o turno ser gravado;
+  - o comando `usage:report`, que resume tokens e latência por turno e por conversa a partir dos registros, com o cálculo numa função pura testada.
+- **Decisão tomada pela IA, sem consultar o usuário:** sem teto de tokens. No plano gratuito do Gemini o limite que importa é o de requisições (15 por minuto, 500 por dia), já coberto pelos tetos globais; tokens só pesariam acima de 250 mil por minuto.
+- **Medição com o Gemini real** (uma conversa: central de ajuda, consulta de chamado e abertura de chamado): cerca de 10,7 mil tokens por turno, quase tudo de entrada (instruções, definições das tools, histórico), 32 mil por conversa e latência de 3,8 s no p50 e 5,7 s no p95. Os números entraram no README. A quarta mensagem da sondagem foi recusada pelo teto de 3 por minuto, recalibrado na T14: o limite funcionou como deveria.
+- **Para depois:** com tantos tokens de entrada por turno, o cache de prompt do provedor (as instruções já são fixas para isso) e enxugar as descrições das tools são os ganhos mais baratos. Fica no "o que faria com mais tempo".
+
