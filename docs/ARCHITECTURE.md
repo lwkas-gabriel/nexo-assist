@@ -77,7 +77,7 @@ Fica explícito no README que senha qualquer é requisito do desafio, não prát
 Princípio: **o LLM interpreta, o código garante as regras.**
 - O LLM (agent Mastra com tools) identifica a intenção e extrai campos (tipo, categoria, impacto, urgência, resumo).
 - Regras determinísticas em código puro e testado: matriz de prioridade (RN11), SLA/vencimento em horário útil (RN12/13), janela de reabertura (RN06), candidatos a duplicidade (RN05).
-- **Turno em duas etapas (R05):** classificador com saída estruturada (intenção, campos, confiança, porquê) → agent com tools, que recebe a classificação.
+- **Turno em duas etapas (R05):** classificador com saída estruturada (intenção, campos, confiança, porquê) → agent com tools, que recebe a classificação como contexto do sistema (`apps/api/src/agent/classifier.ts`). Ao fim do turno, `decision-trace.ts` junta a classificação, os passos do agent, as regras que o código aplicou e os sinais que reduziram a confiança; o registro fica em `decision_traces`, ligado à mensagem. O limiar (R39) é decidido antes do agent falar: segunda mensagem seguida com confiança baixa vai para um analista sem chamar o agent.
 - **Confirmação validada pelo código (RN04, R04):** o agent propõe o rascunho. A criação ou atualização só acontece pelo caso de uso `confirmDraft`, chamado pelo botão, pelo Ctrl/⌘+Enter ou pela tool `confirm_draft`. O servidor recusa se as condições de R04 não forem atendidas.
 - **Pausa por construção (RN08):** se a conversa está com analista, o servidor nem chama o LLM.
 - **Privacidade por construção (RN09):** o `userId` vem da sessão, injetado no contexto das tools; nenhuma tool aceita `userId` do modelo.

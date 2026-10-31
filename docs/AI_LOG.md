@@ -318,3 +318,24 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - A resposta do agent não é revalidada contra o estado no fim do turno. Depois de uma transferência, essa resposta é o próprio aviso ao funcionário e precisa ser gravada; o que importava era impedir ações, e isso as tools agora fazem.
 - **Lição:** de novo, o revisor achou o que os testes do autor não pegavam, e alguns desses testes passavam por acaso. Conferir que um teste falha sem a correção passou a fazer parte das correções.
 
+---
+
+## T14: classificador e registro de decisão (30/10/2026)
+
+### 46. T14: toda resposta do agent tem um registro de decisão
+- **IA gerou:**
+  - o classificador da etapa 1: um agent do Mastra com saída estruturada, que devolve intenção, o que entendeu, campos extraídos, confiança e porquê. Se ele falhar, o turno segue com confiança neutra, e o registro diz isso;
+  - o registro de decisão (`decision-trace.ts`), uma função pura que junta a classificação, os passos do agent e as regras aplicadas pelo código (prioridade, nível de suporte);
+  - sinais objetivos que reduzem a confiança, cada um com o motivo (R09, R40): central de ajuda sem artigo, campos faltando, mais de um duplicado, sistema de chamados falhando, ação que falhou;
+  - a gravação por turno, ligada à mensagem, com o registro chegando à tela nos metadados.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - A classificação vai para o agent pela opção `system` do Mastra. O provedor do Gemini não aceita mensagem de sistema no meio da conversa, e colocá-la no texto do funcionário deixaria qualquer um forjar uma classificação.
+  - O ADR-0010 já contava o classificador nas 3 chamadas por mensagem, então os tetos de uso não mudaram.
+  - Limiar inicial de 0,5, a calibrar na avaliação da T27.
+- **O teste pegou um problema da central de ajuda (R13):** "Como calibro..." achava o artigo "Como instalar ou pedir um software" só pela palavra "como". As palavras de pergunta e de ligação passaram a ser ignoradas na busca, o que também melhora a detecção de duplicados.
+- **O Gemini real pegou dois problemas** (cerca de 15 chamadas da cota gratuita):
+  1. Para "meu computador tá esquisito", o agent montou um rascunho **inventando** a urgência e a descrição. O classificador passou a dar confiança baixa a problema sem detalhe, e o prompt proíbe deduzir urgência ou quem é afetado. Agora o agent pergunta "o que está acontecendo?".
+  2. O limiar era aplicado depois da resposta: o agent fez uma pergunta com opções e a conversa foi transferida logo em seguida, deixando a pergunta sem ninguém para acompanhar. A decisão passou para antes do agent falar. A segunda mensagem seguida com confiança baixa vai para o analista com um aviso fixo, sem chamar o agent, o que também economiza uma chamada.
+- **Validação final com o modelo real:** "qual o horário" saiu com confiança 0,9, sem sinais. A mensagem vaga gerou uma pergunta e, na segunda vaga, a transferência para o N2, com a regra R39 no registro. O pedido claro de abertura saiu com confiança 0,95 e rascunho Alta.
+- **Fica para depois:** os tokens da etapa 2 (o agent) não são medidos ainda, porque o stream do Mastra não os expõe no ponto em que o turno é gravado. Ficam para a T16, junto com o teto de custo.
+
