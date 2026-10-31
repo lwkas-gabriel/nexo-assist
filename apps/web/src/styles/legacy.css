@@ -1,6 +1,5 @@
 /*
- * Estilo das telas do esqueleto, agora com os tokens do protótipo. Sai quando a T18 (login) e a
- * T19 (chat) refizerem as telas com os componentes de ui/.
+ * Estilo das telas do esqueleto, agora com os tokens do protótipo. Sai quando a T19 (chat) refizer a tela com os componentes de ui/.
  */
 @layer components {
   .chat {
@@ -71,51 +70,20 @@
     clip: rect(0 0 0 0);
   }
 
-  .login {
-    max-width: 400px;
-    margin: 48px auto;
-    padding: 0 16px;
-  }
-
-  .login__form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .login__form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .login__form .login__remember {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .login__error,
   .chat__error {
     color: var(--color-danger-text);
-  }
-
-  .login__demo {
-    margin-top: 24px;
-    font-size: 14px;
   }
 
   /*
    * O reset do Tailwind tira borda e fundo de campos e botões e o tamanho dos títulos. Nas telas
    * do esqueleto, isso deixava os campos invisíveis; aqui eles voltam, com os tokens.
    */
-  .login h1,
   .chat h1 {
     font-size: 24px;
     font-weight: 600;
     margin-bottom: 16px;
   }
 
-  .login input:not([type="checkbox"]),
   .composer input {
     height: 40px;
     padding: 0 12px;
@@ -125,7 +93,6 @@
     box-shadow: var(--shadow-field);
   }
 
-  .login button,
   .composer button,
   .chat__error button {
     height: 36px;
@@ -136,14 +103,8 @@
     font-weight: 600;
   }
 
-  .login button:disabled,
   .composer button:disabled {
     opacity: 0.5;
-  }
-
-  .login__demo ul {
-    list-style: disc;
-    padding-left: 20px;
   }
 
   .chat header {
