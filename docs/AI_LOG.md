@@ -524,3 +524,20 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Correção:** a senha dos testes passou a ser gerada a cada execução. Isso vale para o teste da tela, para o ajudante de testes da api e para o E2E, que também usavam `"qualquer-senha"`. O mesmo critério já valia para o token de serviço nos testes.
 - **Fica com o usuário:** o valor antigo continua no histórico do git. Como não é uma credencial de verdade, não justifica reescrever o histórico; o incidente pode ser marcado como resolvido (credencial de teste) no painel do GitGuardian.
 
+---
+
+## T19: chat do funcionário (31/10/2026)
+
+### 57. T19: a tela 2, com o estado vindo do servidor
+- **IA gerou:**
+  - a tela a partir dos nós do protótipo, com os componentes de `ui/`;
+  - as funções puras que leem as mensagens (quem escreveu, o rascunho e as opções vindas das tools, o rascunho que o Ctrl/⌘+Enter confirma, onde entra o resumo da sessão), com testes;
+  - os testes de componente do card, do campo de mensagem e das respostas rápidas.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **O estado do card vem do servidor:** a conversa passou a trazer todos os rascunhos com o estado atual. A saída da tool só diz como o rascunho estava quando foi proposto; depois de um clique ou de um "pode criar" digitado, o card precisa mostrar "Criado · INC-…".
+  - **Recarregar a conversa ao fim de cada resposta** e depois de cada botão: o contador da sessão, os rascunhos e os registros de decisão ficam em dia, sem um segundo canal de atualização.
+  - **O card que aceita ação é o do rascunho mais recente ainda confirmável,** não o da última mensagem: o funcionário pode ter perguntado outra coisa depois da proposta.
+  - **O prompt mudou:** na T12, sem interface, o agent escrevia no texto os campos e as opções numeradas. Com o card e os botões, isso duplicaria tudo. Agora o texto é curto e sempre cita o D-n, porque é ele que marca o rascunho como visto (R04).
+  - **"Meu perfil" aparece na barra lateral desativado,** com "em breve": a tela é da T25.
+- **Conferência visual:** capturas no desktop (1440 × 900) e no celular, com um rascunho aberto. A linha do topo do card quebrava no meio das palavras no celular e foi corrigida.
+
