@@ -2,9 +2,11 @@ import type { Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { DraftService, DraftView, NewTicketInput } from "./draft-service.ts";
+import type { HandoffService } from "./handoff-service.ts";
 
 type DraftActionsDependencies = {
   draftService: DraftService;
+  handoffService: HandoffService;
   conversationStore: ConversationStore;
   clock: Clock;
 };
@@ -28,6 +30,7 @@ function confirmedLine(draft: DraftView): string {
  */
 export function createDraftActions({
   draftService,
+  handoffService,
   conversationStore,
   clock,
 }: DraftActionsDependencies) {
@@ -57,7 +60,13 @@ export function createDraftActions({
         source: { via: "button" },
       });
       await recordInConversation(conversationId, confirmedLine(result.draft));
-      return result;
+      // A04: chamado crítico vai direto para o N2, também quando confirmado pelo botão.
+      const handoff = await handoffService.escalateIfCritical({
+        employeeId,
+        conversationId,
+        ticket: result.ticket,
+      });
+      return { ...result, handoff };
     },
 
     async cancel(employeeId: string, draftNumber: number) {

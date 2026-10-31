@@ -2,7 +2,7 @@ import { AppError } from "@nexo/shared/errors";
 import { describe, expect, it } from "vitest";
 import type { Article, KnowledgeBase } from "../ports/knowledge-base.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
-import { createFakeTicketGateway, createTestDraftService, sampleTicket } from "../test-support.ts";
+import { createFakeTicketGateway, createTestAgentServices, sampleTicket } from "../test-support.ts";
 import { createAgentRequestContext } from "./agent-context.ts";
 import { createModel, createNexoAgent } from "./nexo-agent.ts";
 
@@ -33,12 +33,16 @@ async function createAgent({
   knowledgeBase = createFakeKnowledgeBase([]).knowledgeBase,
   ticketGateway = createFakeTicketGateway().ticketGateway,
 }: { knowledgeBase?: KnowledgeBase; ticketGateway?: TicketGateway } = {}) {
-  const { draftService, conversationId } = await createTestDraftService(ticketGateway, clock);
+  const { draftService, handoffService, conversationId } = await createTestAgentServices(
+    ticketGateway,
+    clock,
+  );
   const agent = createNexoAgent({
     model: createModel({ LLM_MODE: "mock" }),
     knowledgeBase,
     ticketGateway,
     draftService,
+    handoffService,
     clock,
   });
 

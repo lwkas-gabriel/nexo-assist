@@ -9,10 +9,12 @@ import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
 import { createDraftService } from "./app/draft-service.ts";
+import { createHandoffService } from "./app/handoff-service.ts";
 import type { LlmConfig } from "./config.ts";
 import { createConversationStore, type ConversationStore } from "./db/conversation-store.ts";
 import { openDatabase, type Database } from "./db/database.ts";
 import { createDraftStore } from "./db/draft-store.ts";
+import { createHandoffStore } from "./db/handoff-store.ts";
 import { createSessionStore } from "./db/session-store.ts";
 import { createUserStore } from "./db/user-store.ts";
 import type { ChatLimits } from "./http/chat-routes.ts";
@@ -84,11 +86,18 @@ export async function createContainer(
     ticketGateway,
     clock,
   });
+  const handoffService = createHandoffService({
+    conversationStore,
+    handoffStore: createHandoffStore(db),
+    ticketGateway,
+    clock,
+  });
   const mastra = createNexoMastra({
     model: createModel(config),
     knowledgeBase,
     ticketGateway,
     draftService,
+    handoffService,
     clock,
   });
 
@@ -98,7 +107,7 @@ export async function createContainer(
     ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
     chatService: createChatService({ mastra, conversationStore, draftService, clock }),
-    draftActions: createDraftActions({ draftService, conversationStore, clock }),
+    draftActions: createDraftActions({ draftService, handoffService, conversationStore, clock }),
     conversationStore,
     chatLimits: {
       perUser: createRateLimiter({

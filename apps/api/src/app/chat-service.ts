@@ -11,6 +11,7 @@ import {
 import { createAgentRequestContext } from "../agent/agent-context.ts";
 import { describeAgentError } from "../agent/agent-errors.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
+import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
 import type { DraftService } from "./draft-service.ts";
@@ -50,9 +51,12 @@ export function createChatService({
     );
   }
 
-  async function loadHistory(conversationId: string): Promise<UIMessage[]> {
+  async function loadHistory(
+    conversationId: string,
+    toMessage: (row: MessageRow) => UIMessage,
+  ): Promise<UIMessage[]> {
     const rows = await conversationStore.listRecentMessages(conversationId, HISTORY_WINDOW);
-    const result = await safeValidateUIMessages({ messages: rows.map(toUIMessage) });
+    const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
     if (!result.success) {
       throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
     }
@@ -65,13 +69,26 @@ export function createChatService({
       if (!conversation) return { conversation: null, messages: [] };
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
-        messages: await loadHistory(conversation.id),
+        messages: await loadHistory(conversation.id, toUIMessage),
       };
     },
 
-    /** Grava a mensagem do funcionário e devolve a resposta do agent em streaming. */
+    /**
+     * Grava a mensagem do funcionário e devolve a resposta do agent em streaming. Com a conversa
+     * transferida ou com um analista, o agent nem é chamado (RN08): a mensagem fica para o analista.
+     */
     async sendMessage(employee: UserRow, text: string): Promise<ReadableStream<UIMessageChunk>> {
       const conversation = await openConversationFor(employee);
+      if (!agentMayReply(conversation.mode)) {
+        await conversationStore.appendMessage({
+          conversationId: conversation.id,
+          author: "employee",
+          authorId: employee.id,
+          parts: [{ type: "text", text }],
+          createdAt: clock.now(),
+        });
+        return createUIMessageStream({ execute: () => undefined });
+      }
       if (busyConversations.has(conversation.id)) {
         throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
       }
@@ -87,7 +104,7 @@ export function createChatService({
           parts: [{ type: "text", text }],
           createdAt: turnStartedAt,
         });
-        const history = await loadHistory(conversation.id);
+        const history = await loadHistory(conversation.id, toAgentHistoryMessage);
         // O Mastra tipa o stream de forma genérica; no formato v7 ele produz os chunks de UI do AI SDK.
         const agentStream = (await handleChatStream({
           mastra,
@@ -146,10 +163,34 @@ function textOf(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
 }
 
+/** Mensagem como a tela mostra; o autor vai junto, para a tela distinguir agent, analista e sistema. */
 function toUIMessage(row: MessageRow): UIMessage {
   return {
     id: row.id,
     role: row.author === "employee" ? "user" : "assistant",
+    metadata: { author: row.author },
     parts: JSON.parse(row.parts) as UIMessage["parts"],
+  };
+}
+
+/** Como o agent identifica o que não foi ele que escreveu (R18). */
+const AUTHOR_PREFIXES: Partial<Record<MessageRow["author"], string>> = {
+  analyst: "[Mensagem do analista] ",
+  system: "[Registro do sistema] ",
+};
+
+/**
+ * Mensagem como o agent recebe no histórico. Mensagens do analista e registros do sistema chegam
+ * marcadas: sem isso, o modelo as tomaria como respostas dele mesmo (R18).
+ */
+function toAgentHistoryMessage(row: MessageRow): UIMessage {
+  const message = toUIMessage(row);
+  const prefix = AUTHOR_PREFIXES[row.author];
+  if (!prefix) return message;
+  return {
+    ...message,
+    parts: message.parts.map((part) =>
+      part.type === "text" ? { ...part, text: `${prefix}${part.text}` } : part,
+    ),
   };
 }

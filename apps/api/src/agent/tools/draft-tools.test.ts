@@ -1,6 +1,6 @@
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it } from "vitest";
-import { createFakeTicketGateway, createTestDraftService } from "../../test-support.ts";
+import { createFakeTicketGateway, createTestAgentServices } from "../../test-support.ts";
 import { createAgentRequestContext } from "../agent-context.ts";
 import { createDraftTools } from "./draft-tools.ts";
 import { createTicketTools } from "./ticket-tools.ts";
@@ -23,8 +23,11 @@ async function setup() {
   let now = new Date("2026-10-27T12:43:00Z");
   const clock = { now: () => now };
   const fake = createFakeTicketGateway();
-  const { draftService, conversationId } = await createTestDraftService(fake.ticketGateway, clock);
-  const tools = createDraftTools({ draftService });
+  const { draftService, handoffService, conversationId } = await createTestAgentServices(
+    fake.ticketGateway,
+    clock,
+  );
+  const tools = createDraftTools({ draftService, handoffService });
 
   /** Um turno novo: começa quando chega a mensagem do funcionário. */
   const turn = (overrides: { employeeId?: string; conversationId?: string } = {}) =>

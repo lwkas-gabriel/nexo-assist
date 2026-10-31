@@ -10,6 +10,7 @@ import {
 import { MAX_UPDATE_MESSAGE_CHARS } from "@nexo/shared/contracts";
 import { z } from "zod";
 import type { DraftService } from "../../app/draft-service.ts";
+import type { HandoffService } from "../../app/handoff-service.ts";
 import { agentTurnFrom, hasReadTicketData } from "../agent-context.ts";
 import { toolFailure } from "./tool-failure.ts";
 
@@ -30,7 +31,13 @@ function parseDraftId(text: string): number | undefined {
  * Tools que escrevem: só propõem rascunhos e confirmam o que o funcionário já viu (RN04, R04).
  * Quem é o funcionário e qual a conversa vêm do contexto do turno, nunca dos argumentos (RN09).
  */
-export function createDraftTools({ draftService }: { draftService: DraftService }) {
+export function createDraftTools({
+  draftService,
+  handoffService,
+}: {
+  draftService: DraftService;
+  handoffService: HandoffService;
+}) {
   const proposeTicketDraft = createTool({
     id: PROPOSE_TICKET_DRAFT_TOOL_ID,
     description:
@@ -135,8 +142,15 @@ export function createDraftTools({ draftService }: { draftService: DraftService 
           // R04: o rascunho precisa ter sido visto antes da mensagem que confirmou.
           source: { via: "chat", turnStartedAt: turn.startedAt },
         });
+        // A04: chamado crítico vai direto para o N2; o agent só avisa.
+        const handoff = await handoffService.escalateIfCritical({
+          employeeId: turn.employeeId,
+          conversationId: turn.conversationId,
+          ticket,
+        });
         return {
           ok: true as const,
+          handoff,
           ticket: {
             number: ticket.number,
             title: ticket.title,

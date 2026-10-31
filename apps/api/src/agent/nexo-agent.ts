@@ -3,12 +3,14 @@ import type { MastraModelConfig } from "@mastra/core/llm";
 import { Mastra } from "@mastra/core/mastra";
 import type { Clock } from "@nexo/shared/domain";
 import type { DraftService } from "../app/draft-service.ts";
+import type { HandoffService } from "../app/handoff-service.ts";
 import type { LlmConfig } from "../config.ts";
 import type { KnowledgeBase } from "../ports/knowledge-base.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { NEXO_INSTRUCTIONS } from "./instructions.ts";
 import { createMockModel } from "./mock-model.ts";
 import { createDraftTools } from "./tools/draft-tools.ts";
+import { createHandoffTool, HANDOFF_TO_ANALYST_TOOL_ID } from "./tools/handoff-tool.ts";
 import { createSearchKnowledgeBaseTool } from "./tools/search-knowledge-base.ts";
 import { createTicketTools } from "./tools/ticket-tools.ts";
 
@@ -36,6 +38,7 @@ export type NexoAgentDependencies = {
   knowledgeBase: KnowledgeBase;
   ticketGateway: TicketGateway;
   draftService: DraftService;
+  handoffService: HandoffService;
   clock: Clock;
 };
 
@@ -44,6 +47,7 @@ export function createNexoAgent({
   knowledgeBase,
   ticketGateway,
   draftService,
+  handoffService,
   clock,
 }: NexoAgentDependencies) {
   return new Agent({
@@ -55,7 +59,8 @@ export function createNexoAgent({
     tools: {
       search_knowledge_base: createSearchKnowledgeBaseTool(knowledgeBase),
       ...createTicketTools({ ticketGateway, clock }),
-      ...createDraftTools({ draftService }),
+      ...createDraftTools({ draftService, handoffService }),
+      [HANDOFF_TO_ANALYST_TOOL_ID]: createHandoffTool({ handoffService }),
     },
     defaultOptions: {
       // Raciocínio baixo: chat de service desk não precisa de raciocínio longo; menos tokens
