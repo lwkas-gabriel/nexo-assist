@@ -737,3 +737,17 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **Testes fracos no encerramento:** o resumo era conferido só por existir; agora o texto e o contador zerado. Entraram devolver sem assumir, devolver por outro analista, o sistema de chamados caído ao assumir, as rotas novas do tickets-service, e o encerramento no E2E.
 - **Menores, todos tratados:** mensagem da tela velha com os nomes internos dos estados ("de agent com assume"); aviso de ocupado que culpava o assistente quando quem segurava a trava era outro analista; o sistema de chamados era chamado dentro da trava (até ~7 s segurando o chat do funcionário); a linha "Atendimento encerrado" podia cair na sessão nova (mesmo milissegundo); a mensagem do funcionário para o analista não passava pela trava; documentação das rotas e dos estados do chamado; JSDoc fora do lugar e relógio real no sistema de chamados falso dos testes.
 - **Lição:** "uma ação por vez em cada conversa" só vale se todas as entradas que mudam a conversa passarem pela trava. A T24 pôs a do console e a do agent; os botões do card, feitos antes da trava existir, ficaram de fora. Ao introduzir uma trava, vale listar todos os caminhos que escrevem no mesmo estado.
+
+---
+
+## T25: Meu perfil (31/10/2026)
+
+### 71. T25: a tela que só existia no protótipo
+- **IA gerou:** a tela "Meu perfil", a navegação entre atendimento e perfil, e os testes (tela, navegação e E2E nas duas larguras).
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **Só de leitura, como a suposição A01:** nome, e-mail corporativo ("Gerenciado pela TI") e setor; "Redefinir senha" mostra um aviso de simulação ("qualquer senha entra, e nenhum link é enviado").
+  - **Sem o "Alterada há 42 dias" do protótipo:** o sistema não guarda a troca de senha, e a tela não mostra um dado inventado. No lugar, "Definida pela TI".
+  - **Setor a mais que o protótipo:** é dado real do cadastro, útil ao funcionário.
+  - **Navegação por hash (`#/perfil`)** em vez das rotas `/atendimento` e `/perfil` do 10.3: o voltar e o avançar do navegador funcionam, sem roteador nem rota nova no servidor (que serve o front estático). Registrado como desvio do 10.3.
+  - **O perfil é do funcionário:** o protótipo só desenha "Cliente — Meu perfil". O "Disponível" do analista (A21) continua salvo no navegador, pelo console.
+- **Conferência visual:** desktop e celular, com o aviso de simulação aberto.

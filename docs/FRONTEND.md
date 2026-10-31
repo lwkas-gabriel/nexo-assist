@@ -38,7 +38,7 @@
 | `/atendimento` | Telas 2 e 3 (mesma tela, estados diferentes) | funcionário |
 | `/perfil` | Meu perfil | funcionário |
 | `/console` e `/console/:conversaId` | Telas 4 e 5 | analista |
-Guardas de rota por papel; sessão expirada → `/login` com aviso.
+Guardas de rota por papel; sessão expirada → `/login` com aviso. **T25:** sem roteador; o funcionário navega por hash (`#/` e `#/perfil`), o analista tem uma página só (o console), e o papel decide a tela depois do login.
 
 ### 10.4 Componentes (reutilizáveis entre chat e console)
 - **Base (`ui/`):** Button (primary/secondary/danger-soft/ghost), Pill/Badge, Avatar (iniciais), Card, IconButton, TextField, Checkbox, Skeleton, Toast, EmptyState, Kbd (atalho).
