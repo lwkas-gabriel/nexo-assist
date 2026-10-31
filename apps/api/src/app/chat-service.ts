@@ -35,6 +35,7 @@ import {
 } from "./conversation-reader.ts";
 import type { HandoffService } from "./handoff-service.ts";
 import { textOf } from "./chat-text.ts";
+import type { ConversationLocks } from "./conversation-locks.ts";
 import { isSessionAtLimit } from "./session-state.ts";
 import {
   declinedOfferText,
@@ -64,8 +65,11 @@ type ChatServiceDependencies = {
   quota: AgentQuota;
   ticketGateway: TicketGateway;
   userStore: UserStore;
+  locks: ConversationLocks;
   clock: Clock;
 };
+
+const BUSY_MESSAGE = "Aguarde a resposta anterior do Nexo Assist.";
 
 export type { AnalystView };
 
@@ -93,6 +97,7 @@ export function createChatService({
   quota,
   ticketGateway,
   userStore,
+  locks,
   clock,
 }: ChatServiceDependencies) {
   const conversationReader = createConversationReader({
@@ -100,8 +105,6 @@ export function createChatService({
     decisionService,
     userStore,
   });
-  /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
-  const busyConversations = new Set<string>();
 
   async function openConversationFor(employee: UserRow): Promise<ConversationRow> {
     return (
@@ -179,15 +182,7 @@ export function createChatService({
 
   /** Uma ação por vez em cada conversa (R06): mensagens, nova sessão e pedido de analista. */
   async function withConversationLock<T>(conversationId: string, action: () => Promise<T>) {
-    if (busyConversations.has(conversationId)) {
-      throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
-    }
-    busyConversations.add(conversationId);
-    try {
-      return await action();
-    } finally {
-      busyConversations.delete(conversationId);
-    }
+    return locks.run(conversationId, BUSY_MESSAGE, action);
   }
 
   return {
@@ -393,11 +388,7 @@ export function createChatService({
         await chatSessionService.touch(conversation);
         return createUIMessageStream({ execute: () => undefined });
       }
-      if (busyConversations.has(conversation.id)) {
-        throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
-      }
-      busyConversations.add(conversation.id);
-      const release = () => busyConversations.delete(conversation.id);
+      const release = locks.acquire(conversation.id, BUSY_MESSAGE);
 
       try {
         // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.

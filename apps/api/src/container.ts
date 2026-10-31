@@ -10,6 +10,7 @@ import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
 import { createConsoleService, type ConsoleService } from "./app/console-service.ts";
+import { createConversationLocks } from "./app/conversation-locks.ts";
 import { createConversationReader } from "./app/conversation-reader.ts";
 import { createChatSessionService } from "./app/chat-session-service.ts";
 import { createDecisionService } from "./app/decision-service.ts";
@@ -120,6 +121,8 @@ export async function createContainer(
     clock,
   });
   const decisionStore = createDecisionStore(db);
+  // Uma ação por vez em cada conversa, entre o chat e o console (R06).
+  const locks = createConversationLocks();
   const decisionService = createDecisionService({ decisionStore, handoffService, clock });
   // Limites em memória por janela curta; os tetos diários ficam no banco (agent-quota.ts).
   const chatLimits: ChatLimits = {
@@ -192,6 +195,7 @@ export async function createContainer(
       quota,
       ticketGateway,
       userStore,
+      locks,
       chatSessionService: createChatSessionService({
         chatSessionStore: createChatSessionStore(db),
         conversationStore,
