@@ -220,3 +220,18 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Validação com o Gemini real** (4 conversas, cerca de 10 chamadas da cota gratuita): listou os 3 chamados da tela 3 e perguntou qual; entendeu "o do notebook" pelo contexto e avisou que o prazo de 3 dias úteis venceu; recusou o chamado de outra pessoa sem nem consultar; redirecionou férias para o RH com o ramal certo.
 - **Ajuste feito com base no modelo real:** o Gemini respondia em markdown, que o chat mostraria como asteriscos. O prompt passou a pedir texto simples com marcadores "• ".
 - **O E2E pegou um problema de desenho dos testes:** dois testes em paralelo dividiam a mesma conversa e esbarravam, corretamente, na regra de um turno por vez (R06). Cada teste que envia mensagem passou a ter um funcionário próprio; Fábio Nunes e Gabriela Rocha, que aparecem na tela 4 do protótipo, entraram nas pessoas de demonstração.
+
+### 40. Primeira revisão adversarial independente (T11)
+- **Pedido do usuário:** ao fim de cada tarefa, uma revisão adversarial feita por um sub-agente **sem o contexto** da implementação, para ser imparcial. A IA criou a skill versionada `.claude/skills/revisao-adversarial/SKILL.md` com o procedimento (o que ler, o que procurar, como confirmar e o formato do relatório) e disparou um sub-agente novo com apenas a tarefa e o intervalo de commits.
+- **Resultado:** nenhum achado crítico; 1 importante e 8 menores, todos conferidos e corrigidos:
+  1. **Importante:** quando a TI nunca tinha respondido, o agent recebia a data de abertura como "última atualização da equipe de TI" e poderia afirmar uma atualização inexistente. Agora recebe `null`, e o prompt manda dizer que a TI ainda não respondeu. Validado com o Gemini real.
+  2. Erros inesperados das tools viram `tickets_error`, com o detalhe só no log.
+  3. Chamado crítico ou alto vencido saía como "há 0 dias"; o domínio passou a descrever o tempo em horas ou dias.
+  4. Faltavam testes das tools: número inválido, erro interno e contexto sem funcionário.
+  5. Faltava um teste de rota provando a ligação sessão → chat → agent → tool.
+  6. Ternário aninhado (proibido pelo CLAUDE.md) virou uma tabela tipada.
+  7. Regras duplicadas: o início do prazo passou a vir do domínio (`slaClockStart`), e a reabertura e o filtro de abertos passaram a usar as funções do domínio.
+  8. O ramal 4000 do service desk, que só existia no protótipo, foi para a central de ajuda.
+  9. O CLAUDE.md e a arquitetura se contradiziam sobre o agent usar portas; a regra foi alinhada.
+- **Lição:** o revisor sem contexto pegou um problema de comportamento do agent (afirmar uma atualização que não existiu) que os testes da própria implementação não pegavam, porque o caso "TI nunca respondeu" não estava coberto.
+- **Observação registrada:** o prazo do chamado da Carla venceria em 02/11 (Finados), porque feriados são ignorados por decisão (A10). Fica como exemplo concreto dessa limitação para o README.
