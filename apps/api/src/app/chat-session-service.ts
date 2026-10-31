@@ -87,10 +87,13 @@ export function createChatSessionService({
    * Encerra a sessão e abre outra. Só quem conseguiu encerrar abre a nova; quem perdeu a corrida
    * usa a que já existe (o banco garante uma ativa por conversa).
    */
-  async function endAndStart(session: ChatSessionRow, reason: SessionEndReason) {
-    const now = clock.now();
-    await chatSessionStore.end(session.id, reason, await summarize(session), now);
-    return chatSessionStore.start(session.conversationId, now);
+  async function endAndStart(
+    session: ChatSessionRow,
+    reason: SessionEndReason,
+    startAt: Date = clock.now(),
+  ) {
+    await chatSessionStore.end(session.id, reason, await summarize(session), startAt);
+    return chatSessionStore.start(session.conversationId, startAt);
   }
 
   /** A sessão em que a próxima mensagem entra; vencida por inatividade, recomeça (A05). */
@@ -162,12 +165,13 @@ export function createChatSessionService({
 
     /**
      * O analista encerrou o atendimento (T24, ADR-0007): a sessão fecha com resumo, mesmo sem
-     * mensagens ao agent (a conversa foi com o analista), e a próxima começa do zero.
+     * mensagens ao agent (a conversa foi com o analista), e a próxima começa do zero, em
+     * `startAt`: depois da linha "Atendimento encerrado", que fica na sessão que acabou.
      */
-    async endAfterService(conversation: ConversationRef): Promise<ChatSessionRow> {
+    async endAfterService(conversation: ConversationRef, startAt: Date): Promise<ChatSessionRow> {
       const active = await chatSessionStore.findActive(conversation.id);
-      if (!active) return chatSessionStore.start(conversation.id, clock.now());
-      return endAndStart(active, "service_ended");
+      if (!active) return chatSessionStore.start(conversation.id, startAt);
+      return endAndStart(active, "service_ended", startAt);
     },
 
     /**

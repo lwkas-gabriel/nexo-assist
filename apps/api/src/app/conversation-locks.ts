@@ -6,6 +6,13 @@ import { AppError } from "@nexo/shared/errors";
  * isso, o analista assumiria no meio de uma resposta do agent, que terminaria com a conversa já
  * com ele (RN08). Em memória: a api roda numa instância só, com o SQLite (ADR-0003).
  */
+/**
+ * O que quem esbarra na trava ouve. Neutro: quem a segura pode ser o agent, o analista ou um
+ * botão do próprio funcionário.
+ */
+export const CONVERSATION_BUSY_MESSAGE =
+  "Outra ação está em andamento nesta conversa; tente de novo em instantes.";
+
 export function createConversationLocks() {
   const busy = new Set<string>();
 

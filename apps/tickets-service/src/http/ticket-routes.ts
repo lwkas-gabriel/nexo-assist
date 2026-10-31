@@ -49,6 +49,11 @@ export function createTicketRoutes(ticketService: TicketService) {
     return c.json(await ticketService.assume(ownerId, c.req.param("number"), analystName));
   });
 
+  routes.post("/:number/release", async (c) => {
+    const { ownerId, analystName } = parseInput(assumeTicketRequestSchema, await readJson(c.req));
+    return c.json(await ticketService.release(ownerId, c.req.param("number"), analystName));
+  });
+
   routes.post("/:number/transfer", async (c) => {
     const { ownerId, summary } = parseInput(transferTicketRequestSchema, await readJson(c.req));
     return c.json(await ticketService.transfer(ownerId, c.req.param("number"), summary));

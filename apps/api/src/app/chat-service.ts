@@ -35,7 +35,7 @@ import {
 } from "./conversation-reader.ts";
 import type { HandoffService } from "./handoff-service.ts";
 import { textOf } from "./chat-text.ts";
-import type { ConversationLocks } from "./conversation-locks.ts";
+import { CONVERSATION_BUSY_MESSAGE, type ConversationLocks } from "./conversation-locks.ts";
 import { isSessionAtLimit } from "./session-state.ts";
 import {
   declinedOfferText,
@@ -69,7 +69,7 @@ type ChatServiceDependencies = {
   clock: Clock;
 };
 
-const BUSY_MESSAGE = "Aguarde a resposta anterior do Nexo Assist.";
+const BUSY_MESSAGE = CONVERSATION_BUSY_MESSAGE;
 
 export type { AnalystView };
 
@@ -378,15 +378,26 @@ export function createChatService({
             "RATE_LIMITED",
             "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
           );
-        await saveEmployeeMessage(
-          conversation.id,
-          employee.id,
-          text,
-          clock.now(),
-          client.messageId,
+        // Na trava e relendo o estado: se o analista devolveu ou encerrou neste instante, a
+        // mensagem não fica gravada para ninguém (RN08 ao contrário).
+        const stillWithAnalyst = await locks.run(conversation.id, BUSY_MESSAGE, async () => {
+          const current = await conversationStore.findById(conversation.id);
+          if (!current || agentMayReply(current.mode)) return false;
+          await saveEmployeeMessage(
+            conversation.id,
+            employee.id,
+            text,
+            clock.now(),
+            client.messageId,
+          );
+          await chatSessionService.touch(current);
+          return true;
+        });
+        if (stillWithAnalyst) return createUIMessageStream({ execute: () => undefined });
+        throw new AppError(
+          "CONFLICT",
+          "O atendimento acabou de voltar ao assistente; envie a mensagem de novo.",
         );
-        await chatSessionService.touch(conversation);
-        return createUIMessageStream({ execute: () => undefined });
       }
       const release = locks.acquire(conversation.id, BUSY_MESSAGE);
 

@@ -107,6 +107,11 @@ export function createHttpTicketGateway({
         body: { ownerId, summary },
         idempotencyKey,
       }),
+    releaseTicket: (ownerId, number, analystName, idempotencyKey) =>
+      request(ticketSchema, "POST", `${ticketPath(number)}/release`, {
+        body: { ownerId, analystName },
+        idempotencyKey,
+      }),
     assumeTicket: (ownerId, number, analystName, idempotencyKey) =>
       request(ticketSchema, "POST", `${ticketPath(number)}/assume`, {
         body: { ownerId, analystName },

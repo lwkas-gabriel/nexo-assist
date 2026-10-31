@@ -217,6 +217,7 @@ export async function createContainer(
       clock,
     }),
     draftActions: createDraftActions({
+      locks,
       draftService,
       handoffService,
       decisionService,

@@ -5,10 +5,8 @@ import type { HandoffStore } from "../db/handoff-store.ts";
 import type { ConversationRow, UserRow } from "../db/schema.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import type { ChatSessionService } from "./chat-session-service.ts";
-import type { ConversationLocks } from "./conversation-locks.ts";
+import { CONVERSATION_BUSY_MESSAGE, type ConversationLocks } from "./conversation-locks.ts";
 import { nextMode, type ConversationEvent } from "./conversation-state.ts";
-
-const BUSY_MESSAGE = "O assistente está respondendo agora; tente de novo em instantes.";
 
 type ConsoleActionsDependencies = {
   conversationStore: ConversationStore;
@@ -19,10 +17,19 @@ type ConsoleActionsDependencies = {
   clock: Clock;
 };
 
+/** O que dizer quando a tela do analista está velha: em português, sem os nomes dos estados. */
+const STALE_STATE_MESSAGES = {
+  agent: "Esta conversa já voltou ao assistente; atualize a tela.",
+  analyst: "Outro analista já assumiu esta conversa.",
+  waiting_analyst: "Assuma o atendimento antes.",
+  closed: "Esta conversa foi fechada.",
+} as const;
+
 /**
  * Tela 5 (RF20): o analista assume, responde, devolve ao agent e encerra o atendimento. Cada ação
- * passa pela máquina de estados (11.3) e pela trava da conversa (R06); a troca de estado só vale
- * se ninguém mudou a conversa antes (dois analistas assumindo juntos: um só consegue).
+ * passa pela trava da conversa (R06, junto com o turno do agent e os botões do funcionário) e só
+ * troca o estado se ninguém o mudou antes. O sistema de chamados é chamado depois de soltar a
+ * trava: as novas tentativas dele não seguram o chat do funcionário.
  */
 export function createConsoleActions({
   conversationStore,
@@ -40,6 +47,13 @@ export function createConsoleActions({
     return conversation;
   }
 
+  /** A ação só vale com a conversa num destes estados; senão, a tela do analista está velha. */
+  function expectMode(conversation: ConversationRow, allowed: ConversationRow["mode"][]) {
+    if (!allowed.includes(conversation.mode)) {
+      throw new AppError("CONFLICT", STALE_STATE_MESSAGES[conversation.mode]);
+    }
+  }
+
   /** Com a conversa com um analista, só ele age nela (responder, devolver, encerrar). */
   function assertAssignedTo(conversation: ConversationRow, analyst: UserRow) {
     if (conversation.mode === "analyst" && conversation.assignedAnalystId !== analyst.id) {
@@ -52,6 +66,7 @@ export function createConsoleActions({
     event: ConversationEvent,
     to: { mode: ConversationRow["mode"]; assignedAnalystId: string | null },
   ) {
+    // A tabela da 11.3 continua sendo a fonte da regra (expectMode só dá a mensagem para a tela).
     nextMode(conversation.mode, event);
     const changed = await conversationStore.changeMode(conversation, { ...to, now: clock.now() });
     if (!changed) {
@@ -60,44 +75,41 @@ export function createConsoleActions({
     return changed;
   }
 
-  async function systemLine(conversationId: string, text: string) {
+  async function systemLine(conversationId: string, text: string, at: Date = clock.now()) {
     await conversationStore.appendMessage({
       conversationId,
       author: "system",
       authorId: null,
       parts: [{ type: "text", text }],
-      createdAt: clock.now(),
+      createdAt: at,
     });
   }
 
   /**
-   * R31: o chamado da transferência fica "em atendimento". Uma falha no sistema de chamados não
-   * desfaz o assumir: o analista já está com a conversa, e o chamado fica como estava.
+   * O chamado da transferência acompanha o atendimento (R31, 11.3). Uma falha no sistema de
+   * chamados não desfaz a ação: o chamado fica como estava, e a falha vai para o log.
    */
-  async function markTicketInService(conversation: ConversationRow, analyst: UserRow) {
+  async function updateLinkedTicket(
+    conversation: ConversationRow,
+    update: (employeeId: string, number: string, key: string) => Promise<unknown>,
+    keyPrefix: string,
+  ) {
     const handoff = await handoffStore.latestForConversation(conversation.id);
     if (!handoff?.ticketNumber) return;
     try {
-      await ticketGateway.assumeTicket(
-        conversation.employeeId,
-        handoff.ticketNumber,
-        analyst.name,
-        `assume-${handoff.id}`,
-      );
+      await update(conversation.employeeId, handoff.ticketNumber, `${keyPrefix}-${handoff.id}`);
     } catch (error) {
-      console.error(`Chamado ${handoff.ticketNumber} não ficou em atendimento`, error);
+      console.error(`Chamado ${handoff.ticketNumber} não acompanhou o atendimento`, error);
     }
   }
 
   return {
     /** Assumir: o agent fica pausado e o funcionário vê quem o atende (RF20, R27). */
     async assume(analyst: UserRow, conversationId: string) {
-      return locks.run(conversationId, BUSY_MESSAGE, async () => {
+      const changed = await locks.run(conversationId, CONVERSATION_BUSY_MESSAGE, async () => {
         const conversation = await findOpen(conversationId);
-        if (conversation.mode === "analyst") {
-          throw new AppError("CONFLICT", "Outro analista já assumiu esta conversa.");
-        }
-        const changed = await changeMode(conversation, "assume", {
+        expectMode(conversation, ["waiting_analyst"]);
+        const assumed = await changeMode(conversation, "assume", {
           mode: "analyst",
           assignedAnalystId: analyst.id,
         });
@@ -105,18 +117,22 @@ export function createConsoleActions({
           conversation.id,
           `${analyst.name} (${analyst.department}) assumiu o atendimento.`,
         );
-        await markTicketInService(conversation, analyst);
-        return { mode: changed.mode, version: changed.version };
+        return assumed;
       });
+      await updateLinkedTicket(
+        changed,
+        (employeeId, number, key) =>
+          ticketGateway.assumeTicket(employeeId, number, analyst.name, key),
+        "assume",
+      );
+      return { mode: changed.mode, version: changed.version };
     },
 
     /** Responder: só quem assumiu; a mensagem vai para o funcionário, sem passar pelo agent. */
     async reply(analyst: UserRow, conversationId: string, text: string) {
-      return locks.run(conversationId, BUSY_MESSAGE, async () => {
+      return locks.run(conversationId, CONVERSATION_BUSY_MESSAGE, async () => {
         const conversation = await findOpen(conversationId);
-        if (conversation.mode !== "analyst") {
-          throw new AppError("CONFLICT", "Assuma o atendimento para responder.");
-        }
+        expectMode(conversation, ["analyst"]);
         assertAssignedTo(conversation, analyst);
         const message = await conversationStore.appendMessage({
           conversationId: conversation.id,
@@ -131,19 +147,28 @@ export function createConsoleActions({
 
     /**
      * Devolver ao agent (R18): ele não responde agora; volta na próxima mensagem do funcionário,
-     * vendo as mensagens do analista no histórico.
+     * vendo as mensagens do analista no histórico. Vale também sem assumir (11.3). O chamado sai
+     * de "aguardando analista" ou "em atendimento": ninguém está a caminho pelo chat.
      */
     async release(analyst: UserRow, conversationId: string) {
-      return locks.run(conversationId, BUSY_MESSAGE, async () => {
+      const changed = await locks.run(conversationId, CONVERSATION_BUSY_MESSAGE, async () => {
         const conversation = await findOpen(conversationId);
+        expectMode(conversation, ["waiting_analyst", "analyst"]);
         assertAssignedTo(conversation, analyst);
-        const changed = await changeMode(conversation, "release", {
+        const released = await changeMode(conversation, "release", {
           mode: "agent",
           assignedAnalystId: null,
         });
         await systemLine(conversation.id, `${analyst.name} devolveu a conversa ao assistente.`);
-        return { mode: changed.mode, version: changed.version };
+        return released;
       });
+      await updateLinkedTicket(
+        changed,
+        (employeeId, number, key) =>
+          ticketGateway.releaseTicket(employeeId, number, analyst.name, key),
+        `release-${changed.version}`,
+      );
+      return { mode: changed.mode, version: changed.version };
     },
 
     /**
@@ -151,18 +176,19 @@ export function createConsoleActions({
      * abre com o resumo da que acabou. O chamado segue o próprio status.
      */
     async endService(analyst: UserRow, conversationId: string) {
-      return locks.run(conversationId, BUSY_MESSAGE, async () => {
+      return locks.run(conversationId, CONVERSATION_BUSY_MESSAGE, async () => {
         const conversation = await findOpen(conversationId);
-        if (conversation.mode !== "analyst") {
-          throw new AppError("CONFLICT", "Só dá para encerrar um atendimento assumido.");
-        }
+        expectMode(conversation, ["analyst"]);
         assertAssignedTo(conversation, analyst);
-        await systemLine(conversation.id, `Atendimento encerrado por ${analyst.name}.`);
+        const endedAt = clock.now();
+        await systemLine(conversation.id, `Atendimento encerrado por ${analyst.name}.`, endedAt);
         const changed = await changeMode(conversation, "release", {
           mode: "agent",
           assignedAnalystId: null,
         });
-        await chatSessionService.endAfterService(changed);
+        // A sessão nova começa depois da linha: ela fica na sessão que acabou (e no resumo dela),
+        // e o card do resumo aparece depois dela na tela (10.5).
+        await chatSessionService.endAfterService(changed, new Date(endedAt.getTime() + 1));
         return { mode: changed.mode, version: changed.version };
       });
     },

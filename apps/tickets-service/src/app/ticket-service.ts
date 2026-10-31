@@ -166,7 +166,6 @@ export function createTicketService({ db, clock }: TicketServiceDependencies) {
       return toDto(updated ?? row);
     },
 
-    /** RN07: marca o chamado como aguardando analista e registra o resumo do caso. */
     /**
      * R31: um analista assumiu a conversa do chamado. O chamado fica "em atendimento", e o
      * registro é da equipe de TI: conta como resposta para o prazo (A17).
@@ -186,6 +185,24 @@ export function createTicketService({ db, clock }: TicketServiceDependencies) {
       return toDto(updated ?? row);
     },
 
+    /**
+     * O analista devolveu a conversa ao assistente (11.3): ninguém da TI está a caminho pelo
+     * chat, então o chamado sai de "aguardando analista" ou "em atendimento" e volta a "em
+     * andamento", com o registro de quem devolveu. Outros status ficam como estão.
+     */
+    async release(ownerId: string, number: string, analystName: string): Promise<TicketDto> {
+      const row = await findOwned(ownerId, number);
+      if (row.status !== "waiting_analyst" && row.status !== "in_service") return toDto(row);
+      await recordUpdate(row.id, "system", `Conversa devolvida ao assistente por ${analystName}.`);
+      const [updated] = await db
+        .update(tickets)
+        .set({ status: "in_progress", updatedAt: clock.now() })
+        .where(eq(tickets.id, row.id))
+        .returning();
+      return toDto(updated ?? row);
+    },
+
+    /** RN07: marca o chamado como aguardando analista e registra o resumo do caso. */
     async transfer(ownerId: string, number: string, summary: string): Promise<TicketDto> {
       const row = await findOwned(ownerId, number);
       if (!isOpenStatus(row.status)) {

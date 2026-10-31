@@ -69,7 +69,10 @@ export async function createTestApp(container?: Container) {
  * serviço real, e registra com qual dono cada consulta foi feita (prova da RN09). As escritas
  * respeitam a chave de idempotência, como o serviço real (R01).
  */
-export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
+export function createFakeTicketGateway(
+  initialTickets: TicketDto[] = [],
+  clock: Clock = { now: () => new Date() },
+) {
   const tickets = initialTickets.map((ticket) => ({ ...ticket, updates: [...ticket.updates] }));
   const queriedOwners: string[] = [];
   const resultsByKey = new Map<string, TicketDto>();
@@ -153,13 +156,25 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
         });
         return ticket;
       }),
+    releaseTicket: (ownerId, number, analystName, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        if (ticket.status !== "waiting_analyst" && ticket.status !== "in_service") return ticket;
+        ticket.status = "in_progress";
+        ticket.updates.push({
+          author: "system",
+          message: `Conversa devolvida ao assistente por ${analystName}.`,
+          createdAt: clock.now().toISOString(),
+        });
+        return ticket;
+      }),
     assumeTicket: (ownerId, number, analystName, key) =>
       idempotent(key, () => {
         const ticket = findOwned(ownerId, number);
         if (!isOpenStatus(ticket.status)) {
           throw new AppError("CONFLICT", `O chamado ${number} não está aberto.`);
         }
-        const at = new Date().toISOString();
+        const at = clock.now().toISOString();
         ticket.status = "in_service";
         ticket.lastStaffUpdateAt = at;
         ticket.updates.push({
