@@ -2,6 +2,7 @@ export * from "./business-calendar.ts";
 export * from "./clock.ts";
 export * from "./date-format.ts";
 export * from "./duplicates.ts";
+export * from "./handoff.ts";
 export * from "./priority.ts";
 export * from "./reopen.ts";
 export * from "./sla.ts";
