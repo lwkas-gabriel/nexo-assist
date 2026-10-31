@@ -23,8 +23,12 @@ export function TextField({ label, icon, hint, error, className, ...props }: Tex
       </label>
       <div
         className={cx(
-          "flex h-11 items-center gap-2 rounded-md border bg-paper px-3 focus-within:border-primary",
-          error ? "border-danger" : "border-rule",
+          // Como no protótipo: sombra leve parado e borda CTA de 1,5 px com o foco (borda de 1 px
+          // mais meio pixel de anel). No alto contraste do Windows, sombras e anéis somem; o foco
+          // continua visível pelo `outline-hidden` do campo, que nesse modo vira um contorno real.
+          "flex h-11 items-center gap-2 rounded-md border bg-paper px-3 shadow-field",
+          "focus-within:border-cta focus-within:ring-[0.5px] focus-within:ring-cta",
+          error ? "border-danger" : "border-line-strong",
         )}
       >
         {icon && (
@@ -36,7 +40,7 @@ export function TextField({ label, icon, hint, error, className, ...props }: Tex
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className="h-full min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
+          className="h-full min-w-0 flex-1 bg-transparent text-sm text-ink outline-hidden placeholder:text-ink-3"
           {...props}
         />
       </div>

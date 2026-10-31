@@ -1,4 +1,4 @@
-import type { TicketStatus } from "@nexo/shared/domain";
+import type { ConversationMode, TicketStatus } from "@nexo/shared/domain";
 
 /**
  * Mapa único de status → cor (FRONTEND.md 10.2). Telas e componentes pedem o tom aqui, em vez de
@@ -36,8 +36,6 @@ export const TICKET_STATUS_TONES: Record<TicketStatus, Tone> = {
   resolved: "neutral",
   cancelled: "neutral",
 };
-
-export type ConversationMode = "agent" | "waiting_analyst" | "analyst" | "closed";
 
 /** Estado da conversa, como no topo do chat e na lista do console. */
 export const CONVERSATION_MODE_TONES: Record<ConversationMode, Tone> = {

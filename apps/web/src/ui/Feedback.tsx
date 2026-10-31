@@ -47,17 +47,24 @@ export function Kbd({
   );
 }
 
-/** Aviso passageiro, anunciado ao leitor de tela sem roubar o foco. */
-export function Toast({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
+/**
+ * Região de avisos (ex.: "Rascunho cancelado"). Fica sempre montada, vazia, e só o texto muda:
+ * leitores de tela costumam ignorar uma região que já nasce com o texto. Erro usa `alert`, que
+ * interrompe; o resto, `status`, que espera. Quem usa decide quando limpar a mensagem.
+ */
+export function Toast({ message, tone = "neutral" }: { message: string | null; tone?: Tone }) {
   return (
-    <div
-      role="status"
-      className={cx(
-        "rounded-md px-4 py-2.5 text-[13px] font-medium shadow-card",
-        TONE_CLASSES[tone],
+    <div role={tone === "danger" ? "alert" : "status"}>
+      {message && (
+        <div
+          className={cx(
+            "rounded-md px-4 py-2.5 text-[13px] font-medium shadow-card",
+            TONE_CLASSES[tone],
+          )}
+        >
+          {message}
+        </div>
       )}
-    >
-      {children}
     </div>
   );
 }

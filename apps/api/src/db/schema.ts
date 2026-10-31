@@ -1,5 +1,5 @@
 import type { UserRole } from "@nexo/shared/demo";
-import type { HandoffReason, SupportLevel } from "@nexo/shared/domain";
+import type { ConversationMode, HandoffReason, SupportLevel } from "@nexo/shared/domain";
 import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
@@ -7,8 +7,7 @@ import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite
  * O teste de banco aplica as migrações e consulta por aqui: se divergirem, ele quebra.
  */
 
-export const CONVERSATION_MODES = ["agent", "waiting_analyst", "analyst", "closed"] as const;
-export type ConversationMode = (typeof CONVERSATION_MODES)[number];
+export { CONVERSATION_MODES, type ConversationMode } from "@nexo/shared/domain";
 
 export const MESSAGE_AUTHORS = ["employee", "agent", "analyst", "system"] as const;
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];

@@ -103,4 +103,52 @@
     margin-top: 24px;
     font-size: 14px;
   }
+
+  /*
+   * O reset do Tailwind tira borda e fundo de campos e botões e o tamanho dos títulos. Nas telas
+   * do esqueleto, isso deixava os campos invisíveis; aqui eles voltam, com os tokens.
+   */
+  .login h1,
+  .chat h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .login input:not([type="checkbox"]),
+  .composer input {
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-paper);
+    box-shadow: var(--shadow-field);
+  }
+
+  .login button,
+  .composer button,
+  .chat__error button {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    background: var(--color-cta);
+    color: var(--color-paper);
+    font-weight: 600;
+  }
+
+  .login button:disabled,
+  .composer button:disabled {
+    opacity: 0.5;
+  }
+
+  .login__demo ul {
+    list-style: disc;
+    padding-left: 20px;
+  }
+
+  .chat header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 }

@@ -1,9 +1,15 @@
 import type { HTMLAttributes } from "react";
 import { cx } from "./cx.ts";
 
-/** Superfície branca com borda e sombra leve, a base dos cards do protótipo. */
+/**
+ * Superfície dos cards do protótipo (rascunho, chamado, seletor, perfil): raio de 16 px, borda
+ * translúcida e a sombra de card.
+ */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cx("rounded-lg border border-rule bg-paper shadow-sm", className)} {...props} />
+    <div
+      className={cx("rounded-xl border border-line bg-paper shadow-card", className)}
+      {...props}
+    />
   );
 }

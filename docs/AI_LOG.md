@@ -452,3 +452,24 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - As telas do esqueleto (login e chat) não foram refeitas agora. Um CSS provisório passou a usar os tokens, e as telas são refeitas na T18 e na T19, uma tela por tarefa, como manda o plano.
   - Os testes de componente rodam num projeto do Vitest próprio, no jsdom. Como o jsdom não implementa `matchMedia`, a largura da janela é simulada para testar as três formas do painel.
 
+### 53. Revisão adversarial independente da T17
+- **Como:** sub-agente novo, sem o contexto da implementação, com a skill `revisao-adversarial` sobre `e05e6f5..04137f2`. O pedido incluía conferir os componentes contra os nós do `nexo.pen`, além das variáveis.
+- **Resultado:** 1 crítico, 5 importantes e 6 menores. As correções:
+  1. **Crítico:** a gaveta do `SidePanel` tomava o foco a cada nova renderização do componente pai. O efeito dependia da função `onClose`, que o pai recria a cada render. No console, com o polling de 2–3 s, o analista perderia o foco, e o que estivesse digitando, a cada atualização. O efeito de foco agora roda só ao abrir e fechar; o Esc lê a função por referência; e um teste prova que duas novas renderizações não tiram o foco do campo.
+  2. A gaveta se declarava modal, mas o Tab saía dela para os botões atrás do fundo; agora prende o Tab, com teste.
+  3. O reset do Tailwind tirou borda e fundo de campos e botões das telas atuais: no login, e-mail e senha viraram áreas invisíveis. O CSS provisório devolve isso até a T18 e a T19.
+  4. Os componentes estavam diferentes do protótipo: raio e sombra do card, avatar escuro (no protótipo é azul suave, e há uma paleta pastel no console), alturas de 32 e 40 px nos botões (no protótipo, 36 e 44), sombra do CTA em todo botão primário (no protótipo, só no "Entrar"), pílula mais baixa e borda de foco do campo. Todos foram ajustados às medidas tiradas dos nós do arquivo.
+  5. Os tokens não estavam completos: a sombra mais usada (a das bolhas), as bordas translúcidas, as cores das bolhas do console e a paleta dos avatares faltavam. A IA tinha lido só as variáveis, não os valores usados direto nos nós. Eles entraram, e a paleta padrão do Tailwind foi desligada para a regra "nenhuma cor solta" valer.
+  6. Os testes diziam mais do que provavam: o `matchMedia` simulado não avisava mudanças de largura, e nada testava a devolução do foco, o clique fora, a faixa do notebook nem os limites exatos. O simulado agora avisa, e esses casos ganharam teste. Um teste também confere que os breakpoints do código são os do tema.
+  7. Contraste: três pares de pílula ficam abaixo de 4,5:1 sobre os fundos `desk` e `console`. A conta ficou registrada no FRONTEND.md, com a regra de pôr fundo `paper` em etiquetas nesses fundos.
+  8. O tipo `ConversationMode` foi para o domínio compartilhado: uma declaração só para a api e para a tela.
+  9. O foco do campo sumia no alto contraste do Windows; agora o campo usa `outline-hidden`, que nesse modo vira um contorno real.
+  10. O `Toast` nascia já com o texto, e leitores de tela tendem a ignorar isso; virou uma região viva fixa.
+  11. O peso da fonte dos títulos estava errado (500 em vez de 400).
+  12. Detalhes:
+      - o mock do `userAgent` vazava entre testes;
+      - a folha usava `vh` em vez de `dvh`;
+      - o fundo rolava com a gaveta aberta;
+      - o console no celular não tinha como usar tela cheia; ganhou `mobileMode`.
+- **Lição:** "tokens do protótipo" exigia ler o que as telas usam, não só a lista de variáveis do arquivo. E um painel modal acessível tem mais detalhes do que parece: foco, Tab, Esc, rolagem e renderizações do pai.
+
