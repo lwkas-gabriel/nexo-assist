@@ -575,3 +575,20 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **Conversa sem mensagens abria com erro interno.** O AI SDK recusa validar uma lista vazia; uma conversa cuja primeira mensagem foi recusada (cota, limite) ficava inacessível. Corrigido, com teste.
   - **O registro do "Falar com um analista" pelo botão dizia "confirmar rascunho".** O registro dos botões passou a receber a intenção.
 - **Lição:** o registro de decisão guarda o rótulo da intenção, não o código. A primeira versão comparava com o código e nunca reconhecia a opção; o teste de ponta a ponta (contando as chamadas ao classificador) pegou, o teste da função pura sozinho não pegaria.
+
+### 60. Revisão adversarial da T19b e correções
+- **Revisão independente** (sub-agente novo, sem o contexto da implementação, com esforço alto a pedido do usuário): 11 achados, nenhum crítico. O atalho `quickOption` não dá para forjar: o texto é conferido contra a pergunta gravada no banco.
+- **Importantes:**
+  - **A seleção de chamado ignorava uma transferência feita durante a busca** (RN08): enquanto o sistema de chamados respondia, um chamado crítico confirmado pelo card transferia a conversa, e o agent "respondia" mesmo assim. Agora a conversa é relida depois da busca, como o envio de mensagem já fazia.
+  - **Promessas sem teste:** modo analista, sistema fora do ar, número inválido e limite de cliques. Todos testados agora, inclusive a corrida.
+  - **Desvio de R38 e 11.5 sem registro:** a resposta rápida continua chamando o agent. Registrado no ADR-0006, na 11.5 e no PLAN.
+  - **Regressão no resumo da sessão:** o botão "Falar com um analista" passou a ter um passo com outro nome e virou "assunto" no resumo. Corrigido, com teste que falha sem a correção.
+- **Menores, todos tratados:**
+  - cancelar e editar no card ainda ficavam registrados como "confirmar rascunho" (o AI_LOG 59 dizia o contrário): intenção e passo agora são obrigatórios;
+  - a intenção herdada era achada pelo rótulo numa comparação solta: virou `intentFromLabel`, com teste para todas as intenções;
+  - resposta rápida de um turno que não entendeu ganhava confiança 100% e zerava o R39: agora volta ao classificador;
+  - a seleção não passava pela sessão: agora a mantém viva, recomeça a vencida e, no limite, aponta o botão do analista em vez de pedir um "sim" que seria recusado;
+  - `toolCallId` repetido ao escolher o mesmo chamado duas vezes;
+  - tabela de endpoints desatualizada; expressão `&&`/`||` com `await` reescrita; exports sem uso removidos.
+- **Validado com o Gemini real** (uma seleção e uma mensagem): o modelo aceitou no histórico a parte `get_ticket` montada pelo código e respondeu usando o chamado escolhido. No primeiro try, a seleção deu 503 (o sistema de chamados ainda subia, com a falha simulada de 10%) e a conversa ficou sem nada pela metade, como o teste prevê.
+- **Lição:** o `sendMessage` já tinha a releitura da conversa depois de uma espera; o caminho novo copiou o resto e esqueceu essa parte. Ao criar um caminho paralelo a um existente, vale listar as proteções do original uma a uma.

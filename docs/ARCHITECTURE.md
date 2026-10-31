@@ -92,7 +92,9 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 |---|---|---|
 | `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/auth/me` | Sessão | público / logado |
 | `GET /api/chat` | Sessão atual + histórico + resumo das anteriores | funcionário |
-| `POST /api/chat/messages` | Mensagem livre (stream) **ou** ação estruturada (`{ action: "selectTicket", ticketId }`) | funcionário |
+| `POST /api/chat/messages` | Mensagem (stream): `{ text, id?, quickOption? }`; `quickOption` marca a resposta rápida clicada (R38) | funcionário |
+| `POST /api/chat/actions/select-ticket` | Clique num chamado da lista (`{ ticketNumber }`), respondido pelo código, sem o LLM | funcionário |
+| `POST /api/chat/handoff` · `POST /api/chat/sessions` | "Falar com um analista" pelo botão · "Nova sessão" (RN14) | funcionário |
 | `POST /api/chat/drafts/:id/confirm` · `/cancel` · `PATCH /api/chat/drafts/:id` | Rascunho (botões/edição) | funcionário |
 | `POST /api/chat/sessions` | Nova sessão (RN14): encerra a atual com resumo e abre outra | funcionário |
 | `POST /api/chat/handoff` | "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão) | funcionário |
@@ -119,6 +121,8 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 
 ### 11.5 Ações estruturadas: caminho determinístico × caminho LLM
 Cliques em opções (selecionar chamado, Confirmar, Cancelar, "Falar com um analista", "Não, obrigado") enviam um **payload estruturado** e são tratados por handlers determinísticos: **sem chamada ao LLM**. O trace registra "ação determinística, confiança 100%". A resposta vem de um template (ex.: o card do chamado + "Está sem atualização há 5 dias..."). Texto livre segue o caminho classificador → agent. Vantagens: mais barato, mais rápido, testável e sem risco de o LLM interpretar errado um clique.
+
+**Desvio na T19b: resposta rápida.** A opção clicada responde a uma pergunta do agent, que precisa dela para seguir (por exemplo, montar o rascunho); não há template que substitua o agent ali. O clique tira só a etapa 1: a api confere se o texto é uma das opções da mensagem mais recente do agent e, sendo, registra a classificação pelo código (intenção do turno que perguntou, confiança 100%). Se o turno que perguntou não tinha entendido ("não ficou claro" ou confiança baixa), o clique volta ao classificador, para não zerar a sequência do R39. Resultado: uma chamada ao LLM por clique, em vez de duas (ADR-0006).
 
 ### 11.6 Requisitos não funcionais do backend
 | Tema | Meta / regra |
