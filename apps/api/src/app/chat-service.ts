@@ -34,6 +34,7 @@ import {
   type AnalystView,
 } from "./conversation-reader.ts";
 import type { HandoffService } from "./handoff-service.ts";
+import { textOf } from "./chat-text.ts";
 import { isSessionAtLimit } from "./session-state.ts";
 import {
   declinedOfferText,
@@ -509,7 +510,7 @@ export function createChatService({
                   createdAt: clock.now(),
                 });
                 // R04: só o rascunho que a resposta gravada mostra ("D-12") conta como visto.
-                await draftService.markShownInReply(conversation.id, textOf(responseMessage));
+                await draftService.markShownInReply(conversation.id, textOf(responseMessage.parts));
                 await decisionService.record({
                   ...turn,
                   messageId: saved.id,
@@ -550,7 +551,7 @@ export function keepWithinCharBudget(messages: UIMessage[], maxChars: number): U
   const kept: UIMessage[] = [];
   let used = 0;
   for (const message of [...messages].reverse()) {
-    const size = textOf(message).length;
+    const size = textOf(message.parts).length;
     if (kept.length > 0 && used + size > maxChars) break;
     kept.unshift(message);
     used += size;
@@ -566,7 +567,7 @@ const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {
 };
 
 function toTranscriptLine(row: MessageRow): TranscriptLine {
-  return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row)) };
+  return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row).parts) };
 }
 
 /**
@@ -590,10 +591,6 @@ function describeTurnContext(
  */
 function describeClassification({ classification }: ClassificationResult): string {
   return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; confiança ${confidenceLevel(classification.confidence)} (${classification.confidence}).`;
-}
-
-function textOf(message: UIMessage): string {
-  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
 }
 
 /** Como o agent identifica o que não foi ele que escreveu (R18). */

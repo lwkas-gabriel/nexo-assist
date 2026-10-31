@@ -1,3 +1,4 @@
+import { CONSOLE_FILTERS, type ConsoleFilter } from "@nexo/shared/contracts";
 import { HANDOFF_REASON_LABELS, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { UIMessage } from "ai";
@@ -5,15 +6,14 @@ import { toTicketSummary } from "../agent/ticket-view.ts";
 import type { ConsoleConversationSummary, ConversationStore } from "../db/conversation-store.ts";
 import type { DecisionStore } from "../db/decision-store.ts";
 import type { DraftStore } from "../db/draft-store.ts";
+import type { DraftService } from "./draft-service.ts";
 import type { HandoffStore } from "../db/handoff-store.ts";
 import type { HandoffRow, UserRow } from "../db/schema.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { textOf } from "./chat-text.ts";
 import type { AnalystView, ConversationReader } from "./conversation-reader.ts";
 
-/** Filtros da lista do console (tela 4), com a contagem de cada um. */
-export const CONSOLE_FILTERS = ["all", "for_you", "with_agent", "mine"] as const;
-export type ConsoleFilter = (typeof CONSOLE_FILTERS)[number];
+export { CONSOLE_FILTERS, type ConsoleFilter };
 
 /** A20: online é quem carregou a conversa no último minuto (o chat consulta a cada 3 s). */
 const ONLINE_WINDOW_MS = 60_000;
@@ -29,7 +29,8 @@ export type ConsoleConversationState =
       kind: "waiting";
       reason: string;
       ticketNumber: string | null;
-      responseDueAt: string;
+      /** Null se a transferência não chegou a ser gravada (a conversa já está esperando). */
+      responseDueAt: string | null;
       /** Só na transferência por confiança baixa (R39): "Agent pediu ajuda · confiança 41%". */
       confidence: number | null;
     }
@@ -55,6 +56,7 @@ type ConsoleServiceDependencies = {
   handoffStore: HandoffStore;
   decisionStore: DecisionStore;
   draftStore: DraftStore;
+  draftService: DraftService;
   ticketGateway: TicketGateway;
   conversationReader: ConversationReader;
   clock: Clock;
@@ -91,6 +93,7 @@ export function createConsoleService({
   handoffStore,
   decisionStore,
   draftStore,
+  draftService,
   ticketGateway,
   conversationReader,
   clock,
@@ -104,6 +107,18 @@ export function createConsoleService({
     analysts: Map<string, AnalystView>,
     handoff: HandoffRow | undefined,
   ): Promise<ConsoleConversationState> {
+    if (conversation.mode === "waiting_analyst" && !handoff) {
+      // A troca de estado e o registro da transferência são gravados em seguida: entre os dois,
+      // ou se o registro falhou, a conversa continua sendo de quem espera um analista.
+      console.warn(`Conversa ${conversation.id} aguardando analista sem transferência gravada`);
+      return {
+        kind: "waiting",
+        reason: "transferência sem resumo",
+        ticketNumber: null,
+        responseDueAt: null,
+        confidence: null,
+      };
+    }
     if (conversation.mode === "waiting_analyst" && handoff) {
       const confidence =
         handoff.reason === "low_confidence"
@@ -166,10 +181,7 @@ export function createConsoleService({
               last.author === "employee" ? null : seenAt !== null && seenAt >= last.createdAt,
           }
         : null,
-      unread: await conversationStore.countEmployeeMessagesSince(
-        conversation.id,
-        conversation.analystReadAt,
-      ),
+      unread: await unreadOf(conversation, handoff),
     };
     const searchable = fold(
       [conversation.employee.name, conversation.employee.department, ...tickets].join(" "),
@@ -177,12 +189,32 @@ export function createConsoleService({
     return { item, searchable };
   }
 
+  /**
+   * Não lidas: só com a conversa nos analistas, contadas da transferência (ou da última vez que um
+   * analista a abriu, o que for mais recente). Com o agent, ninguém precisa ler: o protótipo não
+   * mostra contagem ali. A leitura é da equipe, não de cada analista (quem abre lê por todos).
+   */
+  async function unreadOf(
+    conversation: ConsoleConversationSummary,
+    handoff: HandoffRow | undefined,
+  ): Promise<number> {
+    if (conversation.mode === "agent" || !handoff) return 0;
+    const readAt = conversation.analystReadAt;
+    const since = readAt && readAt > handoff.createdAt ? readAt : handoff.createdAt;
+    return conversationStore.countEmployeeMessagesSince(conversation.id, since);
+  }
+
   async function findConversation(conversationId: string) {
-    const conversation = (await conversationStore.listOpenForConsole()).find(
-      (candidate) => candidate.id === conversationId,
-    );
+    const conversation = await conversationStore.findForConsole(conversationId);
     if (!conversation) throw new AppError("NOT_FOUND", "Conversa não encontrada.");
     return conversation;
+  }
+
+  /** A15: o analista vê dados de um funcionário; cada acesso fica no log. */
+  function logAccess(analyst: UserRow, conversation: ConsoleConversationSummary, what: string) {
+    console.info(
+      `[A15] ${analyst.id} abriu ${what} de ${conversation.employee.id} (conversa ${conversation.id})`,
+    );
   }
 
   return {
@@ -221,6 +253,7 @@ export function createConsoleService({
         employeeSeenAt: conversation.employee.lastSeenAt,
       });
       await conversationStore.markReadByAnalyst(conversation.id, clock.now());
+      logAccess(analyst, conversation, "a conversa");
       return {
         conversation: {
           id: conversation.id,
@@ -244,6 +277,8 @@ export function createConsoleService({
             : null,
         },
         messages,
+        // Os cards de rascunho que o funcionário viu, no estado atual (RF19: o que ele viu).
+        drafts: await draftService.listForConversation(conversation.employee.id, conversation.id),
       };
     },
 
@@ -255,9 +290,7 @@ export function createConsoleService({
       const conversation = await findConversation(conversationId);
       const handoff = await handoffStore.latestForConversation(conversation.id);
       const linked = await linkedTicketNumbers(conversation.id, handoff);
-      console.info(
-        `[A15] ${analyst.id} consultou os chamados de ${conversation.employee.id} (conversa ${conversation.id})`,
-      );
+      logAccess(analyst, conversation, "os chamados");
       const now = clock.now();
       const tickets = (await ticketGateway.listTickets(conversation.employee.id, "all")).map(
         (ticket) => toTicketSummary(ticket, now),

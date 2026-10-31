@@ -169,6 +169,7 @@ export async function createContainer(
       handoffStore,
       decisionStore,
       draftStore,
+      draftService,
       ticketGateway,
       conversationReader: createConversationReader({
         conversationStore,

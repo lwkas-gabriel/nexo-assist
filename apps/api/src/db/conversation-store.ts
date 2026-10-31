@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, gte, ne } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, ne } from "drizzle-orm";
 import type { Database } from "./database.ts";
 import {
   conversations,
@@ -125,18 +125,41 @@ export function createConversationStore(db: Database) {
     },
 
     /** Mensagens do funcionário depois de `since` (todas, sem `since`): as não lidas do console. */
-    async countEmployeeMessagesSince(conversationId: string, since: Date | null): Promise<number> {
-      const rows = await db
-        .select({ id: messages.id })
+    async countEmployeeMessagesSince(conversationId: string, since: Date): Promise<number> {
+      const [row] = await db
+        .select({ total: count() })
         .from(messages)
         .where(
           and(
             eq(messages.conversationId, conversationId),
             eq(messages.author, "employee"),
-            since ? gt(messages.createdAt, since) : undefined,
+            gt(messages.createdAt, since),
           ),
         );
-      return rows.length;
+      return row?.total ?? 0;
+    },
+
+    /** Uma conversa em andamento como o console a lista, pelo id (sem refazer a lista toda). */
+    async findForConsole(conversationId: string): Promise<ConsoleConversationSummary | undefined> {
+      const [row] = await db
+        .select({
+          id: conversations.id,
+          mode: conversations.mode,
+          version: conversations.version,
+          assignedAnalystId: conversations.assignedAnalystId,
+          analystReadAt: conversations.analystReadAt,
+          updatedAt: conversations.updatedAt,
+          employee: {
+            id: users.id,
+            name: users.name,
+            department: users.department,
+            lastSeenAt: users.lastSeenAt,
+          },
+        })
+        .from(conversations)
+        .innerJoin(users, eq(users.id, conversations.employeeId))
+        .where(and(eq(conversations.id, conversationId), ne(conversations.mode, "closed")));
+      return row;
     },
 
     /** Conversas em andamento, das mais recentes às mais antigas, com quem está conversando. */

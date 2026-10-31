@@ -98,7 +98,10 @@ export function createConversationReader({
         const decision = decisions.get(message.id);
         if (decision) extra.decision = decision;
         // Só no console: o que foi para o funcionário (agent ou analista) já foi visto por ele?
-        if (options.employeeSeenAt !== undefined && row && row.author !== "employee") {
+        if (
+          options.employeeSeenAt !== undefined &&
+          (row?.author === "agent" || row?.author === "analyst")
+        ) {
           extra.seenByEmployee =
             options.employeeSeenAt !== null && options.employeeSeenAt >= row.createdAt;
         }
