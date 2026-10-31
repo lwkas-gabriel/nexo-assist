@@ -11,7 +11,9 @@ export class ApiError extends Error {
   }
 }
 
-const GENERIC_MESSAGE = "Não foi possível falar com o servidor. Tente novamente em instantes.";
+/** Quando a api não responde ou responde sem mensagem: a frase que todas as telas usam. */
+export const GENERIC_MESSAGE =
+  "Não foi possível falar com o servidor. Tente novamente em instantes.";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PATCH";

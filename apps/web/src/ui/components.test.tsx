@@ -6,7 +6,7 @@ import { setViewportWidth } from "../test-setup.ts";
 import { Avatar } from "./Avatar.tsx";
 import { avatarToneFor } from "./avatar-tones.ts";
 import { Button } from "./Button.tsx";
-import { Kbd, Toast } from "./Feedback.tsx";
+import { EmptyState, ErrorState, Kbd, LoadingState, SyncNotice, Toast } from "./Feedback.tsx";
 import { initialsOf } from "./initials.ts";
 import { Pill } from "./Pill.tsx";
 import { SidePanel } from "./SidePanel.tsx";
@@ -79,6 +79,73 @@ describe("componentes base (10.4)", () => {
 
     rerender(<Toast message="Não consegui confirmar." tone="danger" />);
     expect(screen.getByRole("alert").textContent).toBe("Não consegui confirmar.");
+  });
+});
+
+describe("estados de carregamento, erro e vazio (10.5)", () => {
+  it("ErrorState: é um alerta, e Tentar novamente chama a nova tentativa", async () => {
+    const onRetry = vi.fn();
+    render(<ErrorState message="Não foi possível falar com o servidor." onRetry={onRetry} />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Não foi possível falar com o servidor.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("ErrorState: enquanto tenta, o botão diz Tentando… e fica desabilitado; sem foco automático", () => {
+    render(<ErrorState message="Falhou." onRetry={() => undefined} isRetrying />);
+
+    const button = screen.getByRole("button", { name: "Tentando…" });
+    expect(button).toHaveProperty("disabled", true);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("ErrorState: sem onRetry, não há botão", () => {
+    render(<ErrorState message="Falhou." />);
+
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("LoadingState: o rótulo é anunciado e os skeletons ficam escondidos do leitor de tela", () => {
+    render(
+      <LoadingState label="Carregando conversas">
+        <div data-testid="bloco" />
+      </LoadingState>,
+    );
+
+    expect(screen.getByRole("status").textContent).toBe("Carregando conversas");
+    expect(screen.getByTestId("bloco").closest("[aria-hidden]")).not.toBeNull();
+  });
+
+  it("SyncNotice: a região já existe vazia, e só o texto muda", () => {
+    const { rerender } = render(<SyncNotice message={null} />);
+    const region = screen.getByRole("status");
+    expect(region.textContent).toBe("");
+
+    rerender(<SyncNotice message="Não consegui atualizar agora; tentando de novo." />);
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region.textContent).toBe("Não consegui atualizar agora; tentando de novo.");
+
+    rerender(<SyncNotice message={null} />);
+    expect(region.textContent).toBe("");
+  });
+
+  it("EmptyState: título, descrição e uma ação opcional", async () => {
+    const onAction = vi.fn();
+    render(
+      <EmptyState
+        title="Nenhuma conversa neste filtro."
+        description="Troque o filtro."
+        action={<button onClick={onAction}>Limpar busca</button>}
+      />,
+    );
+
+    expect(screen.getByText("Nenhuma conversa neste filtro.")).toBeDefined();
+    expect(screen.getByText("Troque o filtro.")).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+    expect(onAction).toHaveBeenCalledOnce();
   });
 });
 
