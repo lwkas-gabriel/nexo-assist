@@ -18,6 +18,11 @@ export function createUserStore(db: Database) {
       return db.query.users.findFirst({ where: eq(users.id, id) });
     },
 
+    /** Os analistas, para o funcionário ver quem o atende (nome e setor, tela 2, R27). */
+    async listAnalysts(): Promise<UserRow[]> {
+      return db.query.users.findMany({ where: eq(users.role, "analyst") });
+    },
+
     /** Garante que as pessoas de demonstração existam, com os dados atuais (idempotente). */
     async upsertAll(people: readonly DemoUser[]): Promise<void> {
       for (const person of people) {

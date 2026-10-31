@@ -171,6 +171,7 @@ export async function createContainer(
       decisionService,
       quota,
       ticketGateway,
+      userStore,
       chatSessionService: createChatSessionService({
         chatSessionStore: createChatSessionStore(db),
         conversationStore,

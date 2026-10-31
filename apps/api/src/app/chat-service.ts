@@ -22,6 +22,7 @@ import { toTicketDetails } from "../agent/ticket-view.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
+import type { UserStore } from "../db/user-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
 import {
   toSessionView,
@@ -65,11 +66,15 @@ type ChatServiceDependencies = {
   chatSessionService: ChatSessionService;
   quota: AgentQuota;
   ticketGateway: TicketGateway;
+  userStore: UserStore;
   clock: Clock;
 };
 
+/** Quem atende, como o funcionário vê ("Rafael Lima · Suporte N2"). */
+export type AnalystView = { name: string; department: string };
+
 export type ConversationView = {
-  conversation: Pick<ConversationRow, "id" | "mode"> | null;
+  conversation: (Pick<ConversationRow, "id" | "mode"> & { analyst: AnalystView | null }) | null;
   /** RF10: o contador da sessão atual e o resumo da anterior. Nulo antes da primeira mensagem. */
   session: SessionView | null;
   messages: UIMessage[];
@@ -91,6 +96,7 @@ export function createChatService({
   chatSessionService,
   quota,
   ticketGateway,
+  userStore,
   clock,
 }: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
@@ -196,10 +202,37 @@ export function createChatService({
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
-      const messages = await loadHistory(conversation.id, toUIMessage, undefined, DISPLAY_WINDOW);
+      // R27: quem atende aparece pelo nome e setor, na pílula do topo e nas bolhas do analista.
+      const analysts = new Map(
+        (await userStore.listAnalysts()).map((analyst) => [
+          analyst.id,
+          { name: analyst.name, department: analyst.department },
+        ]),
+      );
+      const toDisplayMessage = (row: MessageRow): UIMessage => {
+        const message = toUIMessage(row);
+        const analyst =
+          row.author === "analyst" && row.authorId ? analysts.get(row.authorId) : undefined;
+        return analyst
+          ? { ...message, metadata: { ...authorMetadata(message), analyst } }
+          : message;
+      };
+      const messages = await loadHistory(
+        conversation.id,
+        toDisplayMessage,
+        undefined,
+        DISPLAY_WINDOW,
+      );
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
+      const assignedAnalyst = conversation.assignedAnalystId
+        ? analysts.get(conversation.assignedAnalystId)
+        : undefined;
       return {
-        conversation: { id: conversation.id, mode: conversation.mode },
+        conversation: {
+          id: conversation.id,
+          mode: conversation.mode,
+          analyst: assignedAnalyst ?? null,
+        },
         session: await chatSessionService.view(conversation),
         drafts: await draftService.listForConversation(employee.id, conversation.id),
         messages: messages.map((message) => {
