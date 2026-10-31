@@ -710,3 +710,19 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **"Disponível" fixo:** virou alternável, salvo no navegador; guardar no perfil fica para a tela "Meu perfil" (T25).
 - **Menores:** a leitura das não lidas é da equipe, não de cada analista (registrado como escolha); "aguardando" sem a transferência gravada continua "aguardando", com aviso no log; contraste das etiquetas sobre `desk`; topo "Aguardando atendente" e desvios do 10.2 registrados no FRONTEND.md; ARCHITECTURE (rota dos chamados, "Desta conversa" sem tabela própria), A20, R30 e README atualizados; a presença do analista na tela de login continua por sessões de login (registrado no PLAN); visto só no que o agent ou o analista mandou; painel de chamados zerado a cada conversa; região viva sem tirar o papel de lista; filtros como botões alternáveis; JSDoc fora do lugar e `textOf` duplicado; filtros no contrato do shared; A15 registrado também ao abrir a conversa; testes de ✓ e ✓✓ de verdade, da confiança baixa, de "Minhas", da busca por setor, de foco e de reabertura.
 - **Lição:** o painel que "abre sozinho" e o painel que "a pessoa abriu" são estados diferentes para o foco e para a largura da tela. Tratá-los como um só causou três dos achados (foco roubado, gaveta abrindo sozinha no notebook, painel sem volta no desktop).
+
+---
+
+## T24: tela 5, assumir, responder, devolver e encerrar (31/10/2026)
+
+### 69. T24: o analista atende de verdade
+- **IA gerou:** a operação de assumir no tickets-service (o chamado fica "em atendimento", R31), as ações do console na api (`console-actions.ts`), a trava das conversas compartilhada entre o chat e o console, a barra de atendimento e o campo de resposta na tela, e os testes, inclusive o E2E de ponta a ponta (transferir, assumir, responder e devolver, visto pelos dois lados).
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **Uma trava só por conversa, entre o chat e o console** (R06). Sem ela, o analista poderia assumir no meio de uma resposta do agent, que terminaria com a conversa já com ele (RN08). Durante um turno, a ação do console responde "o assistente está respondendo; tente de novo em instantes".
+  - **Assumir é atômico:** só de "aguardando analista", e a troca de estado só vale se ninguém mudou a conversa antes (dois analistas juntos: um só consegue).
+  - **"Atendimento assumido por X" conta como resposta da TI** no prazo do chamado (A17): é a equipe falando com o funcionário. Se o sistema de chamados falhar, o assumir continua valendo e o chamado fica como estava (registrado no log).
+  - **Responder, devolver e encerrar só por quem assumiu;** devolver também vale com a conversa ainda aguardando (um analista pode devolvê-la ao agent sem assumir, 11.3).
+  - **Encerrar** segue a decisão da T22 (ADR-0007): linha "Atendimento encerrado por X", a conversa volta ao agent e a sessão fecha com resumo, com um motivo novo de fim de sessão ("atendimento encerrado"), porque a sessão pode não ter mensagens ao agent.
+  - **No topo da tela 5, as ações no lugar da pílula de estado,** como no protótipo; abaixo de 1024 px, só os ícones (com nome acessível).
+- **Conferência visual:** console em 1440 px e no celular, e o lado da funcionária. Corrigidos o nome cortado no topo e o "Encerrar atendimento" que saía da tela no celular.
+- **Achado no caminho:** o teste dos 30 turnos da sessão passou dos 5 s padrão com a suíte inteira em paralelo (um commit da T24 saiu com ele vermelho na suíte completa; sozinho, passava). Ganhou um limite de tempo explícito, como os outros testes longos.
