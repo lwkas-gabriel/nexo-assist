@@ -102,7 +102,7 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 | `GET /api/console/conversations?filter=&q=` | Lista com contagens por filtro | analista |
 | `GET /api/console/conversations/:id` | Histórico + traces + resumo da transferência | analista |
 | `POST /api/console/conversations/:id/assume` · `/release` · `/close` · `/messages` | Assumir, devolver, encerrar, responder | analista |
-| `GET /api/console/employees/:id/tickets` | Painel de chamados | analista |
+| `GET /api/console/conversations/:id/tickets` | Painel de chamados do funcionário da conversa (T23: pela conversa, não pelo funcionário, para o analista só alcançar chamados de quem está numa conversa aberta; o acesso fica no log, A15) | analista |
 | `GET /api/stats` · `GET /api/health` | Números do login · health check | público |
 
 ### 11.2 tickets-service (interno, com token)
@@ -116,7 +116,7 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 - **Sessão:** `active` → `ended` (30 mensagens ao agent e o funcionário pede uma nova; 8 h inativa, **exceto** com a conversa em `waiting_analyst`/`analyst`; "Nova sessão"; ou o analista encerra o atendimento, T24). É um trecho da mesma conversa (`chat_sessions`); ao encerrar, grava um resumo montado pelo código, que abre a sessão seguinte. O agent recebe só as mensagens da sessão atual, mais o resumo e os rascunhos pendentes no contexto de sistema.
 
 ### 11.4 Modelo de dados (resumo)
-- **api.db:** `users` (nome, e-mail, papel, setor, nível N1/N2), `auth_sessions`, `conversations` (estado, `version`, analista), `chat_sessions` (contador, resumo, status), `messages` (autor: employee/agent/analyst/system; partes: texto/cards), `decision_traces` (por turno: classificação, passos, regras, confiança, sinais, tokens, latência), `drafts`, `conversation_tickets` (painel "Desta conversa"), `rate_limits`.
+- **api.db:** `users` (nome, e-mail, papel, setor, nível N1/N2), `auth_sessions`, `conversations` (estado, `version`, analista), `chat_sessions` (contador, resumo, status), `messages` (autor: employee/agent/analyst/system; partes: texto/cards), `decision_traces` (por turno: classificação, passos, regras, confiança, sinais, tokens, latência), `drafts`, `rate_limits`. O painel "Desta conversa" (T23) não tem tabela própria: são os chamados da transferência mais recente e os criados por rascunhos confirmados na conversa; chamados só consultados ficam em "Outros chamados". O console também usa `users.last_seen_at` ("online" e ✓✓) e `conversations.analyst_read_at` (não lidas, uma leitura para a equipe toda).
 - **tickets.db:** `tickets`, `ticket_updates` (autor: equipe/funcionário; define o prazo, A17), `idempotency_keys`.
 - **Central de ajuda:** artigos em **arquivos Markdown versionados** (`apps/api/knowledge/*.md` com frontmatter: título, tags, aplica-se a), carregados no boot. Legíveis e revisáveis em PR.
 

@@ -59,7 +59,7 @@ Objetivo: achar o que quebraria, causaria retrabalho ou contradiz o próprio pla
 | R27 | O mock não mostra o lado do funcionário durante a transferência e o atendimento humano | **[corrigir]** Estados desenhados em 10.5 |
 | R28 | No console, as mensagens do agent não têm chips, mas o analista precisa entender por que recebeu a conversa (história 2 do analista) | **[corrigir]** ActionChips + DecisionPanel reutilizados no console |
 | R29 | "Ver todos os chamados da Ana" aponta para uma tela inexistente | **[corrigir]** Expande no próprio painel |
-| R30 | O mock mostra confirmação de leitura (✓✓), "digitando…" e "online" | **[corrigir]** Suposição **A20**: "online" = funcionário fez polling nos últimos 60 s (barato); ✓ entregue / ✓✓ lida quando o analista abre a conversa; "digitando…" fora do escopo (documentado) |
+| R30 | O mock mostra confirmação de leitura (✓✓), "digitando…" e "online" | **[corrigir]** Suposição **A20**: "online" = funcionário fez polling nos últimos 60 s (barato); ✓ entregue / ✓✓ lida quando o analista abre a conversa; "digitando…" fora do escopo (documentado) **Ajustado na T23:** ✓✓ = o funcionário viu o que o agent ou o analista mandou; a leitura do analista conta as não lidas. |
 | R31 | Ao assumir, o chamado muda para "Em atendimento" (tela 5): status de chamado e conversa estão acoplados | **[corrigir]** Máquinas de estado explícitas (11.3); "assumir" atualiza o chamado vinculado. A12 inclui "Em atendimento" |
 | R32 | O console mostra o setor ("Financeiro") e o nível ("Suporte N2") | **[corrigir]** Campos `setor` e `nível` no seed de usuários |
 | R33 | Atalho ⌘↵ não existe no Windows | **[corrigir]** Ctrl+Enter no Windows/Linux, ⌘+Enter no Mac; o Kbd mostra conforme o SO |

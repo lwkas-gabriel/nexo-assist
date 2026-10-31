@@ -29,6 +29,8 @@
 
 **Desvio na tela 3 (T21), seguindo o protótipo:** no chat do funcionário, o status do chamado fica na cor do próprio status (o ponto e o texto), e o vencimento aparece escrito: no card, "há N dias" em warning e "· prazo vencido" em ink-3, como no `nexo.pen`; na lista de chamados, "· prazo vencido" em warning, para o vencido se destacar entre os outros. O danger de "prazo vencido" da tabela fica para o console (T23), onde o analista prioriza.
 
+**Console (T23), seguindo o protótipo:** "Agent atendendo" usa success, como no `nexo.pen` (a tabela dizia primary/neutro); o topo da conversa diz "Aguardando atendente" em warning, e a lista, "Transferida · INC-x" ou "contato em N min" em danger. "Resolvida pelo agent" não aparece: o sistema não tem esse estado (uma conversa resolvida continua com o agent). O item selecionado na lista tem contorno, não fundo `desk`, e as etiquetas coloridas sobre `desk` ganham fundo `paper` próprio (regra do 10.7).
+
 ### 10.3 Rotas e telas
 | Rota | Tela | Papel |
 |---|---|---|
