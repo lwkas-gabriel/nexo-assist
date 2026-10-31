@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
@@ -423,6 +423,202 @@ describe("console do analista (tela 4)", () => {
       expect(await screen.findByText("Juliana Costa está atendendo")).toBeDefined();
       expect(screen.queryByRole("button", { name: "Encerrar atendimento" })).toBeNull();
       expect(screen.queryByLabelText("Resposta para Ana")).toBeNull();
+    });
+  });
+
+  describe("estados de carregamento, erro e vazio (10.5, RF23)", () => {
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+    const NETWORK_DOWN = "Não foi possível falar com o servidor. Tente novamente em instantes.";
+
+    /** A api do console em que cada rota pode ser ligada, derrubada ou segurada pelo teste. */
+    function controllableConsole() {
+      const control = {
+        list: "ok" as "ok" | "down" | "hold",
+        mineList: "ok" as "ok" | "down" | "hold",
+        conversation: "ok" as "ok" | "down",
+        tickets: "ok" as "ok" | "unavailable",
+        release: () => undefined as void,
+      };
+      const gate = new Promise<void>((resolve) => (control.release = resolve));
+      vi.stubGlobal("fetch", async (input: string) => {
+        if (input.startsWith("/api/console/conversations?")) {
+          const mode = input.includes("filter=mine") ? control.mineList : control.list;
+          if (mode === "down") throw new TypeError("Failed to fetch");
+          if (mode === "hold") await gate;
+          return json(LIST);
+        }
+        if (input.endsWith("/tickets")) {
+          return control.tickets === "unavailable"
+            ? json(
+                {
+                  error: {
+                    code: "TICKETS_UNAVAILABLE",
+                    message:
+                      "O sistema de chamados está instável no momento (3 tentativas sem resposta).",
+                  },
+                },
+                503,
+              )
+            : json(TICKETS);
+        }
+        if (control.conversation === "down") throw new TypeError("Failed to fetch");
+        return json(CONVERSATION);
+      });
+      return control;
+    }
+
+    it("carregando: a lista anuncia o carregamento e não diz que está vazia", async () => {
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      renderConsole();
+
+      expect(await screen.findByText("Carregando conversas")).toBeDefined();
+      expect(screen.queryByText(/Nenhuma conversa/)).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("erro de rede na lista: mensagem em português e Tentar novamente recarrega", async () => {
+      const control = controllableConsole();
+      control.list = "down";
+      renderConsole();
+
+      expect((await screen.findByRole("alert")).textContent).toContain(NETWORK_DOWN);
+      control.list = "ok";
+      await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+      expect(await screen.findByRole("list", { name: "Conversas" })).toBeDefined();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("trocar de filtro com a consulta falhando mostra o erro, nunca a lista do filtro anterior", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const control = controllableConsole();
+        renderConsole();
+        await screen.findByText("Ana Souza");
+
+        control.mineList = "down";
+        await userEvent.click(screen.getByRole("button", { name: /^Minhas/ }));
+        expect((await screen.findByRole("alert")).textContent).toContain(NETWORK_DOWN);
+        expect(screen.queryByText("Ana Souza")).toBeNull();
+
+        // O polling tenta de novo a cada 3 s. Com a resposta ainda a caminho, a lista do filtro
+        // anterior não pode voltar à tela em silêncio.
+        control.mineList = "hold";
+        await vi.advanceTimersByTimeAsync(3100);
+        expect(screen.getByRole("alert")).toBeDefined();
+        expect(screen.queryByText("Ana Souza")).toBeNull();
+        await act(() => {
+          control.release();
+          return Promise.resolve();
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("trocando de filtro, a lista anterior fica marcada como ocupada até a nova chegar", async () => {
+      const control = controllableConsole();
+      renderConsole();
+      await screen.findByText("Ana Souza");
+
+      control.mineList = "hold";
+      await userEvent.click(screen.getByRole("button", { name: /^Minhas/ }));
+
+      await waitFor(() =>
+        expect(screen.getByRole("list", { name: "Conversas" }).getAttribute("aria-busy")).toBe(
+          "true",
+        ),
+      );
+      await act(() => {
+        control.release();
+        return Promise.resolve();
+      });
+      await waitFor(() =>
+        expect(screen.getByRole("list", { name: "Conversas" }).getAttribute("aria-busy")).toBe(
+          "false",
+        ),
+      );
+    });
+
+    it("o polling da lista falha depois de carregar: a lista fica, com um aviso", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const control = controllableConsole();
+        renderConsole();
+        await screen.findByText("Ana Souza");
+
+        control.list = "down";
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(screen.getByText("Ana Souza")).toBeDefined();
+        expect(
+          await screen.findByText("Não consegui atualizar a lista agora; tentando de novo."),
+        ).toBeDefined();
+        expect(screen.queryByRole("alert")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("o polling da conversa falha depois de carregar: a conversa fica, com um aviso", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const control = controllableConsole();
+        renderConsole();
+        await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+        await screen.findByText("Notebook lento há 6 dias, sem resposta da TI.");
+
+        control.conversation = "down";
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(screen.getByText("Notebook lento há 6 dias, sem resposta da TI.")).toBeDefined();
+        expect(
+          await screen.findByText("Não consegui atualizar a conversa agora; tentando de novo."),
+        ).toBeDefined();
+        expect(screen.queryByRole("alert")).toBeNull();
+
+        control.conversation = "ok";
+        await vi.advanceTimersByTimeAsync(3100);
+        await waitFor(() =>
+          expect(screen.queryByText(/Não consegui atualizar a conversa/)).toBeNull(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("chamados com o sistema instável (503): alerta com a frase do servidor, e Tentar novamente carrega", async () => {
+      const control = controllableConsole();
+      control.tickets = "unavailable";
+      renderConsole();
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+      const panel = await screen.findByRole("complementary", { name: "Chamados de Ana" });
+      const alert = await within(panel).findByRole("alert");
+      expect(alert.textContent).toContain("O sistema de chamados está instável no momento");
+      expect(alert.textContent).not.toContain("TICKETS_UNAVAILABLE");
+
+      control.tickets = "ok";
+      await userEvent.click(within(panel).getByRole("button", { name: "Tentar novamente" }));
+
+      expect(await within(panel).findByText(overdueTicket.title)).toBeDefined();
+      expect(within(panel).queryByRole("alert")).toBeNull();
+    });
+
+    it("conversa que não carrega: erro com Tentar novamente no lugar da conversa", async () => {
+      const control = controllableConsole();
+      control.conversation = "down";
+      renderConsole();
+      await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+      const alerts = await screen.findAllByRole("alert");
+      expect(alerts.some((alert) => alert.textContent?.includes(NETWORK_DOWN))).toBe(true);
+      control.conversation = "ok";
+      await userEvent.click(screen.getAllByRole("button", { name: "Tentar novamente" })[0]!);
+
+      expect(
+        await screen.findByText("Notebook lento há 6 dias, sem resposta da TI."),
+      ).toBeDefined();
     });
   });
 });

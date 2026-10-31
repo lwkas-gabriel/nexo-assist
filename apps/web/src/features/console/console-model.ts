@@ -8,6 +8,10 @@ import type { ConsoleConversationState } from "./console-api.ts";
 
 const MINUTE_MS = 60_000;
 
+/** Avisos de que o que está na tela pode estar velho: o polling falhou e tenta de novo (10.5). */
+export const LIST_OUT_OF_SYNC = "Não consegui atualizar a lista agora; tentando de novo.";
+export const TICKETS_OUT_OF_SYNC = "Não consegui atualizar os chamados agora; tentando de novo.";
+
 /** "contato em 25 min", "contato em 2 h", "contato vencido" ou, sem prazo gravado, "sem prazo". */
 export function describeContactDue(responseDueAt: string | null, now: Date): string {
   if (responseDueAt === null) return "sem prazo";

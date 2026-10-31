@@ -2,10 +2,12 @@ import { ArrowRightLeft } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../../ui/Button.tsx";
 import { cx } from "../../../ui/cx.ts";
-import { Skeleton } from "../../../ui/Feedback.tsx";
+import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../../ui/Feedback.tsx";
+import type { QueryView } from "../../../lib/query-view.ts";
 import { TICKET_STATUS_TONES, TONE_DOT_CLASSES } from "../../../ui/status-styles.ts";
 import type { TicketSummaryView } from "../../chat/ticket-model.ts";
 import type { ConsoleTickets } from "../console-api.ts";
+import { TICKETS_OUT_OF_SYNC } from "../console-model.ts";
 
 /** Quantos "outros chamados" aparecem antes do "Ver todos" (R29: expande no próprio painel). */
 const OTHERS_PREVIEW = 3;
@@ -23,31 +25,36 @@ const TONE_TEXT_CLASSES = {
  * outros numa lista que expande no próprio painel (R29). Aqui o vencido fica em danger (10.2).
  */
 export function TicketHistoryPanel({
-  data,
-  isLoading,
-  error,
+  view,
+  onRetry,
+  isRetrying,
 }: {
-  data: ConsoleTickets | undefined;
-  isLoading: boolean;
-  error: string | null;
+  view: QueryView<ConsoleTickets>;
+  onRetry: () => void;
+  isRetrying: boolean;
 }) {
-  const [showAll, setShowAll] = useState(false);
-  if (isLoading) {
+  if (view.status === "loading") {
     return (
-      <div aria-busy="true" aria-label="Carregando chamados" className="flex flex-col gap-3">
+      <LoadingState label="Carregando chamados" className="flex flex-col gap-3">
         <Skeleton className="h-28" />
         <Skeleton className="h-12" />
         <Skeleton className="h-12" />
-      </div>
+      </LoadingState>
     );
   }
-  if (error || !data) {
-    return (
-      <p role="alert" className="text-[13.5px] text-danger-text">
-        {error ?? "Não consegui carregar os chamados."}
-      </p>
-    );
+  if (view.status === "error") {
+    return <ErrorState message={view.message} onRetry={onRetry} isRetrying={isRetrying} />;
   }
+  return (
+    <>
+      <TicketHistory data={view.data} />
+      <SyncNotice message={view.isOutOfSync ? TICKETS_OUT_OF_SYNC : null} className="mt-4" />
+    </>
+  );
+}
+
+function TicketHistory({ data }: { data: ConsoleTickets }) {
+  const [showAll, setShowAll] = useState(false);
   const firstName = data.employeeName.split(" ")[0];
   const others = showAll ? data.others : data.others.slice(0, OTHERS_PREVIEW);
 

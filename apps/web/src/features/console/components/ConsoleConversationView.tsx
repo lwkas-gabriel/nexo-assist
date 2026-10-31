@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
 import { cx } from "../../../ui/cx.ts";
+import { SyncNotice } from "../../../ui/Feedback.tsx";
 import { IconButton } from "../../../ui/IconButton.tsx";
 import { Pill } from "../../../ui/Pill.tsx";
 import type { DraftView } from "../../chat/chat-api.ts";
@@ -21,6 +22,7 @@ import { DraftCard } from "../../chat/components/DraftCard.tsx";
 import { QuickOptions } from "../../chat/components/QuickOptions.tsx";
 import { TicketCard } from "../../chat/components/TicketCard.tsx";
 import { TicketPickerList } from "../../chat/components/TicketPickerList.tsx";
+import { CONVERSATION_OUT_OF_SYNC } from "../../chat/chat-error.ts";
 import { decisionOf } from "../../chat/decision-model.ts";
 import { consultedTicketOf, listedTicketsOf } from "../../chat/ticket-model.ts";
 import type { ConsoleConversation } from "../console-api.ts";
@@ -42,6 +44,8 @@ type ConsoleConversationViewProps = {
   focusTitleOnOpen: boolean;
   /** Tela 5: assumir, responder, devolver e encerrar. */
   actions: ServiceActions;
+  /** O polling falhou: a conversa na tela pode estar velha (10.5). */
+  isOutOfSync: boolean;
 };
 
 const noop = () => undefined;
@@ -135,6 +139,10 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
         </div>
       </div>
 
+      <SyncNotice
+        message={props.isOutOfSync ? CONVERSATION_OUT_OF_SYNC : null}
+        className="shrink-0 pb-1"
+      />
       <ServiceBar data={props.data} now={props.now} actions={props.actions} />
     </section>
   );

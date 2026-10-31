@@ -3,11 +3,12 @@ import { useState } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
 import { cx } from "../../../ui/cx.ts";
-import { Skeleton } from "../../../ui/Feedback.tsx";
+import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../../ui/Feedback.tsx";
+import type { QueryView } from "../../../lib/query-view.ts";
 import { TONE_DOT_CLASSES } from "../../../ui/status-styles.ts";
 import type { ConsoleFilter, ConsoleList, ConsoleListItem } from "../console-api.ts";
 import { CONSOLE_FILTERS } from "../console-api.ts";
-import { listTime, stateTag } from "../console-model.ts";
+import { LIST_OUT_OF_SYNC, listTime, stateTag } from "../console-model.ts";
 
 const FILTER_LABELS: Record<ConsoleFilter, string> = {
   all: "Todas",
@@ -25,9 +26,9 @@ const TAG_TEXT_CLASSES = {
 } as const;
 
 type ConversationListProps = {
-  data: ConsoleList | undefined;
-  isLoading: boolean;
-  error: string | null;
+  view: QueryView<ConsoleList>;
+  onRetry: () => void;
+  isRetrying: boolean;
   filter: ConsoleFilter;
   onFilter: (filter: ConsoleFilter) => void;
   query: string;
@@ -39,7 +40,8 @@ type ConversationListProps = {
 
 /** RF18, tela 4: a lista de conversas, com busca e filtros com contagem. */
 export function ConversationList(props: ConversationListProps) {
-  const { data, filter } = props;
+  const { view, filter } = props;
+  const data = view.status === "ready" ? view.data : undefined;
   return (
     <section aria-labelledby="console-list-title" className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-3 px-4 pt-4 pb-2.5">
@@ -95,38 +97,52 @@ export function ConversationList(props: ConversationListProps) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {props.isLoading ? (
-          <div
-            aria-busy="true"
-            aria-label="Carregando conversas"
-            className="flex flex-col gap-2 p-2"
-          >
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-          </div>
-        ) : props.error ? (
-          <p role="alert" className="p-4 text-[13.5px] text-danger-text">
-            {props.error}
-          </p>
-        ) : data && data.conversations.length === 0 ? (
-          <p className="p-4 text-center text-[13.5px] text-ink-3">Nenhuma conversa neste filtro.</p>
-        ) : (
-          <ul aria-label="Conversas" className="flex flex-col">
-            {data?.conversations.map((item) => (
-              <li key={item.id}>
-                <ConversationItem
-                  item={item}
-                  isSelected={item.id === props.selectedId}
-                  onSelect={() => props.onSelect(item.id)}
-                  now={props.now}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <ListBody {...props} />
       </div>
+      <SyncNotice
+        message={view.status === "ready" && view.isOutOfSync ? LIST_OUT_OF_SYNC : null}
+        className="shrink-0 py-1.5"
+      />
     </section>
+  );
+}
+
+function ListBody({ view, onRetry, isRetrying, selectedId, onSelect, now }: ConversationListProps) {
+  if (view.status === "loading") {
+    return (
+      <LoadingState label="Carregando conversas" className="flex flex-col gap-2 p-2">
+        <Skeleton className="h-16" />
+        <Skeleton className="h-16" />
+        <Skeleton className="h-16" />
+      </LoadingState>
+    );
+  }
+  if (view.status === "error") {
+    return <ErrorState message={view.message} onRetry={onRetry} isRetrying={isRetrying} />;
+  }
+  if (view.data.conversations.length === 0) {
+    return (
+      <p className="p-4 text-center text-[13.5px] text-ink-3">Nenhuma conversa neste filtro.</p>
+    );
+  }
+  return (
+    // Trocando de filtro ou de busca, a lista antiga fica até a nova chegar: mais apagada.
+    <ul
+      aria-label="Conversas"
+      aria-busy={view.isSwitching}
+      className={cx("flex flex-col", view.isSwitching && "opacity-60")}
+    >
+      {view.data.conversations.map((item) => (
+        <li key={item.id}>
+          <ConversationItem
+            item={item}
+            isSelected={item.id === selectedId}
+            onSelect={() => onSelect(item.id)}
+            now={now}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 

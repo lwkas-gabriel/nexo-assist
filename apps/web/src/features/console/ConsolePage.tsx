@@ -3,8 +3,8 @@ import { LogOut, MessageSquare } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useBreakpoint } from "../../lib/use-breakpoint.ts";
 import { Avatar } from "../../ui/Avatar.tsx";
-import { Button } from "../../ui/Button.tsx";
-import { Skeleton } from "../../ui/Feedback.tsx";
+import { queryViewOf } from "../../lib/query-view.ts";
+import { ErrorState, LoadingState, Skeleton } from "../../ui/Feedback.tsx";
 import { IconButton } from "../../ui/IconButton.tsx";
 import { SidePanel } from "../../ui/SidePanel.tsx";
 import { NexoMark } from "../auth/NexoMark.tsx";
@@ -91,18 +91,22 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     refetchInterval: POLL_MS,
     placeholderData: (previous) => previous,
   });
+  const listView = queryViewOf(list);
+  const listData = listView.status === "ready" ? listView.data : undefined;
   const conversation = useQuery({
     queryKey: ["console", "conversation", selectedId],
     queryFn: () => fetchConsoleConversation(selectedId ?? ""),
     enabled: selectedId !== null,
     refetchInterval: POLL_MS,
   });
+  const conversationView = queryViewOf(conversation);
   const tickets = useQuery({
     queryKey: ["console", "tickets", selectedId],
     queryFn: () => fetchConsoleTickets(selectedId ?? ""),
     enabled: selectedId !== null,
     refetchInterval: TICKETS_POLL_MS,
   });
+  const ticketsView = queryViewOf(tickets);
 
   // Tela 5: cada ação recarrega a conversa, a lista e os chamados (o status do chamado muda ao
   // assumir, R31). O erro fica na barra de baixo da conversa.
@@ -140,7 +144,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
       }),
   };
 
-  const decisionMessage = conversation.data?.messages.find((message) => message.id === decisionId);
+  const conversationData = conversationView.status === "ready" ? conversationView.data : undefined;
+  const decisionMessage = conversationData?.messages.find((message) => message.id === decisionId);
   const decision = decisionMessage ? decisionOf(decisionMessage) : undefined;
   // A resposta do detalhe saiu da janela da conversa: o painel volta aos chamados.
   const effectivePanel: Panel = panel === "decision" && !decision ? "auto" : panel;
@@ -189,9 +194,50 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     }
     setPanel(null);
   };
-  const firstName = conversation.data?.conversation.employee.name.split(" ")[0] ?? "";
+  const firstName = conversationData?.conversation.employee.name.split(" ")[0] ?? "";
   const showList = !isMobile || selectedId === null;
   const showConversation = !isMobile || selectedId !== null;
+
+  /** A conversa escolhida: carregando, erro com nova tentativa, ou a conversa (que não sai mais). */
+  function renderConversation() {
+    if (conversationView.status === "loading") {
+      return (
+        <LoadingState
+          label="Carregando a conversa"
+          className="flex flex-1 flex-col gap-4 bg-console p-10"
+        >
+          <Skeleton className="h-10 w-1/2" />
+          <Skeleton className="h-16 w-2/3 self-end" />
+          <Skeleton className="h-10 w-1/3" />
+        </LoadingState>
+      );
+    }
+    if (conversationView.status === "error") {
+      return (
+        <ErrorState
+          message={conversationView.message}
+          onRetry={() => void conversation.refetch()}
+          isRetrying={conversation.isFetching}
+          className="flex-1 justify-center bg-console"
+        />
+      );
+    }
+    return (
+      <ConsoleConversationView
+        key={selectedId}
+        data={conversationView.data}
+        isOutOfSync={conversationView.isOutOfSync}
+        now={now}
+        onBack={isMobile ? backToList : undefined}
+        onOpenTickets={panelOpen ? undefined : () => setPanel("tickets")}
+        onOpenDecision={toggleDecision}
+        openDecisionId={effectivePanel === "decision" ? decisionId : null}
+        decisionPanelId={decisionPanelId}
+        focusTitleOnOpen={isMobile}
+        actions={serviceActions}
+      />
+    );
+  }
 
   return (
     <div className="flex h-dvh bg-paper">
@@ -208,9 +254,9 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
         >
           <MessageSquare aria-hidden size={19} />
           <span className="sr-only">Conversas</span>
-          {(list.data?.counts.for_you ?? 0) > 0 && (
+          {(listData?.counts.for_you ?? 0) > 0 && (
             <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-desk bg-cta px-[5px] text-[10px] font-bold text-paper">
-              {list.data?.counts.for_you}
+              {listData?.counts.for_you}
               <span className="sr-only"> aguardando analista</span>
             </span>
           )}
@@ -245,9 +291,9 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
             </div>
           )}
           <ConversationList
-            data={list.data}
-            isLoading={list.isPending}
-            error={list.data ? null : (list.error?.message ?? null)}
+            view={listView}
+            onRetry={() => void list.refetch()}
+            isRetrying={list.isFetching}
             filter={filter}
             onFilter={setFilter}
             query={query}
@@ -265,39 +311,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
             <div className="flex flex-1 items-center justify-center bg-console px-6 text-center text-[14.5px] text-ink-3">
               Escolha uma conversa na lista.
             </div>
-          ) : conversation.data ? (
-            <ConsoleConversationView
-              key={selectedId}
-              data={conversation.data}
-              now={now}
-              onBack={isMobile ? backToList : undefined}
-              onOpenTickets={panelOpen ? undefined : () => setPanel("tickets")}
-              onOpenDecision={toggleDecision}
-              openDecisionId={effectivePanel === "decision" ? decisionId : null}
-              decisionPanelId={decisionPanelId}
-              focusTitleOnOpen={isMobile}
-              actions={serviceActions}
-            />
-          ) : conversation.isError ? (
-            <div
-              role="alert"
-              className="flex flex-1 flex-col items-center justify-center gap-3 bg-console px-6 text-center"
-            >
-              <p className="text-[14.5px] text-ink-2">{conversation.error.message}</p>
-              <Button variant="secondary" onClick={() => void conversation.refetch()}>
-                Tentar novamente
-              </Button>
-            </div>
           ) : (
-            <div
-              aria-busy="true"
-              aria-label="Carregando a conversa"
-              className="flex flex-1 flex-col gap-4 bg-console p-10"
-            >
-              <Skeleton className="h-10 w-1/2" />
-              <Skeleton className="h-16 w-2/3 self-end" />
-              <Skeleton className="h-10 w-1/3" />
-            </div>
+            renderConversation()
           )}
           {selectedId !== null && (
             <SidePanel
@@ -323,9 +338,9 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
                 <DecisionPanel decision={decision} />
               ) : (
                 <TicketHistoryPanel
-                  data={tickets.data}
-                  isLoading={tickets.isPending}
-                  error={tickets.data ? null : (tickets.error?.message ?? null)}
+                  view={ticketsView}
+                  onRetry={() => void tickets.refetch()}
+                  isRetrying={tickets.isFetching}
                 />
               )}
             </SidePanel>
