@@ -10,6 +10,8 @@ export type NewDecision = {
   conversationVersion: number;
   trace: DecisionTrace;
   classifierTokens: number | null;
+  /** Tokens do agent no turno (etapa 2); nulo quando o agent não foi chamado ou o provedor não informou. */
+  agentTokens: number | null;
   latencyMs: number;
   createdAt: Date;
 };

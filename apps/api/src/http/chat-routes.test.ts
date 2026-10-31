@@ -11,6 +11,7 @@ import {
   sampleTicket,
   testConfig,
 } from "../test-support.ts";
+import { decisionTraces } from "../db/schema.ts";
 import { createRateLimiter } from "./rate-limiter.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
@@ -170,5 +171,43 @@ describe("chat do funcionário", () => {
       // lê o stream até o fim: o turno termina
     }
     await expect(container.chatService.sendMessage(ana.user, "terceira")).resolves.toBeDefined();
+  });
+
+  it("A13: o limite por IP vale para todas as contas que saem dele", async () => {
+    const container = await createContainer(testConfig());
+    container.chatLimits.perIp = createRateLimiter({
+      limit: 1,
+      windowMs: 60_000,
+      clock: systemClock,
+    });
+    const { app, login } = await createTestApp(container);
+    const sendFrom = async (ip: string, email: string) =>
+      app.request("/api/chat/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: await login(email),
+          "X-Forwarded-For": ip,
+        },
+        body: JSON.stringify({ text: "oi" }),
+      });
+
+    await (await sendFrom("203.0.113.7", ANA_EMAIL)).text();
+    const sameIp = await sendFrom("203.0.113.7", "bruno.tavares@nexo.com.br");
+    const otherIp = await sendFrom("198.51.100.4", "carla.mendes@nexo.com.br");
+
+    expect(sameIp.status).toBe(429);
+    expect(otherIp.status).toBe(200);
+  });
+
+  it("RT10: cada turno registra os tokens do classificador e do agent", async () => {
+    const container = await createContainer(testConfig());
+    const { send } = await loggedInAsAna(container);
+
+    await (await send({ text: "Qual o horário do service desk?" })).text();
+
+    // O modelo de teste informa 120 tokens por chamada: 1 do classificador e 2 do agent (tool e resposta).
+    const [trace] = await container.db.select().from(decisionTraces);
+    expect(trace).toMatchObject({ classifierTokens: 120, agentTokens: 240 });
   });
 });

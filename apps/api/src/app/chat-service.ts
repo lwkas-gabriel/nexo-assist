@@ -250,6 +250,8 @@ export function createChatService({
         );
         const previousSummary = await chatSessionService.previousSummary(conversation.id);
         const pendingDrafts = await draftService.describePending(conversation.id);
+        // RT10: tokens que o agent gastou no turno, informados pelo Mastra quando ele termina.
+        const usage: { agentTokens?: number } = {};
         // O Mastra tipa o stream de forma genérica; no formato v7 ele produz os chunks de UI do AI SDK.
         const agentStream = (await handleChatStream({
           mastra,
@@ -266,6 +268,9 @@ export function createChatService({
               conversationId: conversation.id,
               startedAt: turnStartedAt,
             }),
+            onFinish: ({ totalUsage }) => {
+              if (totalUsage.totalTokens !== undefined) usage.agentTokens = totalUsage.totalTokens;
+            },
           },
           // O erro original (provedor, stack trace) fica no log; o funcionário vê uma mensagem amigável.
           onError: (error) => {
@@ -294,6 +299,7 @@ export function createChatService({
                   ...turn,
                   messageId: saved.id,
                   response: responseMessage,
+                  ...usage,
                 });
               }
             } finally {

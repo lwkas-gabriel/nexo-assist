@@ -123,6 +123,7 @@ export const decisionTraces = sqliteTable("decision_traces", {
   classifierConfidence: real("classifier_confidence"),
   conversationVersion: integer("conversation_version"),
   classifierTokens: integer("classifier_tokens"),
+  agentTokens: integer("agent_tokens"),
   latencyMs: integer("latency_ms").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });

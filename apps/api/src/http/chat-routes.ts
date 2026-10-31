@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { ChatService } from "../app/chat-service.ts";
 import type { DraftActions } from "../app/draft-actions.ts";
 import type { AppEnv } from "./app-env.ts";
+import { clientIp } from "./client-ip.ts";
 import type { RateLimiter } from "./rate-limiter.ts";
 import { currentUser, requireRole } from "./session.ts";
 
@@ -27,6 +28,8 @@ const sendMessageSchema = z.object({
  */
 export type ChatLimits = {
   perUser: RateLimiter;
+  /** A13: o login aceita qualquer senha, então uma pessoa pode usar todas as contas de demonstração. */
+  perIp: RateLimiter;
   globalPerMinute: RateLimiter;
   globalPerDay: RateLimiter;
   toAnalystPerUser: RateLimiter;
@@ -85,6 +88,7 @@ export function createChatRoutes({
     if (agentReplies) await chatService.assertSessionBelowLimit(employee);
     const withinLimits = agentReplies
       ? chatLimits.perUser.tryConsume(employee.id) &&
+        chatLimits.perIp.tryConsume(clientIp(c)) &&
         chatLimits.globalPerMinute.tryConsume("global") &&
         chatLimits.globalPerDay.tryConsume("global")
       : chatLimits.toAnalystPerUser.tryConsume(employee.id);

@@ -33,7 +33,7 @@ const envSchema = z
     TICKETS_SERVICE_TOKEN: z.string().min(32),
     /**
      * Tetos globais de mensagens ao agent, somando todos os usuários. Dependem da cota da conta
-     * do provedor (cada mensagem usa até 3 chamadas ao modelo); ver .env.example e ADR-0010.
+     * do provedor (cada mensagem usa até 4 chamadas ao modelo); ver .env.example e ADR-0010.
      */
     CHAT_MESSAGES_PER_MINUTE: z.coerce.number().int().positive(),
     CHAT_MESSAGES_PER_DAY: z.coerce.number().int().positive(),

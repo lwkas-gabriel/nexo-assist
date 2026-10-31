@@ -38,6 +38,8 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
+/** Um pouco mais que um funcionário: cabe uma sala com IP compartilhado, não todas as contas de uma vez. */
+const CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
 const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
 const LOGINS_PER_IP_PER_MINUTE = 20;
@@ -148,6 +150,11 @@ export async function createContainer(
     chatLimits: {
       perUser: createRateLimiter({
         limit: CHAT_MESSAGES_PER_USER_PER_HOUR,
+        windowMs: HOUR_MS,
+        clock,
+      }),
+      perIp: createRateLimiter({
+        limit: CHAT_MESSAGES_PER_IP_PER_HOUR,
         windowMs: HOUR_MS,
         clock,
       }),

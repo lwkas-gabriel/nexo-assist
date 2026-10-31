@@ -26,6 +26,8 @@ export type TurnOutcome = {
   response: UIMessage;
   classification: ClassificationResult;
   startedAt: Date;
+  /** Tokens que o agent gastou no turno (RT10). */
+  agentTokens?: number;
 };
 
 /** O que o turno faz depois da etapa 1: o agent responde, o código transfere ou a conversa já saiu do agent. */
@@ -53,6 +55,7 @@ export function createDecisionService({
       conversationVersion: outcome.conversationVersion,
       trace,
       classifierTokens: outcome.classification.ok ? (outcome.classification.tokens ?? null) : null,
+      agentTokens: outcome.agentTokens ?? null,
       latencyMs: now.getTime() - outcome.startedAt.getTime(),
       createdAt: now,
     });

@@ -38,7 +38,7 @@ export function createMockModel() {
       return Promise.resolve({
         content: [toContent(step)],
         finishReason: finishReasonOf(step),
-        usage: NO_USAGE,
+        usage: MOCK_USAGE,
         warnings: [],
       });
     },
@@ -55,9 +55,10 @@ type Step =
   | { kind: "call"; toolName: string; input: Record<string, unknown> }
   | { kind: "answer"; text: string };
 
-const NO_USAGE: LanguageModelV4Usage = {
-  inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-  outputTokens: { total: 0, text: 0, reasoning: 0 },
+/** Consumo fixo por chamada (100 de entrada + 20 de saída), para os testes de custo terem o que somar. */
+const MOCK_USAGE: LanguageModelV4Usage = {
+  inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 20, text: 20, reasoning: 0 },
 };
 
 const TOOL_CALL_ID = "mock-call-1";
@@ -138,7 +139,7 @@ function toStreamParts(step: Step): LanguageModelV4StreamPart[] {
   return [
     { type: "stream-start", warnings: [] },
     ...body,
-    { type: "finish", usage: NO_USAGE, finishReason: finishReasonOf(step) },
+    { type: "finish", usage: MOCK_USAGE, finishReason: finishReasonOf(step) },
   ];
 }
 
