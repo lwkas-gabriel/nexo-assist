@@ -52,13 +52,33 @@ export async function createTestApp(container?: Container) {
 }
 
 /**
- * Sistema de chamados falso para testes: responde só com os chamados do dono pedido,
- * como o serviço real, e registra com qual dono cada consulta foi feita (prova da RN09).
+ * Sistema de chamados falso para testes: responde só com os chamados do dono pedido, como o
+ * serviço real, e registra com qual dono cada consulta foi feita (prova da RN09). As escritas
+ * respeitam a chave de idempotência, como o serviço real (R01).
  */
-export function createFakeTicketGateway(tickets: TicketDto[] = []) {
+export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
+  const tickets = initialTickets.map((ticket) => ({ ...ticket, updates: [...ticket.updates] }));
   const queriedOwners: string[] = [];
+  const resultsByKey = new Map<string, TicketDto>();
   const ownedBy = (ownerId: string) => tickets.filter((ticket) => ticket.ownerId === ownerId);
   const notYetSupported = () => Promise.reject(new Error("Escrita não usada nestes testes"));
+
+  function findOwned(ownerId: string, number: string): TicketDto {
+    const ticket = ownedBy(ownerId).find((candidate) => candidate.number === number);
+    if (!ticket) throw new AppError("NOT_FOUND", `Chamado ${number} não encontrado.`);
+    return ticket;
+  }
+
+  /** Repetir a mesma chave devolve o resultado original, sem executar de novo. */
+  function idempotent(key: string, write: () => TicketDto): Promise<TicketDto> {
+    try {
+      const result = resultsByKey.get(key) ?? write();
+      resultsByKey.set(key, result);
+      return Promise.resolve(structuredClone(result));
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
 
   const ticketGateway: TicketGateway = {
     listTickets: (ownerId, filter) => {
@@ -75,12 +95,40 @@ export function createFakeTicketGateway(tickets: TicketDto[] = []) {
         ? Promise.resolve(ticket)
         : Promise.reject(new AppError("NOT_FOUND", `Chamado ${number} não encontrado.`));
     },
-    createTicket: notYetSupported,
-    addUpdate: notYetSupported,
-    reopenTicket: notYetSupported,
+    createTicket: (ownerId, draft, key) =>
+      idempotent(key, () => {
+        const prefix = draft.type === "incident" ? "INC" : "REQ";
+        const now = new Date().toISOString();
+        const ticket: TicketDto = {
+          ...draft,
+          number: `${prefix}-${20500 + tickets.length}`,
+          ownerId,
+          status: "new",
+          createdAt: now,
+          updatedAt: now,
+          lastStaffUpdateAt: null,
+          resolvedAt: null,
+          updates: [],
+        };
+        tickets.push(ticket);
+        return ticket;
+      }),
+    addUpdate: (ownerId, number, update, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        ticket.updates.push({ ...update, createdAt: new Date().toISOString() });
+        return ticket;
+      }),
+    reopenTicket: (ownerId, number, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        ticket.status = "reopened";
+        ticket.resolvedAt = null;
+        return ticket;
+      }),
     transferTicket: notYetSupported,
   };
-  return { ticketGateway, queriedOwners };
+  return { ticketGateway, queriedOwners, tickets };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */
