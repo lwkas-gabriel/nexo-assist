@@ -133,7 +133,8 @@ export const decisionTraces = sqliteTable("decision_traces", {
 
 export type DecisionTraceRow = typeof decisionTraces.$inferSelect;
 
-export const SESSION_END_REASONS = ["limit", "inactivity", "new_session"] as const;
+/** "service_ended": o analista encerrou o atendimento (T24, ADR-0007). */
+export const SESSION_END_REASONS = ["limit", "inactivity", "new_session", "service_ended"] as const;
 export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
 
 export const chatSessions = sqliteTable("chat_sessions", {

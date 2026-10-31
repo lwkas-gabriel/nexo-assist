@@ -1,6 +1,8 @@
-import { parseInput } from "@nexo/shared/http";
+import { CHAT_MESSAGE_MAX_CHARS } from "@nexo/shared/contracts";
+import { parseInput, readJson } from "@nexo/shared/http";
 import { Hono } from "hono";
 import { z } from "zod";
+import type { ConsoleActions } from "../app/console-actions.ts";
 import { CONSOLE_FILTERS, type ConsoleService } from "../app/console-service.ts";
 import type { AppEnv } from "./app-env.ts";
 import { currentUser, requireRole } from "./session.ts";
@@ -11,12 +13,20 @@ const listQuerySchema = z.object({
 });
 
 const conversationIdSchema = z.string().min(1).max(64);
+const replySchema = z.object({ text: z.string().trim().min(1).max(CHAT_MESSAGE_MAX_CHARS) });
 
 /**
  * Console do analista (telas 4 e 5). Só analistas entram: funcionário recebe 403.
- * A T23 lê (lista, conversa, chamados); assumir, responder, devolver e encerrar vêm na T24.
+ * Leitura (T23: lista, conversa, chamados) e ações da tela 5 (T24: assumir, responder, devolver,
+ * encerrar o atendimento).
  */
-export function createConsoleRoutes({ consoleService }: { consoleService: ConsoleService }) {
+export function createConsoleRoutes({
+  consoleService,
+  consoleActions,
+}: {
+  consoleService: ConsoleService;
+  consoleActions: ConsoleActions;
+}) {
   const routes = new Hono<AppEnv>();
   routes.use("*", requireRole("analyst"));
 
@@ -40,6 +50,29 @@ export function createConsoleRoutes({ consoleService }: { consoleService: Consol
   routes.get("/conversations/:id/tickets", async (c) => {
     const id = parseInput(conversationIdSchema, c.req.param("id"));
     return c.json(await consoleService.tickets(currentUser(c, "analyst"), id));
+  });
+
+  // RF20, tela 5.
+  routes.post("/conversations/:id/assume", async (c) => {
+    const id = parseInput(conversationIdSchema, c.req.param("id"));
+    return c.json(await consoleActions.assume(currentUser(c, "analyst"), id));
+  });
+
+  routes.post("/conversations/:id/messages", async (c) => {
+    const id = parseInput(conversationIdSchema, c.req.param("id"));
+    const { text } = parseInput(replySchema, await readJson(c.req));
+    return c.json(await consoleActions.reply(currentUser(c, "analyst"), id, text));
+  });
+
+  routes.post("/conversations/:id/release", async (c) => {
+    const id = parseInput(conversationIdSchema, c.req.param("id"));
+    return c.json(await consoleActions.release(currentUser(c, "analyst"), id));
+  });
+
+  // A08: encerra o atendimento, não o chamado (ADR-0007).
+  routes.post("/conversations/:id/close", async (c) => {
+    const id = parseInput(conversationIdSchema, c.req.param("id"));
+    return c.json(await consoleActions.endService(currentUser(c, "analyst"), id));
   });
 
   return routes;

@@ -161,6 +161,16 @@ export function createChatSessionService({
     },
 
     /**
+     * O analista encerrou o atendimento (T24, ADR-0007): a sessão fecha com resumo, mesmo sem
+     * mensagens ao agent (a conversa foi com o analista), e a próxima começa do zero.
+     */
+    async endAfterService(conversation: ConversationRef): Promise<ChatSessionRow> {
+      const active = await chatSessionStore.findActive(conversation.id);
+      if (!active) return chatSessionStore.start(conversation.id, clock.now());
+      return endAndStart(active, "service_ended");
+    },
+
+    /**
      * A sessão como a tela mostra (RF10), sem abrir nem encerrar nada. Vencida por inatividade,
      * a tela já mostra o que a próxima mensagem vai encontrar: contador zerado e o resumo dela.
      */

@@ -9,6 +9,7 @@ import { createClassifier } from "./agent/classifier.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createConsoleActions, type ConsoleActions } from "./app/console-actions.ts";
 import { createConsoleService, type ConsoleService } from "./app/console-service.ts";
 import { createConversationLocks } from "./app/conversation-locks.ts";
 import { createConversationReader } from "./app/conversation-reader.ts";
@@ -67,6 +68,7 @@ export type ContainerConfig = LlmConfig & {
 export type Container = {
   db: Database;
   consoleService: ConsoleService;
+  consoleActions: ConsoleActions;
   mastra: Mastra;
   ticketGateway: TicketGateway;
   authService: AuthService;
@@ -123,6 +125,12 @@ export async function createContainer(
   const decisionStore = createDecisionStore(db);
   // Uma ação por vez em cada conversa, entre o chat e o console (R06).
   const locks = createConversationLocks();
+  const chatSessionService = createChatSessionService({
+    chatSessionStore: createChatSessionStore(db),
+    conversationStore,
+    decisionStore,
+    clock,
+  });
   const decisionService = createDecisionService({ decisionStore, handoffService, clock });
   // Limites em memória por janela curta; os tetos diários ficam no banco (agent-quota.ts).
   const chatLimits: ChatLimits = {
@@ -166,6 +174,15 @@ export async function createContainer(
 
   return {
     db,
+    // Tela 5: assumir, responder, devolver e encerrar (RF20).
+    consoleActions: createConsoleActions({
+      conversationStore,
+      handoffStore,
+      ticketGateway,
+      chatSessionService,
+      locks,
+      clock,
+    }),
     // Console do analista (tela 4): leitura das conversas e dos chamados de quem está nelas.
     consoleService: createConsoleService({
       conversationStore,
@@ -196,12 +213,7 @@ export async function createContainer(
       ticketGateway,
       userStore,
       locks,
-      chatSessionService: createChatSessionService({
-        chatSessionStore: createChatSessionStore(db),
-        conversationStore,
-        decisionStore,
-        clock,
-      }),
+      chatSessionService,
       clock,
     }),
     draftActions: createDraftActions({
