@@ -118,4 +118,23 @@ describe("conversas", () => {
       [{ type: "text", text: "mensagem 3" }],
     ]);
   });
+
+  it("grava com o id que a tela já usa; repetido, gera outro em vez de falhar", async () => {
+    const { conversationStore } = await setup();
+    const conversation = await conversationStore.create(ANA, at("2026-10-29T10:00:00Z"));
+    const message = {
+      id: "msg-tela-1",
+      conversationId: conversation.id,
+      author: "employee" as const,
+      authorId: ANA,
+      parts: [{ type: "text", text: "Minha VPN não conecta" }],
+      createdAt: at("2026-10-29T10:00:01Z"),
+    };
+
+    const first = await conversationStore.appendMessage(message);
+    const repeated = await conversationStore.appendMessage(message);
+
+    expect(first.id).toBe("msg-tela-1");
+    expect(repeated.id).not.toBe("msg-tela-1");
+  });
 });

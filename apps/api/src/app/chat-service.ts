@@ -34,6 +34,11 @@ import type { HandoffService } from "./handoff-service.ts";
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
 /**
+ * Quantas mensagens a tela recebe: bem mais que o agent, para o histórico das sessões anteriores
+ * continuar visível (R03, RF11). Uma sessão inteira tem umas 60 mensagens.
+ */
+const DISPLAY_WINDOW = 200;
+/**
  * Teto de texto do histórico que o agent recebe. Sem ele, 20 mensagens de 2.000 caracteres,
  * reenviadas a cada passo do agent, chegariam perto dos 250 mil tokens por minuto do plano gratuito.
  */
@@ -94,8 +99,9 @@ export function createChatService({
     conversationId: string,
     toMessage: (row: MessageRow) => UIMessage,
     since?: Date,
+    limit: number = HISTORY_WINDOW,
   ): Promise<UIMessage[]> {
-    const rows = await conversationStore.listRecentMessages(conversationId, HISTORY_WINDOW, since);
+    const rows = await conversationStore.listRecentMessages(conversationId, limit, since);
     const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
     if (!result.success) {
       throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
@@ -121,7 +127,7 @@ export function createChatService({
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
-      const messages = await loadHistory(conversation.id, toUIMessage);
+      const messages = await loadHistory(conversation.id, toUIMessage, undefined, DISPLAY_WINDOW);
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
@@ -183,7 +189,7 @@ export function createChatService({
     async sendMessage(
       employee: UserRow,
       text: string,
-      client: { ip: string },
+      client: { ip: string; messageId?: string },
     ): Promise<ReadableStream<UIMessageChunk>> {
       const conversation = await openConversationFor(employee);
       if (!agentMayReply(conversation.mode)) {
@@ -232,6 +238,7 @@ export function createChatService({
         );
         const classification = await classifier.classify(previous.map(toTranscriptLine), text);
         await conversationStore.appendMessage({
+          ...(client.messageId ? { id: client.messageId } : {}),
           conversationId: conversation.id,
           author: "employee",
           authorId: employee.id,
@@ -306,6 +313,8 @@ export function createChatService({
             try {
               if (responseMessage.parts.length > 0) {
                 const saved = await conversationStore.appendMessage({
+                  // O mesmo id do stream: a tela não troca a bolha ao recarregar a conversa.
+                  id: responseMessage.id,
                   conversationId: conversation.id,
                   author: "agent",
                   authorId: null,

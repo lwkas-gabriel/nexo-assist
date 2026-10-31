@@ -1,3 +1,4 @@
+import { sendMessageRequestSchema } from "@nexo/shared/contracts";
 import { AppError } from "@nexo/shared/errors";
 import { parseInput, readJson } from "@nexo/shared/http";
 import { createUIMessageStreamResponse } from "ai";
@@ -14,12 +15,6 @@ import { currentUser, requireRole } from "./session.ts";
 
 /** Limites de entrada: protegem custo e memória contra abuso (RT10, RT13). */
 const MAX_BODY_BYTES = 16 * 1024;
-const MAX_MESSAGE_CHARS = 2000;
-
-/** O navegador manda só o texto novo; o histórico vem do banco. */
-const sendMessageSchema = z.object({
-  text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
-});
 
 type ChatRoutesDependencies = {
   chatService: ChatService;
@@ -69,8 +64,11 @@ export function createChatRoutes({
   // travada, se a mensagem vai para o modelo ou para o analista.
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
-    const { text } = parseInput(sendMessageSchema, await readJson(c.req));
-    const stream = await chatService.sendMessage(employee, text, { ip: clientIp(c) });
+    const { text, id } = parseInput(sendMessageRequestSchema, await readJson(c.req));
+    const stream = await chatService.sendMessage(employee, text, {
+      ip: clientIp(c),
+      ...(id ? { messageId: id } : {}),
+    });
     return createUIMessageStreamResponse({ stream });
   });
 

@@ -20,6 +20,8 @@ export type ConsoleConversationSummary = {
 };
 
 export type NewMessage = {
+  /** Id já usado na tela (bolha otimista ou stream); sem ele, o servidor gera um. */
+  id?: string;
   conversationId: string;
   author: MessageAuthor;
   authorId: string | null;
@@ -79,10 +81,21 @@ export function createConversationStore(db: Database) {
 
     /** Grava uma mensagem com id gerado pelo servidor e atualiza a data da conversa. */
     async appendMessage(message: NewMessage): Promise<MessageRow> {
-      const [row] = await db
-        .insert(messages)
-        .values({ ...message, id: randomUUID(), parts: JSON.stringify(message.parts) })
-        .returning();
+      const values = { ...message, parts: JSON.stringify(message.parts) };
+      // O id sugerido só vale se estiver livre; repetido (retry, colisão), o servidor gera outro.
+      const [suggested] = message.id
+        ? await db
+            .insert(messages)
+            .values({ ...values, id: message.id })
+            .onConflictDoNothing()
+            .returning()
+        : [];
+      const [row] = suggested
+        ? [suggested]
+        : await db
+            .insert(messages)
+            .values({ ...values, id: randomUUID() })
+            .returning();
       if (!row) throw new Error("Falha ao gravar a mensagem");
       await db
         .update(conversations)

@@ -63,6 +63,30 @@ describe("falhas do modelo no chat", () => {
   );
 });
 
+describe("ids das mensagens", () => {
+  it("a conversa recarregada mantém os ids da tela: a do funcionário e a do stream", async () => {
+    const { chatService, authService } = await createTestContainer();
+    const { user: employee } = await authService.login({
+      email: "ana.souza@nexo.com.br",
+      password: "x",
+      remember: false,
+    });
+
+    const stream = await chatService.sendMessage(employee, "Como configuro a VPN?", {
+      ip: "local",
+      messageId: "msg-da-tela",
+    });
+    let streamMessageId: string | undefined;
+    const reader = stream.getReader();
+    for (let result = await reader.read(); !result.done; result = await reader.read()) {
+      if (result.value.type === "start") streamMessageId = result.value.messageId;
+    }
+
+    const { messages } = await chatService.getConversation(employee);
+    expect(messages.map((message) => message.id)).toEqual(["msg-da-tela", streamMessageId]);
+  });
+});
+
 describe("histórico que o agent recebe (R18)", () => {
   const row = (author: MessageRow["author"], text: string): MessageRow => ({
     id: `m-${author}`,

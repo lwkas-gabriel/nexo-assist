@@ -1,8 +1,8 @@
+import { SESSION_MESSAGE_LIMIT } from "@nexo/shared/domain";
 import type { ChatSessionRow, ConversationRow } from "../db/schema.ts";
 import { agentMayReply } from "./conversation-state.ts";
 
-/** RN14: mensagens do funcionário ao agent por sessão. */
-export const SESSION_MESSAGE_LIMIT = 30;
+export { SESSION_MESSAGE_LIMIT };
 
 /** A05: sem atividade por mais que isto, a próxima mensagem abre uma sessão nova. */
 export const SESSION_INACTIVITY_MS = 8 * 60 * 60 * 1000;
