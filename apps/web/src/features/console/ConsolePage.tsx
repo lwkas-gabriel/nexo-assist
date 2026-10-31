@@ -80,7 +80,9 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   const decisionPanelId = useId();
   // Para onde o foco volta depois que o painel ou a coluna mudam (10.7): aplicado num efeito,
   // depois de o React montar o que mudou, para nada o roubar em seguida.
-  const pendingFocusRef = useRef<HTMLElement | string | null>(null);
+  // Um elemento, ou quem o encontra depois que a tela mudar (o campo de resposta só existe
+  // quando a conversa recarregada já diz que o atendimento é meu).
+  const pendingFocusRef = useRef<HTMLElement | (() => HTMLElement | null) | null>(null);
   const decisionOpenerRef = useRef<HTMLElement | null>(null);
 
   const list = useQuery({
@@ -105,17 +107,37 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   // Tela 5: cada ação recarrega a conversa, a lista e os chamados (o status do chamado muda ao
   // assumir, R31). O erro fica na barra de baixo da conversa.
   const queryClient = useQueryClient();
+  // 10.7: depois da ação, o botão clicado some; o foco vai para onde o trabalho continua.
   const service = useMutation({
-    mutationFn: (run: () => Promise<unknown>) => run(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["console"] }),
+    mutationFn: ({ run }: { run: () => Promise<unknown>; focusAfter: string }) => run(),
+    onSuccess: (_result, { focusAfter }) => {
+      pendingFocusRef.current = () => document.getElementById(focusAfter);
+      return queryClient.invalidateQueries({ queryKey: ["console"] });
+    },
   });
   const serviceActions: ServiceActions = {
     isWorking: service.isPending,
     error: service.error ? service.error.message : null,
-    assume: () => service.mutate(() => assumeConversation(selectedId ?? "")),
-    release: () => service.mutate(() => releaseConversation(selectedId ?? "")),
-    close: () => service.mutate(() => closeService(selectedId ?? "")),
-    reply: (text) => service.mutateAsync(() => replyToConversation(selectedId ?? "", text)),
+    assume: () =>
+      service.mutate({
+        run: () => assumeConversation(selectedId ?? ""),
+        focusAfter: "console-reply",
+      }),
+    release: () =>
+      service.mutate({
+        run: () => releaseConversation(selectedId ?? ""),
+        focusAfter: "console-conversation-title",
+      }),
+    close: () =>
+      service.mutate({
+        run: () => closeService(selectedId ?? ""),
+        focusAfter: "console-conversation-title",
+      }),
+    reply: (text) =>
+      service.mutateAsync({
+        run: () => replyToConversation(selectedId ?? "", text),
+        focusAfter: "console-reply",
+      }),
   };
 
   const decisionMessage = conversation.data?.messages.find((message) => message.id === decisionId);
@@ -130,12 +152,11 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   useEffect(() => {
     const target = pendingFocusRef.current;
     if (target === null) return;
+    const element = typeof target === "function" ? target() : target;
+    // Ainda não está na tela (a conversa recarregando): tenta de novo na próxima renderização.
+    if (!element) return;
     pendingFocusRef.current = null;
-    const element =
-      typeof target === "string"
-        ? document.querySelector<HTMLElement>(`[data-conversation-id="${target}"]`)
-        : target;
-    element?.focus();
+    element.focus();
   });
 
   const selectConversation = (id: string) => {
@@ -145,7 +166,9 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     setPanel("auto");
   };
   const backToList = () => {
-    pendingFocusRef.current = selectedId;
+    const fromId = selectedId;
+    pendingFocusRef.current = () =>
+      document.querySelector<HTMLElement>(`[data-conversation-id="${fromId ?? ""}"]`);
     setSelectedId(null);
   };
   const toggleDecision = (messageId: string, opener: HTMLElement) => {

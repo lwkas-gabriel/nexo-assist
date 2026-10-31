@@ -284,7 +284,13 @@ describe("console do analista (tela 4)", () => {
 
   describe("tela 5: assumir, responder, devolver e encerrar (RF20)", () => {
     /** A api do console que guarda os POSTs; `failing` responde 409 a uma ação. */
-    function stubActions(conversation: ConsoleConversation, failing?: string) {
+    function stubActions(
+      initial: ConsoleConversation,
+      failing?: string,
+      /** A conversa como a api devolve depois de uma ação bem-sucedida. */
+      afterAction?: ConsoleConversation,
+    ) {
+      let conversation = initial;
       const posts: { path: string; body: unknown }[] = [];
       vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
         if (init?.method === "POST") {
@@ -298,6 +304,7 @@ describe("console do analista (tela 4)", () => {
             };
             return Promise.resolve(new Response(JSON.stringify(error), { status: 409 }));
           }
+          if (afterAction) conversation = afterAction;
           return Promise.resolve(new Response("{}", { status: 200 }));
         }
         const body = input.startsWith("/api/console/conversations?")
@@ -326,15 +333,43 @@ describe("console do analista (tela 4)", () => {
       await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
     };
 
-    it("aguardando: assumir e devolver ao agent, com o campo trancado até assumir", async () => {
-      const posts = stubActions(CONVERSATION);
+    it("aguardando: assumir leva o foco ao campo de resposta (10.7)", async () => {
+      const posts = stubActions(CONVERSATION, undefined, mine);
       await open();
 
       expect(await screen.findByText("Assuma o atendimento para responder")).toBeDefined();
       await userEvent.click(screen.getByRole("button", { name: "Assumir atendimento" }));
 
       await waitFor(() =>
-        expect(posts.map((post) => post.path)).toContain("/api/console/conversations/c-ana/assume"),
+        expect(document.activeElement).toBe(screen.getByLabelText("Resposta para Ana")),
+      );
+      expect(posts.map((post) => post.path)).toContain("/api/console/conversations/c-ana/assume");
+    });
+
+    it("aguardando: devolver ao agent sem assumir", async () => {
+      const posts = stubActions(CONVERSATION);
+      await open();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Devolver ao agent" }));
+
+      await waitFor(() =>
+        expect(posts.map((post) => post.path)).toContain(
+          "/api/console/conversations/c-ana/release",
+        ),
+      );
+    });
+
+    it("encerrar leva o foco ao título da conversa (o botão some)", async () => {
+      stubActions(mine, undefined, {
+        ...mine,
+        conversation: { ...mine.conversation, mode: "agent", state: { kind: "agent" } },
+      });
+      await open();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Encerrar atendimento" }));
+
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Ana Souza" })),
       );
     });
 

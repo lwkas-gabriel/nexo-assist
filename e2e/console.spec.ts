@@ -7,7 +7,7 @@ import { loginAs } from "./support/login.ts";
  * os outros funcionários conversam em testes que rodam em paralelo, e uma transferência os
  * quebraria. Roda no desktop; o console no celular tem teste de página (ConsolePage.test).
  */
-test("analista encontra a conversa transferida, assume, responde e devolve", async ({
+test("analista encontra a conversa transferida, assume, responde, devolve e encerra", async ({
   browser,
 }, testInfo) => {
   test.skip(
@@ -42,6 +42,16 @@ test("analista encontra a conversa transferida, assume, responde e devolve", asy
   await analyst.getByRole("button", { name: "Devolver ao agent" }).click();
   await expect(employee.getByText("Assistente online")).toBeVisible();
   await expect(employee.getByText("Rafael Lima devolveu a conversa ao assistente.")).toBeVisible();
+
+  // A08, ADR-0007: encerrar o atendimento volta ao assistente com sessão nova e resumo.
+  await employee.getByLabel("Mensagem para o Nexo").fill("Quero falar com um analista de novo");
+  await employee.getByRole("button", { name: "Enviar" }).click();
+  await analyst.getByRole("button", { name: "Assumir atendimento" }).click();
+  await analyst.getByRole("button", { name: "Encerrar atendimento" }).click();
+  await expect(
+    employee.getByText("Atendimento encerrado por Rafael Lima.", { exact: true }),
+  ).toBeVisible();
+  await expect(employee.getByText("Resumo da sessão anterior")).toBeVisible();
 
   await employeeContext.close();
   await analystContext.close();
