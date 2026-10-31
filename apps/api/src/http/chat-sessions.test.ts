@@ -78,31 +78,36 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     });
   });
 
-  it("RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota", async () => {
-    const { container, recording, send, say, conversation } = await setup();
-    for (let index = 0; index < SESSION_MESSAGE_LIMIT; index += 1) {
-      await say(`Qual o horário do service desk? (${index})`);
-    }
-    const callsAtLimit = recording.counter.calls;
-    const messagesAtLimit = (await conversation()).messages.length;
-    // Teto de 1 por minuto: se a recusa gastasse cota, a segunda já viria como 429.
-    container.chatLimits.globalPerMinute = createRateLimiter({
-      limit: 1,
-      windowMs: HOUR_MS,
-      clock: { now: () => new Date() },
-    });
+  // 30 turnos do agent: com a suíte inteira em paralelo, passa dos 5 s padrão.
+  it(
+    "RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota",
+    { timeout: 20_000 },
+    async () => {
+      const { container, recording, send, say, conversation } = await setup();
+      for (let index = 0; index < SESSION_MESSAGE_LIMIT; index += 1) {
+        await say(`Qual o horário do service desk? (${index})`);
+      }
+      const callsAtLimit = recording.counter.calls;
+      const messagesAtLimit = (await conversation()).messages.length;
+      // Teto de 1 por minuto: se a recusa gastasse cota, a segunda já viria como 429.
+      container.chatLimits.globalPerMinute = createRateLimiter({
+        limit: 1,
+        windowMs: HOUR_MS,
+        clock: { now: () => new Date() },
+      });
 
-    const blocked = await send("Mais uma pergunta");
-    const blockedAgain = await send("E mais uma");
+      const blocked = await send("Mais uma pergunta");
+      const blockedAgain = await send("E mais uma");
 
-    expect(await blocked.json()).toMatchObject({ error: { code: "SESSION_LIMIT" } });
-    // A recusa vem do limite da sessão, não do teto de uso: ele continua livre.
-    expect(blockedAgain.status).toBe(409);
-    expect(recording.counter.calls).toBe(callsAtLimit);
-    const saved = await conversation();
-    expect(saved.session).toMatchObject({ agentMessages: 30, isAtLimit: true });
-    expect(saved.messages).toHaveLength(messagesAtLimit);
-  });
+      expect(await blocked.json()).toMatchObject({ error: { code: "SESSION_LIMIT" } });
+      // A recusa vem do limite da sessão, não do teto de uso: ele continua livre.
+      expect(blockedAgain.status).toBe(409);
+      expect(recording.counter.calls).toBe(callsAtLimit);
+      const saved = await conversation();
+      expect(saved.session).toMatchObject({ agentMessages: 30, isAtLimit: true });
+      expect(saved.messages).toHaveLength(messagesAtLimit);
+    },
+  );
 
   it("R03: nova sessão zera o contador e abre com o resumo da anterior", async () => {
     const { post, say, conversation } = await setup();
