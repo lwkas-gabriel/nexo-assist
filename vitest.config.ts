@@ -27,10 +27,19 @@ export default defineConfig({
       },
       {
         test: {
-          // Por enquanto só funções puras do front; componentes ganham ambiente de navegador na T17.
+          // Funções puras do front.
           name: "web",
           include: ["apps/web/src/**/*.test.ts"],
           environment: "node",
+        },
+      },
+      {
+        test: {
+          // Componentes, num navegador simulado (jsdom), com o Testing Library.
+          name: "web-components",
+          include: ["apps/web/src/**/*.test.tsx"],
+          environment: "jsdom",
+          setupFiles: ["apps/web/src/test-setup.ts"],
         },
       },
       {

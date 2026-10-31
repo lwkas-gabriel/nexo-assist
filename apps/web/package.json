@@ -11,16 +11,22 @@
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.147",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/newsreader": "5.3.0",
+    "@fontsource/schibsted-grotesk": "5.3.0",
     "@tanstack/react-query": "5.105.0",
     "ai": "7.0.143",
+    "lucide-react": "1.64.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@nexo/shared": "workspace:*",
+    "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
     "vite": "8.3.5",
     "zod": "4.6.7"
   }
