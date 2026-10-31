@@ -3,13 +3,17 @@ import {
   AFFECTED_SCOPE_LABELS,
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
+  TICKET_DESCRIPTION_MAX_CHARS,
+  TICKET_DESCRIPTION_MIN_CHARS,
+  TICKET_TITLE_MAX_CHARS,
+  TICKET_TITLE_MIN_CHARS,
   TICKET_TYPES,
   TICKET_TYPE_LABELS,
   URGENCY_LABELS,
   URGENCY_LEVELS,
 } from "@nexo/shared/domain";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { isMacPlatform, modifierKeyLabel } from "../../../lib/platform.ts";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { isMacPlatform, modifierEnterShortcut, modifierKeyLabel } from "../../../lib/platform.ts";
 import { Button } from "../../../ui/Button.tsx";
 import { Card } from "../../../ui/Card.tsx";
 import { cx } from "../../../ui/cx.ts";
@@ -23,7 +27,8 @@ type DraftCardProps = {
   error: string | null;
   onConfirm: () => void;
   onCancel: () => void;
-  onEdit: (changes: Partial<DraftFields>) => void;
+  /** Resolve quando a api aceita; rejeita com o erro, que aparece no card. */
+  onEdit: (changes: Partial<DraftFields>) => Promise<unknown>;
 };
 
 const STATE_LABELS: Record<DraftView["status"], { label: string; dot: string; text: string }> = {
@@ -55,6 +60,7 @@ const PRIORITY_DOTS: Record<string, string> = {
 export function DraftCard(props: DraftCardProps) {
   const { draft, isActionable } = props;
   const [isEditing, setIsEditing] = useState(false);
+  const isMac = isMacPlatform();
   const state = STATE_LABELS[draft.status];
   const canAct = isActionable && (draft.status === "pending" || draft.status === "confirm_failed");
   const statusLabel =
@@ -93,15 +99,20 @@ export function DraftCard(props: DraftCardProps) {
           )}
         </div>
 
-        {draft.ticket && !isEditing && <DraftFieldsGrid ticket={draft.ticket} />}
+        {draft.ticket && !isEditing && (
+          <DraftFieldsGrid ticket={draft.ticket} showDeadline={draft.status !== "cancelled"} />
+        )}
         {draft.fields && isEditing && (
           <DraftEditForm
             fields={draft.fields}
             isWorking={props.isWorking}
-            onSave={(changes) => {
-              props.onEdit(changes);
-              setIsEditing(false);
-            }}
+            // Fecha só quando a api aceita: com erro, o funcionário não perde o que digitou.
+            onSave={(changes) =>
+              void props.onEdit(changes).then(
+                () => setIsEditing(false),
+                () => undefined,
+              )
+            }
             onCancel={() => setIsEditing(false)}
           />
         )}
@@ -114,13 +125,17 @@ export function DraftCard(props: DraftCardProps) {
 
         {canAct && !isEditing && (
           <div className="flex items-center gap-1.5 border-t border-rule bg-desk py-2 pr-3.5 pl-2">
-            <Button onClick={props.onConfirm} disabled={props.isWorking}>
+            <Button
+              onClick={props.onConfirm}
+              disabled={props.isWorking}
+              aria-keyshortcuts={modifierEnterShortcut(isMac)}
+            >
               {draft.status === "confirm_failed" ? "Tentar de novo" : "Confirmar"}
               <kbd
                 aria-hidden
-                className="rounded-sm bg-paper/15 px-[5px] py-px text-[11.5px] font-normal text-paper/80"
+                className="rounded-sm bg-paper/15 px-[5px] py-px font-ui text-[11.5px] font-normal text-paper/80"
               >
-                {`${modifierKeyLabel(isMacPlatform())}↵`}
+                {`${modifierKeyLabel(isMac)}↵`}
               </kbd>
             </Button>
             {draft.status === "pending" && draft.fields && (
@@ -155,7 +170,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function DraftFieldsGrid({ ticket }: { ticket: NonNullable<DraftView["ticket"]> }) {
+/** Os campos do chamado; o prazo some no cancelado, que não tem mais prazo a cumprir. */
+function DraftFieldsGrid({
+  ticket,
+  showDeadline,
+}: {
+  ticket: NonNullable<DraftView["ticket"]>;
+  showDeadline: boolean;
+}) {
   return (
     <div className="px-[18px] pb-4">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-rule pt-3 md:grid-cols-4">
@@ -167,15 +189,14 @@ function DraftFieldsGrid({ ticket }: { ticket: NonNullable<DraftView["ticket"]> 
             className={cx("size-1.5 rounded-full", PRIORITY_DOTS[ticket.priority] ?? "bg-ink-3")}
           />
           {ticket.priority}
-          <span className="text-[13.5px] font-normal text-ink-3">
-            · resposta até {ticket.firstResponseBy}
-          </span>
+          {showDeadline && (
+            <span className="text-[13.5px] font-normal text-ink-3">
+              · resposta até {ticket.firstResponseBy}
+            </span>
+          )}
         </Field>
         <Field label="Afetados">{ticket.affected}</Field>
       </dl>
-      {ticket.priorityReason && (
-        <p className="mt-2 text-[12.5px] text-ink-3">{ticket.priorityReason}</p>
-      )}
     </div>
   );
 }
@@ -225,12 +246,25 @@ function DraftEditForm({
   onCancel: () => void;
 }) {
   const [values, setValues] = useState(fields);
+  const titleRef = useRef<HTMLInputElement>(null);
   const set = (key: keyof DraftFields) => (value: string) =>
     setValues((current) => ({ ...current, [key]: value }));
+  // As mesmas regras da api (RN03), para avisar antes de enviar.
+  const problem =
+    values.title.trim().length < TICKET_TITLE_MIN_CHARS
+      ? `O título precisa de pelo menos ${TICKET_TITLE_MIN_CHARS} caracteres.`
+      : values.description.trim().length < TICKET_DESCRIPTION_MIN_CHARS
+        ? `A descrição precisa de pelo menos ${TICKET_DESCRIPTION_MIN_CHARS} caracteres.`
+        : null;
+
+  // Ao abrir a edição, o foco vai para o primeiro campo (o botão Editar some).
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSave(values);
+    if (!problem) onSave(values);
   }
 
   return (
@@ -242,7 +276,10 @@ function DraftEditForm({
       <label className="flex flex-col gap-1 text-[12.5px] text-ink-3">
         Título
         <input
+          ref={titleRef}
           value={values.title}
+          maxLength={TICKET_TITLE_MAX_CHARS}
+          aria-describedby={problem ? "draft-edit-problem" : undefined}
           onChange={(event) => set("title")(event.target.value)}
           className="h-9 rounded-md border border-line-strong px-2.5 text-[13.5px] text-ink"
         />
@@ -251,6 +288,8 @@ function DraftEditForm({
         Descrição
         <textarea
           value={values.description}
+          maxLength={TICKET_DESCRIPTION_MAX_CHARS}
+          aria-describedby={problem ? "draft-edit-problem" : undefined}
           onChange={(event) => set("description")(event.target.value)}
           rows={3}
           className="rounded-md border border-line-strong px-2.5 py-2 text-[13.5px] text-ink"
@@ -289,8 +328,13 @@ function DraftEditForm({
       <p className="text-[12.5px] text-ink-3">
         A prioridade é recalculada pelas regras do service desk.
       </p>
+      {problem && (
+        <p id="draft-edit-problem" className="text-[13px] text-danger-text">
+          {problem}
+        </p>
+      )}
       <div className="flex gap-1.5">
-        <Button type="submit" disabled={isWorking}>
+        <Button type="submit" disabled={isWorking || problem !== null}>
           Salvar
         </Button>
         <Button variant="ghost" onClick={onCancel} disabled={isWorking}>

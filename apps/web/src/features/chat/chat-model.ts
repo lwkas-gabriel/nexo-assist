@@ -1,4 +1,4 @@
-import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { getToolName, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import type { DraftView, SessionView } from "./chat-api.ts";
 
 /**
@@ -26,6 +26,19 @@ export function messageAuthor(message: UIMessage): MessageAuthor {
 export function messageCreatedAt(message: UIMessage): string | undefined {
   const createdAt = metadataOf(message).createdAt;
   return typeof createdAt === "string" ? createdAt : undefined;
+}
+
+/** O texto da mensagem, sem as partes de tool. */
+export function textOf(message: UIMessage): string {
+  return message.parts
+    .filter(isTextUIPart)
+    .map((part) => part.text)
+    .join("");
+}
+
+/** A mensagem mais recente do funcionário: a que fica sem resposta quando o envio falha. */
+export function lastEmployeeMessage(messages: readonly UIMessage[]): UIMessage | undefined {
+  return messages.findLast((message) => messageAuthor(message) === "employee");
 }
 
 /** Saída de uma tool já concluída, pelo nome. */

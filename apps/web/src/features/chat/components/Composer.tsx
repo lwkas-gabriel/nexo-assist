@@ -1,13 +1,13 @@
+import { CHAT_MESSAGE_MAX_CHARS } from "@nexo/shared/contracts";
 import { ArrowUp } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
 import { Button } from "../../../ui/Button.tsx";
-
-/** Mesmo limite que a api aplica, para avisar antes de enviar. */
-const MAX_MESSAGE_CHARS = 2000;
 /** R34: as quatro primeiras respostas rápidas têm atalho de teclado. */
 const SHORTCUT_OPTIONS = 4;
 
 type ComposerProps = {
+  /** O campo de texto: o foco volta para ele depois de um botão do card ou de uma opção. */
+  ref?: Ref<HTMLInputElement>;
   isBusy: boolean;
   onSend: (text: string) => void;
   /** Contador da sessão (RF10): mensagens ao agent e o limite. */
@@ -19,10 +19,17 @@ type ComposerProps = {
 };
 
 /** Campo de mensagem da tela 2, com o contador da sessão e os atalhos de teclado. */
-export function Composer({ isBusy, onSend, counter, quickOptions, onConfirmDraft }: ComposerProps) {
+export function Composer({
+  ref,
+  isBusy,
+  onSend,
+  counter,
+  quickOptions,
+  onConfirmDraft,
+}: ComposerProps) {
   const [text, setText] = useState("");
   const trimmed = text.trim();
-  const canSend = !isBusy && trimmed.length > 0 && trimmed.length <= MAX_MESSAGE_CHARS;
+  const canSend = !isBusy && trimmed.length > 0 && trimmed.length <= CHAT_MESSAGE_MAX_CHARS;
 
   function send(message: string) {
     onSend(message);
@@ -40,7 +47,9 @@ export function Composer({ isBusy, onSend, counter, quickOptions, onConfirmDraft
       onConfirmDraft();
       return;
     }
-    const option = text === "" && !isBusy ? quickOptions[Number(event.key) - 1] : undefined;
+    const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const option =
+      text === "" && !isBusy && !hasModifier ? quickOptions[Number(event.key) - 1] : undefined;
     if (option && Number(event.key) <= SHORTCUT_OPTIONS) {
       event.preventDefault();
       send(option);
@@ -55,11 +64,12 @@ export function Composer({ isBusy, onSend, counter, quickOptions, onConfirmDraft
         </label>
         <input
           id="composer-input"
+          ref={ref}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Escreva para o Nexo…"
-          maxLength={MAX_MESSAGE_CHARS}
+          maxLength={CHAT_MESSAGE_MAX_CHARS}
           autoComplete="off"
           aria-describedby="composer-counter"
           className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-ink outline-hidden placeholder:text-ink-3"
@@ -82,30 +92,37 @@ export function Composer({ isBusy, onSend, counter, quickOptions, onConfirmDraft
  */
 export function SessionLimitNotice({
   isWorking,
+  error,
   onNewSession,
   onTalkToAnalyst,
 }: {
   isWorking: boolean;
+  /** Falha de um dos dois botões; sem ela, o funcionário clicaria sem ver resultado. */
+  error: string | null;
   onNewSession: () => void;
   onTalkToAnalyst: () => void;
 }) {
   return (
-    <div
-      role="status"
-      className="flex flex-col gap-3 rounded-lg border border-line-strong bg-paper px-4 py-3 md:flex-row md:items-center"
-    >
-      <p className="flex-1 text-[13.5px] text-ink-2">
-        <span className="font-semibold text-ink">Limite desta sessão atingido.</span> Comece uma
-        sessão nova para continuar com o assistente, ou fale com um analista.
-      </p>
-      <div className="flex gap-1.5">
-        <Button variant="secondary" onClick={onTalkToAnalyst} disabled={isWorking}>
-          Falar com um analista
-        </Button>
-        <Button onClick={onNewSession} disabled={isWorking}>
-          Nova sessão
-        </Button>
+    <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-paper px-4 py-3">
+      <div role="status" className="flex flex-col gap-3 md:flex-row md:items-center">
+        <p className="flex-1 text-[13.5px] text-ink-2">
+          <span className="font-semibold text-ink">Limite desta sessão atingido.</span> Comece uma
+          sessão nova para continuar com o assistente, ou fale com um analista.
+        </p>
+        <div className="flex gap-1.5">
+          <Button variant="secondary" onClick={onTalkToAnalyst} disabled={isWorking}>
+            Falar com um analista
+          </Button>
+          <Button onClick={onNewSession} disabled={isWorking}>
+            Nova sessão
+          </Button>
+        </div>
       </div>
+      {error && (
+        <p role="alert" className="text-[13px] text-danger-text">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

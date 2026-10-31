@@ -92,12 +92,12 @@ export function ChatShell({ user, mode, isLoggingOut, onLogout, children }: Chat
           <div className="flex items-center gap-2 md:hidden">
             <NexoMark tone="onLight" />
           </div>
-          <p className="hidden min-w-0 flex-1 items-center gap-2 text-[13.5px] md:flex">
-            <span className="text-ink-3">Service desk de TI</span>
-            <ChevronRight size={14} aria-hidden className="text-ink-3" />
-            <span className="font-semibold text-ink">Atendimento</span>
-          </p>
-          <div className="flex-1 md:hidden" />
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-[13.5px]">
+            <span className="hidden text-ink-3 md:inline">Service desk de TI</span>
+            <ChevronRight size={14} aria-hidden className="hidden text-ink-3 md:block" />
+            {/* O título da página; no celular, só para o leitor de tela (a marca ocupa o topo). */}
+            <h1 className="sr-only font-semibold text-ink md:not-sr-only">Atendimento</h1>
+          </div>
           <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
             {MODE_LABELS[mode]}
           </Pill>

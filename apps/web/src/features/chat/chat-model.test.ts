@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { DraftView, SessionView } from "./chat-api.ts";
 import {
   confirmableDraft,
+  lastEmployeeMessage,
   liveDraft,
   messageAuthor,
   proposedDraft,
@@ -104,5 +105,14 @@ describe("leitura das mensagens do chat", () => {
     expect(sessionSummaryIndex(messages, session)).toBe(1);
     expect(sessionSummaryIndex(messages, { ...session, startedAt: null })).toBe(2);
     expect(sessionSummaryIndex(messages, { ...session, previousSummary: null })).toBeUndefined();
+  });
+
+  it("a mensagem que fica para o Tentar novamente é a última do funcionário", () => {
+    const employee = (id: string): UIMessage => ({ id, role: "user", parts: [] });
+
+    expect(lastEmployeeMessage([employee("1"), message("2"), employee("3"), message("4")])).toEqual(
+      employee("3"),
+    );
+    expect(lastEmployeeMessage([message("1")])).toBeUndefined();
   });
 });

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DraftView } from "../chat-api.ts";
-import { Composer } from "./Composer.tsx";
+import { Composer, SessionLimitNotice } from "./Composer.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
 
@@ -34,7 +34,11 @@ const pendingDraft: DraftView = {
 };
 
 function renderCard(draft: DraftView, overrides: Partial<Parameters<typeof DraftCard>[0]> = {}) {
-  const handlers = { onConfirm: vi.fn(), onCancel: vi.fn(), onEdit: vi.fn() };
+  const handlers = {
+    onConfirm: vi.fn(),
+    onCancel: vi.fn(),
+    onEdit: vi.fn(() => Promise.resolve()),
+  };
   render(
     <DraftCard
       draft={draft}
@@ -89,6 +93,56 @@ describe("card do rascunho (RF07, R16, R26)", () => {
 
     expect(screen.queryByLabelText("Prioridade")).toBeNull();
     expect(handlers.onEdit).toHaveBeenCalledWith(expect.objectContaining({ affected: "my_team" }));
+  });
+
+  it("editar leva o foco ao primeiro campo, e o formulário fecha quando a api aceita", async () => {
+    renderCard(pendingDraft);
+
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(document.activeElement).toBe(screen.getByLabelText("Título"));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(screen.queryByRole("form", { name: "Editar rascunho" })).toBeNull();
+  });
+
+  it("com erro da api, o formulário fica aberto com o que foi digitado", async () => {
+    renderCard(pendingDraft, { onEdit: vi.fn(() => Promise.reject(new Error("falhou"))) });
+
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    await userEvent.type(screen.getByLabelText("Título"), " (urgente)");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(screen.getByLabelText("Título")).toHaveProperty(
+      "value",
+      "VPN não conecta no notebook — erro 809 (urgente)",
+    );
+  });
+
+  it("RN03: título curto demais não é enviado, e o motivo aparece", async () => {
+    const handlers = renderCard(pendingDraft);
+
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    await userEvent.clear(screen.getByLabelText("Título"));
+    await userEvent.type(screen.getByLabelText("Título"), "VPN");
+
+    expect(screen.getByText("O título precisa de pelo menos 5 caracteres.")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Salvar" })).toHaveProperty("disabled", true);
+    expect(handlers.onEdit).not.toHaveBeenCalled();
+  });
+
+  it("R33: o Confirmar anuncia o atalho de teclado", () => {
+    renderCard(pendingDraft);
+
+    expect(
+      screen.getByRole("button", { name: /Confirmar/ }).getAttribute("aria-keyshortcuts"),
+    ).toMatch(/^(Control|Meta)\+Enter$/);
+  });
+
+  it("cancelado não mostra prazo de resposta", () => {
+    renderCard({ ...pendingDraft, status: "cancelled" });
+
+    expect(screen.getByText("Cancelado")).toBeDefined();
+    expect(screen.queryByText(/resposta até/)).toBeNull();
   });
 
   it("depois de confirmado, mostra o número do chamado e some com os botões", () => {
@@ -148,6 +202,24 @@ describe("campo de mensagem (RF10, R33, R34)", () => {
     expect(props.onSend).not.toHaveBeenCalled();
   });
 
+  it("R33: no Mac, ⌘+Enter também confirma", async () => {
+    const props = renderComposer();
+    await userEvent.click(screen.getByLabelText("Mensagem para o Nexo"));
+
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+
+    expect(props.onConfirmDraft).toHaveBeenCalledOnce();
+  });
+
+  it("R34: número com Ctrl, Alt ou ⌘ é atalho do navegador, não resposta rápida", async () => {
+    const props = renderComposer();
+    await userEvent.click(screen.getByLabelText("Mensagem para o Nexo"));
+
+    await userEvent.keyboard("{Control>}2{/Control}{Alt>}1{/Alt}");
+
+    expect(props.onSend).not.toHaveBeenCalled();
+  });
+
   it("Enter envia o texto e limpa o campo", async () => {
     const props = renderComposer();
 
@@ -155,6 +227,21 @@ describe("campo de mensagem (RF10, R33, R34)", () => {
 
     expect(props.onSend).toHaveBeenCalledWith("Minha VPN caiu");
     expect(screen.getByLabelText("Mensagem para o Nexo")).toHaveProperty("value", "");
+  });
+});
+
+describe("limite da sessão (RN14)", () => {
+  it("a falha de um dos botões aparece no aviso", () => {
+    render(
+      <SessionLimitNotice
+        isWorking={false}
+        error="Sistema de chamados indisponível."
+        onNewSession={() => undefined}
+        onTalkToAnalyst={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toBe("Sistema de chamados indisponível.");
   });
 });
 

@@ -1,0 +1,118 @@
+import type { ConversationMode } from "@nexo/shared/domain";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CurrentUser } from "../auth/auth-api.ts";
+import type { ConversationView } from "./chat-api.ts";
+import { ChatPage } from "./ChatPage.tsx";
+
+const ANA: CurrentUser = {
+  id: "emp-ana-souza",
+  name: "Ana Souza",
+  email: "ana.souza@nexo.com.br",
+  role: "employee",
+  department: "Financeiro",
+};
+
+function conversationAt(mode: ConversationMode, isAtLimit: boolean): ConversationView {
+  return {
+    conversation: { id: "c-1", mode },
+    session: {
+      agentMessages: isAtLimit ? 30 : 12,
+      limit: 30,
+      isAtLimit,
+      startedAt: "2026-10-31T12:00:00.000Z",
+      previousSummary: null,
+    },
+    messages: [],
+    drafts: [],
+  };
+}
+
+const RATE_LIMITED = {
+  error: { code: "RATE_LIMITED", message: "Muitas mensagens em pouco tempo." },
+};
+
+/**
+ * A api por rota: `GET /chat` devolve a conversa da vez (muda depois do "Falar com um analista");
+ * o envio de mensagem falha, para os testes do "Tentar novamente".
+ */
+function stubApi(initial: ConversationView, afterHandoff: ConversationView = initial) {
+  const calls: string[] = [];
+  const sentBodies: unknown[] = [];
+  let current = initial;
+  vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+    const call = `${init?.method ?? "GET"} ${input}`;
+    calls.push(call);
+    if (call === "POST /api/chat/handoff") current = afterHandoff;
+    if (call === "POST /api/chat/messages") {
+      sentBodies.push(JSON.parse(typeof init?.body === "string" ? init.body : "null"));
+      return Promise.resolve(new Response(JSON.stringify(RATE_LIMITED), { status: 429 }));
+    }
+    const body = call === "GET /api/chat" ? current : {};
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  });
+  return { calls, sentBodies };
+}
+
+function renderChat() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ChatPage user={ANA} isLoggingOut={false} onLogout={() => undefined} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("tela do chat (tela 2)", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("RN14: no limite, falar com um analista transfere e devolve o campo de mensagem", async () => {
+    const { calls } = stubApi(
+      conversationAt("agent", true),
+      conversationAt("waiting_analyst", true),
+    );
+    renderChat();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
+
+    expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+    expect(screen.queryByText(/Limite desta sessão atingido/)).toBeNull();
+    expect(calls).toContain("POST /api/chat/handoff");
+  });
+
+  it("RN14: com a conversa no analista, o limite do agent não bloqueia o funcionário", async () => {
+    stubApi(conversationAt("analyst", true));
+    renderChat();
+
+    expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
+    expect(screen.queryByText(/Limite desta sessão atingido/)).toBeNull();
+  });
+
+  it("a página tem título e a conversa é uma região viva", async () => {
+    stubApi(conversationAt("agent", false));
+    renderChat();
+
+    expect(await screen.findByRole("log", { name: "Conversa com o Nexo Assist" })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1, name: "Atendimento" })).toBeDefined();
+  });
+
+  it("mensagem recusada fica marcada, e Tentar novamente reenvia a mesma (texto e id)", async () => {
+    const { sentBodies } = stubApi(conversationAt("agent", false));
+    renderChat();
+
+    await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "VPN caiu{Enter}");
+    expect(await screen.findByText("Muitas mensagens em pouco tempo.")).toBeDefined();
+    expect(screen.getByText("Não enviada")).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await waitFor(() => expect(sentBodies).toHaveLength(2));
+    expect(sentBodies[1]).toEqual(sentBodies[0]);
+    expect(sentBodies[0]).toMatchObject({ text: "VPN caiu" });
+    expect(typeof (sentBodies[0] as { id?: unknown }).id).toBe("string");
+    expect(screen.getAllByText("VPN caiu")).toHaveLength(1);
+  });
+});

@@ -1,6 +1,7 @@
 import { useChat } from "@ai-sdk/react";
+import { SESSION_MESSAGE_LIMIT } from "@nexo/shared/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DefaultChatTransport, isTextUIPart, type UIMessage } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "../../ui/Button.tsx";
@@ -20,33 +21,30 @@ import {
 import { describeChatError } from "./chat-error.ts";
 import {
   confirmableDraft,
+  lastEmployeeMessage,
   messageAuthor,
   quickOptionsOf,
   sessionSummaryIndex,
+  textOf,
 } from "./chat-model.ts";
 import { ChatShell } from "./ChatShell.tsx";
 import { Composer, SessionLimitNotice } from "./components/Composer.tsx";
-import { MessageBubble } from "./components/MessageBubble.tsx";
+import { MessageBubble, type DraftActions } from "./components/MessageBubble.tsx";
 
 const CONVERSATION_KEY = ["conversation"] as const;
-const DEFAULT_SESSION_LIMIT = 30;
 
 /**
- * O histórico vive no servidor: o navegador manda só o texto da mensagem nova.
+ * O histórico vive no servidor: o navegador manda só o texto da mensagem nova, com o id da bolha
+ * (a conversa recarregada mantém os mesmos ids, e o reenvio depois de uma falha não duplica).
  * Assim não há como forjar mensagens anteriores da conversa.
  */
 const chatTransport = new DefaultChatTransport({
   api: "/api/chat/messages",
-  prepareSendMessagesRequest: ({ messages }) => ({ body: { text: lastText(messages) } }),
+  prepareSendMessagesRequest: ({ messages }) => {
+    const last = messages.at(-1);
+    return { body: { text: last ? textOf(last) : "", ...(last ? { id: last.id } : {}) } };
+  },
 });
-
-function lastText(messages: UIMessage[]): string {
-  const last = messages.at(-1);
-  return (last?.parts ?? [])
-    .filter(isTextUIPart)
-    .map((part) => part.text)
-    .join("");
-}
 
 type ChatPageProps = { user: CurrentUser; isLoggingOut: boolean; onLogout: () => void };
 
@@ -84,39 +82,65 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
   );
 }
 
+type DraftAction = { draft: DraftView; run: () => Promise<unknown> };
+
 function ChatConversation({ user, view }: { user: CurrentUser; view: ConversationView }) {
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLInputElement>(null);
+  const mode = view.conversation?.mode ?? "agent";
 
-  /** Recarrega do servidor: contador, rascunhos e registros de decisão ficam em dia. */
-  async function refresh() {
-    const fresh = await queryClient.fetchQuery({
+  /** Recarrega do servidor: contador, rascunhos, modo e registros de decisão ficam em dia. */
+  function reloadView() {
+    return queryClient.fetchQuery({
       queryKey: CONVERSATION_KEY,
       queryFn: fetchConversation,
       staleTime: 0,
     });
-    setMessages(fresh.messages);
   }
 
-  const { messages, sendMessage, status, error, regenerate, setMessages } = useChat({
+  /** Recarrega também as mensagens; os ids são os mesmos, então as bolhas não são remontadas. */
+  async function refresh() {
+    setMessages((await reloadView()).messages);
+  }
+
+  const { messages, sendMessage, status, error, setMessages, clearError } = useChat({
     transport: chatTransport,
     messages: view.messages,
-    onFinish: () => void refresh(),
+    // Depois de uma falha, a bolha que não teve resposta fica na tela para o "Tentar novamente".
+    onFinish: ({ isError }) => void (isError ? reloadView() : refresh()),
   });
   const isBusy = status === "submitted" || status === "streaming";
 
-  // Botões do card e da sessão: ações determinísticas, sem o modelo (11.5).
-  const action = useMutation({
-    mutationFn: (run: () => Promise<unknown>) => run(),
-    onSuccess: () => void refresh(),
+  // Botões do card: ações determinísticas, sem o modelo (11.5). O erro fica no card que falhou.
+  const draftAction = useMutation({
+    mutationFn: ({ run }: DraftAction) => run(),
+    onSuccess: async () => {
+      await refresh();
+      composerRef.current?.focus();
+    },
   });
-  const draftActions = {
-    isWorking: action.isPending,
-    error: action.error ? action.error.message : null,
-    confirm: (draft: DraftView) => action.mutate(() => confirmDraft(draft.number)),
-    cancel: (draft: DraftView) => action.mutate(() => cancelDraft(draft.number)),
-    edit: (draft: DraftView, changes: Partial<DraftFields>) =>
-      action.mutate(() => editDraft(draft.number, changes)),
+  // Nova sessão e "Falar com um analista": separadas do card, com o erro no próprio aviso.
+  const sessionAction = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: async () => {
+      clearError();
+      await refresh();
+    },
+  });
+
+  const pendingDraft = confirmableDraft(messages, view.drafts);
+  const draftActions: DraftActions = {
+    // Enquanto o agent responde, o card pode estar mudando: os botões esperam o fim do turno.
+    isWorking: draftAction.isPending || isBusy,
+    errorFor: (draft) =>
+      draftAction.error && draftAction.variables?.draft.number === draft.number
+        ? draftAction.error.message
+        : null,
+    confirm: (draft) => draftAction.mutate({ draft, run: () => confirmDraft(draft.number) }),
+    cancel: (draft) => draftAction.mutate({ draft, run: () => cancelDraft(draft.number) }),
+    edit: (draft, changes: Partial<DraftFields>) =>
+      draftAction.mutateAsync({ draft, run: () => editDraft(draft.number, changes) }),
   };
 
   const lastMessage = messages.at(-1);
@@ -124,9 +148,24 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     lastMessage && messageAuthor(lastMessage) === "agent" && !isBusy
       ? quickOptionsOf(lastMessage)
       : undefined;
-  const pendingDraft = confirmableDraft(messages, view.drafts);
   const summaryIndex = sessionSummaryIndex(messages, view.session);
+  // A mensagem que ficou sem resposta; "não enviada" se nem chegou a ser gravada no servidor.
+  const failedMessage = error ? lastEmployeeMessage(messages) : undefined;
+  const unsentMessageId =
+    failedMessage && !view.messages.some((message) => message.id === failedMessage.id)
+      ? failedMessage.id
+      : undefined;
+  // RN14: o limite vale para o agent; com um analista, o funcionário continua escrevendo.
+  const isAtLimit = mode === "agent" && view.session?.isAtLimit === true;
+
   const send = (text: string) => void sendMessage({ text });
+  const pickOption = (option: string) => {
+    send(option);
+    composerRef.current?.focus();
+  };
+  const retry = (message: UIMessage) =>
+    void sendMessage({ text: textOf(message), messageId: message.id });
+  const talkToAnalyst = () => sessionAction.mutate(requestAnalyst);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
@@ -142,42 +181,61 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
               chamados.
             </p>
           )}
-          <ol role="log" aria-label="Conversa com o Nexo Assist" className="flex flex-col gap-5">
-            {messages.map((message, index) => (
-              <MessageWithSummary
-                key={message.id}
-                showSummaryBefore={summaryIndex === index}
-                summary={view.session?.previousSummary ?? null}
-              >
-                <MessageBubble
-                  message={message}
-                  drafts={view.drafts}
-                  optionsActive={message === lastMessage && activeOptions !== undefined}
-                  actionableDraftNumber={pendingDraft?.number}
-                  onPickOption={send}
-                  draftActions={draftActions}
-                />
-              </MessageWithSummary>
-            ))}
-            {summaryIndex === messages.length && view.session?.previousSummary && (
-              <SessionSummaryCard summary={view.session.previousSummary} />
+          <div role="log" aria-label="Conversa com o Nexo Assist" className="flex flex-col gap-5">
+            <ol className="flex flex-col gap-5">
+              {messages.map((message, index) => (
+                <MessageWithSummary
+                  key={message.id}
+                  showSummaryBefore={summaryIndex === index}
+                  summary={view.session?.previousSummary ?? null}
+                >
+                  <MessageBubble
+                    message={message}
+                    drafts={view.drafts}
+                    optionsActive={message === lastMessage && activeOptions !== undefined}
+                    actionableDraftNumber={pendingDraft?.number}
+                    isUnsent={message.id === unsentMessageId}
+                    onPickOption={pickOption}
+                    draftActions={draftActions}
+                  />
+                </MessageWithSummary>
+              ))}
+              {summaryIndex === messages.length && view.session?.previousSummary && (
+                <SessionSummaryCard summary={view.session.previousSummary} />
+              )}
+            </ol>
+            {status === "submitted" && (
+              <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
+                <LoaderCircle size={12} aria-hidden className="animate-spin" />
+                Nexo Assist está pensando…
+              </p>
             )}
-          </ol>
-          {status === "submitted" && (
-            <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
-              <LoaderCircle size={12} aria-hidden className="animate-spin" />
-              Nexo Assist está pensando…
-            </p>
-          )}
+          </div>
           {error && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-4 py-3"
             >
-              <p className="flex-1 text-[13.5px] text-danger-text">{describeChatError(error)}</p>
-              <Button variant="secondary" onClick={() => void regenerate()}>
-                Tentar novamente
-              </Button>
+              <p className="flex-1 text-[13.5px] text-danger-text">
+                {describeChatError(error)}
+                {sessionAction.error && ` ${sessionAction.error.message}`}
+              </p>
+              <div className="flex gap-1.5">
+                {mode === "agent" && (
+                  <Button
+                    variant="secondary"
+                    onClick={talkToAnalyst}
+                    disabled={sessionAction.isPending}
+                  >
+                    Falar com um analista
+                  </Button>
+                )}
+                {failedMessage && !isAtLimit && (
+                  <Button variant="secondary" onClick={() => retry(failedMessage)}>
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           <div ref={endRef} />
@@ -185,22 +243,32 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
       </div>
 
       <div className="shrink-0 px-4 pt-2.5 pb-[18px] md:px-12 xl:px-[200px]">
-        {view.session?.isAtLimit ? (
+        {isAtLimit ? (
           <SessionLimitNotice
-            isWorking={action.isPending}
-            onNewSession={() => action.mutate(startNewSession)}
-            onTalkToAnalyst={() => action.mutate(requestAnalyst)}
+            isWorking={sessionAction.isPending}
+            error={sessionAction.error ? sessionAction.error.message : null}
+            onNewSession={() => sessionAction.mutate(startNewSession)}
+            onTalkToAnalyst={talkToAnalyst}
           />
         ) : (
           <Composer
+            ref={composerRef}
             isBusy={isBusy}
             onSend={send}
             counter={{
               used: view.session?.agentMessages ?? 0,
-              limit: view.session?.limit ?? DEFAULT_SESSION_LIMIT,
+              limit: view.session?.limit ?? SESSION_MESSAGE_LIMIT,
             }}
             quickOptions={activeOptions?.options ?? []}
-            onConfirmDraft={pendingDraft ? () => draftActions.confirm(pendingDraft) : undefined}
+            onConfirmDraft={
+              pendingDraft
+                ? () => {
+                    // Ctrl/⌘+Enter repetido durante a confirmação, ou com o agent respondendo,
+                    // não manda outra (RN04).
+                    if (!draftActions.isWorking) draftActions.confirm(pendingDraft);
+                  }
+                : undefined
+            }
           />
         )}
       </div>

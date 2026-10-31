@@ -1,16 +1,18 @@
-import { isTextUIPart, isToolUIPart, type UIMessage } from "ai";
+import { isToolUIPart, type UIMessage } from "ai";
 import type { DraftFields, DraftView } from "../chat-api.ts";
-import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf } from "../chat-model.ts";
+import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf, textOf } from "../chat-model.ts";
 import { ActionChips } from "./ActionChips.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
 
 export type DraftActions = {
   isWorking: boolean;
-  error: string | null;
+  /** O erro da última ação, só no card em que ela falhou. */
+  errorFor: (draft: DraftView) => string | null;
   confirm: (draft: DraftView) => void;
   cancel: (draft: DraftView) => void;
-  edit: (draft: DraftView, changes: Partial<DraftFields>) => void;
+  /** Resolve quando a api aceita a edição; o formulário só fecha aí. */
+  edit: (draft: DraftView, changes: Partial<DraftFields>) => Promise<unknown>;
 };
 
 type MessageBubbleProps = {
@@ -20,16 +22,11 @@ type MessageBubbleProps = {
   optionsActive: boolean;
   /** O rascunho que aceita ação (o mais recente ainda confirmável); os outros são registro. */
   actionableDraftNumber: number | undefined;
+  /** O envio falhou antes de a mensagem chegar ao servidor. */
+  isUnsent: boolean;
   onPickOption: (option: string) => void;
   draftActions: DraftActions;
 };
-
-function textOf(message: UIMessage): string {
-  return message.parts
-    .filter(isTextUIPart)
-    .map((part) => part.text)
-    .join("");
-}
 
 /** Uma mensagem da conversa, com a aparência de quem escreveu (tela 2). */
 export function MessageBubble(props: MessageBubbleProps) {
@@ -51,11 +48,12 @@ export function MessageBubble(props: MessageBubbleProps) {
 
   if (author === "employee") {
     return (
-      <li className="flex justify-end">
+      <li className="flex flex-col items-end gap-1">
         <p className="max-w-[520px] rounded-[12px_12px_4px_12px] bg-ink px-4 py-[11px] text-[14.5px] leading-[1.45] whitespace-pre-wrap text-paper">
           <span className="sr-only">Você: </span>
           {text}
         </p>
+        {props.isUnsent && <span className="text-[12.5px] text-danger-text">Não enviada</span>}
       </li>
     );
   }
@@ -105,7 +103,7 @@ function AgentMessage({
           draft={draft}
           isActionable={draft.number === actionableDraftNumber}
           isWorking={draftActions.isWorking}
-          error={draft.number === actionableDraftNumber ? draftActions.error : null}
+          error={draftActions.errorFor(draft)}
           onConfirm={() => draftActions.confirm(draft)}
           onCancel={() => draftActions.cancel(draft)}
           onEdit={(changes) => draftActions.edit(draft, changes)}
