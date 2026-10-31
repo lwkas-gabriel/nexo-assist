@@ -1,0 +1,49 @@
+/*
+ * Design tokens do protótipo (nexo.pen, FRONTEND.md 10.1), como tema do Tailwind. As classes
+ * nascem daqui (bg-ink, text-ink-3, rounded-lg, shadow-card...): nenhuma cor solta no código.
+ */
+@theme {
+  --font-ui: "Schibsted Grotesk", system-ui, sans-serif;
+  --font-display: "Newsreader", Georgia, serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-ink: #1b2431;
+  --color-ink-2: #3d4656;
+  --color-ink-3: #5b6472;
+  --color-paper: #ffffff;
+  --color-desk: #f6f7f9;
+  --color-rule: #e6e8ec;
+  /* Fundo da conversa no console do analista. */
+  --color-console: #eef1f5;
+  --color-cta: #0062c4;
+
+  --color-primary: #0285f7;
+  --color-primary-hover: #0071d6;
+  --color-primary-soft: #0285f712;
+  --color-primary-text: #0069c7;
+  --color-success: #00bd6c;
+  --color-success-soft: #00bd6c14;
+  --color-success-text: #00804a;
+  --color-warning: #f5a500;
+  --color-warning-soft: #f5a50018;
+  --color-warning-text: #946300;
+  --color-danger: #ee343b;
+  --color-danger-soft: #ee343b12;
+  --color-danger-text: #c4161d;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  /* Balão de chat: um canto de 4 px, do lado de quem fala. */
+  --radius-bubble-corner: 4px;
+
+  --shadow-sm: 0 1px 2px #1b24310d;
+  --shadow-card: 0 1px 2px #1b24310d, 0 6px 18px #1b24310a;
+  --shadow-cta: 0 1px 2px #0062c433, 0 6px 16px #0062c426;
+
+  /* Breakpoints de 10.6 (iguais aos do Tailwind): celular < 768, tablet, notebook, desktop. */
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
