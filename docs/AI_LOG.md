@@ -680,3 +680,21 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
 - **Menores, todos tratados:** pílula como região de status (a troca de estado é anunciada); "pensando…" só com o agent; rótulo do campo conforme o destinatário; analista no topo só com a conversa com ele; tipo `AnalystView` reaproveitado e `recipient` obrigatório.
 - **Custo do polling (menor, registrado, não resolvido agora):** cada consulta traz a conversa inteira (até 200 mensagens), a cada 3 s, durante a espera pelo analista. É aceitável no tamanho da demonstração; um endpoint leve ("houve mudança desde X?") fica em "o que faria com mais tempo", no README (T29).
 - **Lição:** o teste de componente que só conferia o estado final não via um sumiço de meio segundo. Para código que reage a fontes assíncronas (stream, polling, recarregamento), o teste precisa segurar uma das respostas e olhar a tela no meio do caminho, como o revisor fez.
+
+---
+
+## T23: console do analista, tela 4 (31/10/2026)
+
+### 67. T23: o analista vê quem precisa dele e por quê
+- **IA gerou:** o `console-service` e três rotas de leitura (lista, conversa, chamados), a migração do visto por último do funcionário e da leitura do analista, o `conversation-reader` (tirado do chat-service, para as duas telas montarem as mensagens do mesmo jeito), a tela 4 (lista, conversa, painel de chamados e de decisão) e os testes, inclusive um E2E com dois navegadores.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - **Divisão com a T24:** a T23 é o console de leitura; assumir, responder, devolver e encerrar ficam na T24. A barra de espera mostra o estado e o resumo da transferência, sem os botões ainda.
+  - **"Online" (A20):** o funcionário carregou a conversa no último minuto; o polling da T22 mantém isso vivo enquanto ele espera. Fica gravado no usuário (`last_seen_at`).
+  - **✓ / ✓✓:** valem para o que saiu para o funcionário (agent e analista): ✓✓ quando ele carregou a conversa depois da mensagem. A A20 do plano falava em "lida quando o analista abre"; a leitura do analista virou a contagem de não lidas (`analyst_read_at` na conversa), que é o que o protótipo mostra na lista.
+  - **Filtros:** "Para você" são as conversas aguardando analista; "Minhas", as assumidas por quem está logado. A busca, sem acento, olha nome, setor e os chamados ligados à conversa (o da transferência e os criados nela).
+  - **Etiquetas no tom do 10.2:** transferida em danger ("Transferida · INC-x" ou "contato em N min", recalculado a cada minuto, R36), pedido de ajuda por confiança baixa em warning, com a confiança da transferência (R39).
+  - **Um painel à direita, dois conteúdos:** os chamados (padrão no desktop) ou o detalhe da decisão de uma resposta (R28); fechar o detalhe volta aos chamados. Abaixo de 1280 px, a gaveta só abre a pedido.
+  - **Isabela Martins (Jurídico) entrou na demonstração** só para o E2E do console: os outros funcionários conversam em testes que rodam em paralelo, e transferir um deles quebraria esses testes.
+  - **Acesso do analista aos chamados (A15):** fica registrado no log da api.
+- **Conferência visual:** 1440, 1024 e 390 px. Corrigidos o remetente "Nexo Assist" repetido (a linha de chips também o mostrava), o ponto de online fora do avatar e a gaveta de chamados que abria sozinha no notebook (o padrão do desktop sobrevivia à troca de largura).
+- **Achado no caminho:** o jsdom junta o nome do filtro e a contagem sem espaço ("Para você1"); cada filtro ganhou um nome explícito ("Para você, 1 conversa"), melhor também no leitor de tela.
