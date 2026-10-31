@@ -473,3 +473,23 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
       - o console no celular não tinha como usar tela cheia; ganhou `mobileMode`.
 - **Lição:** "tokens do protótipo" exigia ler o que as telas usam, não só a lista de variáveis do arquivo. E um painel modal acessível tem mais detalhes do que parece: foco, Tab, Esc, rolagem e renderizações do pai.
 
+---
+
+## T18: tela de login (31/10/2026)
+
+### 54. T18: a tela 1, conferida contra o protótipo por captura de tela
+- **IA gerou:**
+  - a tela a partir dos nós do `nexo.pen`, extraídos por script: textos, tamanhos de fonte, espaçamentos, ícones e opacidades;
+  - os números do painel escuro vindos do banco por `GET /api/stats`, como manda a A11, em vez dos "8 s · 72% · 6" ilustrativos do protótipo;
+  - os testes de componente da tela, com a api simulada.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - Sem dados ainda (base recém-zerada), os números aparecem como "—". Mostrar os do protótipo seria apresentar como real um número inventado.
+  - "Analistas online" conta os analistas com sessão de login aberta; a presença em tempo real só existe com o console (T23).
+  - As contas de demonstração ocupam a "nota" abaixo do botão, que o protótipo deixou vazia. Ficam à vista as duas que cobrem as telas (Ana e Rafael), e as outras 8 em "Outras contas".
+  - "Esqueci minha senha" e "Privacidade e uso de dados" não levam a telas inexistentes: o primeiro explica que, na demonstração, qualquer senha entra; o segundo abre o `SidePanel` com o uso de dados (conversas guardadas, modelo de IA, nada de dado real).
+- **Conferência visual:** a IA tirou capturas com o Playwright no desktop (1440 × 900) e no celular e comparou com o protótipo. Ajustes que saíram disso:
+  - a lista com as 10 contas alongava o formulário;
+  - no celular, o "Nexo Assist" quebrava em duas linhas e o balão da marca sumia no bloco azul;
+  - o número do chamado na prévia usava a fonte monoespaçada, mas o protótipo usa a de interface.
+- **Erro pego pelo E2E:** o teste de fumaça procurava o título antigo "Nexo Assist". O título da tela agora é "Entrar", como no protótipo, e o teste confere a marca visível em cada largura.
+

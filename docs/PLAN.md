@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T17 concluídas; próxima T18 (tela de login). Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T18 concluídas; próxima T19 (chat do funcionário). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -157,7 +157,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 
 **Fase 3 — Interface**
 - [x] T17 Design tokens (10.1), `statusStyles` (10.2), componentes base, `SidePanel` e breakpoints (10.6) (RT04, A18) — **concluída**. Tailwind 4 com os tokens extraídos do próprio `nexo.pen` como tema (`apps/web/src/styles/tokens.css`), incluindo os tons de sucesso, aviso e perigo e as sombras exatas, que o FRONTEND.md não listava; fontes locais via `@fontsource`. Componentes base em `apps/web/src/ui/`, mapa único de status (`status-styles.ts`) e `SidePanel` responsivo, com testes de componente no jsdom (AI_LOG 52). As telas do esqueleto usam os tokens por um CSS provisório (`legacy.css`) até a T18 e a T19. Revisão adversarial independente: 12 achados (1 crítico: a gaveta roubava o foco a cada renderização do pai), todos tratados (AI_LOG 53).
-- [ ] T18 Tela 1 Login (RF01, A11)
+- [x] T18 Tela 1 Login (RF01, A11) — **concluída**. Tela 1 com as medidas e textos do `nexo.pen`. Os três números do painel escuro vêm de `GET /api/stats` (A11): tempo médio da resposta do agent, conversas resolvidas sem analista e analistas com sessão aberta; sem dados ainda, a tela mostra "—", nunca o número ilustrativo do protótipo. As contas de demonstração ficam na nota abaixo do botão, que o protótipo deixou vazia (A22, R37), e clicar numa delas preenche o e-mail. "Esqueci minha senha" explica que qualquer senha entra. "Privacidade e uso de dados" abre o `SidePanel`. Conferida por captura de tela no desktop (1440 × 900) e no celular (AI_LOG 54).
 - [ ] T19 Tela 2 chat: streaming, chips progressivos, opções rápidas (teclas 1–4), DraftCard com Tipo e estados criado/cancelado, Ctrl/⌘+Enter (RF03, RF04, RF06, RF07, R26, R33–R35)
 - [ ] T19b Ações estruturadas: handlers determinísticos para cliques (R38, 11.5)
 - [ ] T20 DecisionPanel (painel lateral / gaveta / bottom sheet) (RF05, 10.4)
