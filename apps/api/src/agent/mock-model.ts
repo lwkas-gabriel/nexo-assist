@@ -8,6 +8,7 @@ import type {
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
+import { CONFIRM_DRAFT_TOOL_ID, PROPOSE_TICKET_DRAFT_TOOL_ID } from "./tools/draft-tools.ts";
 import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "./tools/search-knowledge-base.ts";
 import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tools.ts";
 
@@ -16,7 +17,9 @@ import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tool
  *
  * Roteiro, imitando o que o modelo real faz:
  * 1. Mensagem do funcionário → escolhe a tool pelo texto:
- *    número de chamado → get_ticket; "chamado"/"status" → list_my_tickets; o resto → central de ajuda.
+ *    "confirmo"/"pode criar" → confirm_draft do último rascunho mostrado; "abrir chamado" →
+ *    propose_ticket_draft com o próprio texto; número de chamado → get_ticket;
+ *    "chamado"/"status" → list_my_tickets; o resto → central de ajuda.
  * 2. Resultado da tool → responde com base nele.
  *
  * Implementa as duas formas de chamada (com e sem streaming) a partir do mesmo roteiro.
@@ -55,16 +58,25 @@ const NO_USAGE: LanguageModelV4Usage = {
 const TOOL_CALL_ID = "mock-call-1";
 const TEXT_ID = "mock-text-1";
 const TICKET_NUMBER_IN_TEXT = /\b(INC|REQ)[\s_-]?\d{5}\b/i;
+const CONFIRMATION_IN_TEXT = /\b(confirmo|pode criar|pode abrir|pode enviar)\b/i;
+const OPEN_TICKET_IN_TEXT = /\b(abrir|abre|abra)\b.*\bchamado\b/i;
+const DRAFT_ID_IN_TEXT = /\bD-\d+\b/g;
 
 function nextStep(prompt: LanguageModelV4Prompt): Step {
   const lastMessage = prompt.at(-1);
   if (lastMessage?.role === "tool") {
     return { kind: "answer", text: answerFromToolResult(lastMessage.content) };
   }
-  return chooseTool(lastUserText(prompt));
+  return chooseTool(lastUserText(prompt), lastDraftIdShown(prompt));
 }
 
-function chooseTool(userText: string): Step {
+function chooseTool(userText: string, draftId: string | undefined): Step {
+  if (draftId && CONFIRMATION_IN_TEXT.test(userText)) {
+    return { kind: "call", toolName: CONFIRM_DRAFT_TOOL_ID, input: { draftId } };
+  }
+  if (OPEN_TICKET_IN_TEXT.test(userText)) {
+    return { kind: "call", toolName: PROPOSE_TICKET_DRAFT_TOOL_ID, input: draftFrom(userText) };
+  }
   const ticketNumber = TICKET_NUMBER_IN_TEXT.exec(userText)?.[0];
   if (ticketNumber) {
     return { kind: "call", toolName: GET_TICKET_TOOL_ID, input: { number: ticketNumber } };
@@ -114,6 +126,30 @@ function toStreamParts(step: Step): LanguageModelV4StreamPart[] {
   ];
 }
 
+/**
+ * Rascunho roteirizado: o modelo real extrairia os campos da conversa; aqui o próprio texto vira
+ * título e descrição, com classificação fixa (só eu, parado → Alta).
+ */
+function draftFrom(userText: string) {
+  return {
+    title: userText.slice(0, 60),
+    description: userText,
+    type: "incident",
+    category: "other",
+    affected: "just_me",
+    urgency: "blocked",
+    duplicatesReviewed: true,
+  };
+}
+
+/** Último "D-n" que o agent escreveu na conversa: o rascunho que o funcionário viu. */
+function lastDraftIdShown(prompt: LanguageModelV4Prompt): string | undefined {
+  const agentTexts = prompt
+    .filter((message) => message.role === "assistant")
+    .flatMap((message) => message.content.map((part) => (part.type === "text" ? part.text : "")));
+  return agentTexts.join(" ").match(DRAFT_ID_IN_TEXT)?.at(-1);
+}
+
 function lastUserText(prompt: LanguageModelV4Prompt): string {
   const lastUser = prompt.findLast((message) => message.role === "user");
   if (!lastUser) return "";
@@ -139,7 +175,22 @@ const ticketSchema = z.object({
 });
 const listResultSchema = z.object({ ok: z.literal(true), tickets: z.array(ticketSchema) });
 const getResultSchema = z.object({ ok: z.literal(true), ticket: ticketSchema });
-const failureSchema = z.object({ ok: z.literal(false), reason: z.string() });
+const failureSchema = z.object({
+  ok: z.literal(false),
+  reason: z.string(),
+  detail: z.string().optional(),
+});
+const draftResultSchema = z.object({
+  ok: z.literal(true),
+  draft: z.object({
+    draftId: z.string(),
+    ticket: z.object({ title: z.string(), priority: z.string() }).optional(),
+  }),
+});
+const confirmResultSchema = z.object({
+  ok: z.literal(true),
+  ticket: z.object({ number: z.string() }),
+});
 /** Como o prompt manda responder a cada falha das tools de chamados. */
 const FAILURE_ANSWERS: Record<string, string> = {
   not_found: "Não encontrei esse chamado entre os seus.",
@@ -147,6 +198,9 @@ const FAILURE_ANSWERS: Record<string, string> = {
     "O sistema de chamados está instável no momento; tente de novo em instantes.",
   invalid_number: "Pode confirmar o número no formato INC-12345 ou REQ-12345?",
   tickets_error: "Não consegui consultar seus chamados agora; tente de novo em instantes.",
+  incomplete: "Para montar o rascunho, preciso de mais alguns detalhes.",
+  possible_duplicate: "Você já tem um chamado parecido aberto.",
+  cannot_reopen: "Esse chamado foi resolvido há mais de 7 dias; vamos abrir um novo.",
   default: "Não consegui consultar seus chamados agora.",
 };
 
@@ -163,9 +217,14 @@ function answerFromToolResult(content: unknown): string {
   const { toolName, output } = result.data;
 
   const failure = failureSchema.safeParse(output.value);
-  if (failure.success)
-    return `${FAILURE_ANSWERS[failure.data.reason] ?? FAILURE_ANSWERS.default} ${TEST_MODEL_NOTE}`;
+  if (failure.success) {
+    const answer =
+      failure.data.detail ?? FAILURE_ANSWERS[failure.data.reason] ?? FAILURE_ANSWERS.default;
+    return `${answer} ${TEST_MODEL_NOTE}`;
+  }
 
+  if (toolName === PROPOSE_TICKET_DRAFT_TOOL_ID) return answerDraft(output.value);
+  if (toolName === CONFIRM_DRAFT_TOOL_ID) return answerConfirmation(output.value);
   if (toolName === LIST_MY_TICKETS_TOOL_ID) return answerTicketList(output.value);
   if (toolName === GET_TICKET_TOOL_ID) return answerTicket(output.value);
   return answerArticleSearch(output.value);
@@ -190,6 +249,19 @@ function answerTicket(value: unknown): string {
     ? ` Está sem resposta da TI há ${timeWithoutTeamResponse}, acima do prazo de ${deadline.rule}.`
     : "";
   return `O chamado ${number} está ${status.toLowerCase()}.${overdue} ${TEST_MODEL_NOTE}`;
+}
+
+function answerDraft(value: unknown): string {
+  const draft = draftResultSchema.safeParse(value).data?.draft;
+  if (!draft?.ticket) return `Não consegui montar o rascunho. ${TEST_MODEL_NOTE}`;
+  return `Montei o rascunho ${draft.draftId}: ${draft.ticket.title}, prioridade ${draft.ticket.priority}. Confere e confirma? ${TEST_MODEL_NOTE}`;
+}
+
+function answerConfirmation(value: unknown): string {
+  const ticket = confirmResultSchema.safeParse(value).data?.ticket;
+  return ticket
+    ? `Pronto, chamado ${ticket.number} criado. ${TEST_MODEL_NOTE}`
+    : `Não consegui confirmar o rascunho. ${TEST_MODEL_NOTE}`;
 }
 
 function answerArticleSearch(value: unknown): string {
