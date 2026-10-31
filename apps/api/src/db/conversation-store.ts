@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, ne } from "drizzle-orm";
+import { and, desc, eq, gt, gte, ne } from "drizzle-orm";
 import type { Database } from "./database.ts";
 import {
   conversations,
@@ -15,8 +15,11 @@ import {
 export type ConsoleConversationSummary = {
   id: string;
   mode: ConversationMode;
+  version: number;
+  assignedAnalystId: string | null;
+  analystReadAt: Date | null;
   updatedAt: Date;
-  employee: { id: string; name: string; department: string };
+  employee: { id: string; name: string; department: string; lastSeenAt: Date | null };
 };
 
 export type NewMessage = {
@@ -113,14 +116,45 @@ export function createConversationStore(db: Database) {
         .where(eq(conversations.id, message.conversationId));
       return row;
     },
+    /** Um analista abriu a conversa no console: as mensagens até aqui deixam de ser não lidas. */
+    async markReadByAnalyst(conversationId: string, at: Date): Promise<void> {
+      await db
+        .update(conversations)
+        .set({ analystReadAt: at })
+        .where(eq(conversations.id, conversationId));
+    },
+
+    /** Mensagens do funcionário depois de `since` (todas, sem `since`): as não lidas do console. */
+    async countEmployeeMessagesSince(conversationId: string, since: Date | null): Promise<number> {
+      const rows = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.author, "employee"),
+            since ? gt(messages.createdAt, since) : undefined,
+          ),
+        );
+      return rows.length;
+    },
+
     /** Conversas em andamento, das mais recentes às mais antigas, com quem está conversando. */
     async listOpenForConsole(): Promise<ConsoleConversationSummary[]> {
       const rows = await db
         .select({
           id: conversations.id,
           mode: conversations.mode,
+          version: conversations.version,
+          assignedAnalystId: conversations.assignedAnalystId,
+          analystReadAt: conversations.analystReadAt,
           updatedAt: conversations.updatedAt,
-          employee: { id: users.id, name: users.name, department: users.department },
+          employee: {
+            id: users.id,
+            name: users.name,
+            department: users.department,
+            lastSeenAt: users.lastSeenAt,
+          },
         })
         .from(conversations)
         .innerJoin(users, eq(users.id, conversations.employeeId))

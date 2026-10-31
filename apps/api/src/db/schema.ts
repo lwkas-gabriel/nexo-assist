@@ -18,6 +18,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   role: text("role").$type<UserRole>().notNull(),
   department: text("department").notNull(),
+  /** Última vez que carregou a conversa: "online" no console e o ✓✓ (A20). */
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
 });
 
 export const authSessions = sqliteTable("auth_sessions", {
@@ -37,6 +39,8 @@ export const conversations = sqliteTable("conversations", {
   mode: text("mode").$type<ConversationMode>().notNull(),
   assignedAnalystId: text("assigned_analyst_id").references(() => users.id),
   version: integer("version").notNull().default(1),
+  /** Última vez que um analista abriu a conversa no console: as não lidas contam daí. */
+  analystReadAt: integer("analyst_read_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });

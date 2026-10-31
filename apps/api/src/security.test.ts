@@ -71,7 +71,9 @@ describe("A07 e A15: papéis", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      conversations: [{ mode: "agent", employee: { name: "Ana Souza", department: "Financeiro" } }],
+      conversations: [
+        { state: { kind: "agent" }, employee: { name: "Ana Souza", department: "Financeiro" } },
+      ],
     });
   });
 

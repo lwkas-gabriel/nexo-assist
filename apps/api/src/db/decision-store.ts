@@ -31,6 +31,15 @@ export function createDecisionStore(db: Database) {
      * Confiança do classificador no turno anterior, no mesmo período com o agent (R39). Registros
      * de outra versão da conversa (antes de uma transferência ou devolução) não contam.
      */
+    /** O registro mais recente da conversa (a etiqueta "Agent pediu ajuda · confiança X%"). */
+    async latestForConversation(conversationId: string): Promise<DecisionTrace | undefined> {
+      const row = await db.query.decisionTraces.findFirst({
+        where: eq(decisionTraces.conversationId, conversationId),
+        orderBy: desc(decisionTraces.createdAt),
+      });
+      return row ? (JSON.parse(row.trace) as DecisionTrace) : undefined;
+    },
+
     async previousClassifierConfidence(conversationId: string, conversationVersion: number) {
       const row = await db.query.decisionTraces.findFirst({
         where: and(

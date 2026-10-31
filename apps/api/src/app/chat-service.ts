@@ -192,6 +192,8 @@ export function createChatService({
   return {
     /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
+      // A20: "online" no console e o ✓✓ das mensagens que saíram para ele.
+      await userStore.markSeen(employee.id, clock.now());
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
       if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
       // R27: quem atende aparece pelo nome e setor, na pílula do topo e nas bolhas do analista.

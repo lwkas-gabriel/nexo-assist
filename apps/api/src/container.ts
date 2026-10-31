@@ -9,6 +9,8 @@ import { createClassifier } from "./agent/classifier.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createConsoleService, type ConsoleService } from "./app/console-service.ts";
+import { createConversationReader } from "./app/conversation-reader.ts";
 import { createChatSessionService } from "./app/chat-session-service.ts";
 import { createDecisionService } from "./app/decision-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
@@ -63,6 +65,7 @@ export type ContainerConfig = LlmConfig & {
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
 export type Container = {
   db: Database;
+  consoleService: ConsoleService;
   mastra: Mastra;
   ticketGateway: TicketGateway;
   authService: AuthService;
@@ -103,14 +106,16 @@ export async function createContainer(
       serviceToken: config.TICKETS_SERVICE_TOKEN,
     });
   const model = overrides.model ?? createModel(config);
+  const draftStore = createDraftStore(db);
+  const handoffStore = createHandoffStore(db);
   const draftService = createDraftService({
-    draftStore: createDraftStore(db),
+    draftStore,
     ticketGateway,
     clock,
   });
   const handoffService = createHandoffService({
     conversationStore,
-    handoffStore: createHandoffStore(db),
+    handoffStore,
     ticketGateway,
     clock,
   });
@@ -158,6 +163,20 @@ export async function createContainer(
 
   return {
     db,
+    // Console do analista (tela 4): leitura das conversas e dos chamados de quem está nelas.
+    consoleService: createConsoleService({
+      conversationStore,
+      handoffStore,
+      decisionStore,
+      draftStore,
+      ticketGateway,
+      conversationReader: createConversationReader({
+        conversationStore,
+        decisionService,
+        userStore,
+      }),
+      clock,
+    }),
     mastra,
     ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
