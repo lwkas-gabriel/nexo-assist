@@ -167,6 +167,25 @@ export function createTicketService({ db, clock }: TicketServiceDependencies) {
     },
 
     /** RN07: marca o chamado como aguardando analista e registra o resumo do caso. */
+    /**
+     * R31: um analista assumiu a conversa do chamado. O chamado fica "em atendimento", e o
+     * registro é da equipe de TI: conta como resposta para o prazo (A17).
+     */
+    async assume(ownerId: string, number: string, analystName: string): Promise<TicketDto> {
+      const row = await findOwned(ownerId, number);
+      if (!isOpenStatus(row.status)) {
+        throw new AppError("CONFLICT", `O chamado ${number} não está aberto.`);
+      }
+      const now = clock.now();
+      await recordUpdate(row.id, "staff", `Atendimento assumido por ${analystName}.`);
+      const [updated] = await db
+        .update(tickets)
+        .set({ status: "in_service", updatedAt: now, lastStaffUpdateAt: now })
+        .where(eq(tickets.id, row.id))
+        .returning();
+      return toDto(updated ?? row);
+    },
+
     async transfer(ownerId: string, number: string, summary: string): Promise<TicketDto> {
       const row = await findOwned(ownerId, number);
       if (!isOpenStatus(row.status)) {

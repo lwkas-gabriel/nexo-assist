@@ -25,4 +25,11 @@ export type TicketGateway = {
     summary: string,
     idempotencyKey: string,
   ): Promise<TicketDto>;
+  /** R31: um analista assumiu a conversa; o chamado fica "em atendimento". */
+  assumeTicket(
+    ownerId: string,
+    number: string,
+    analystName: string,
+    idempotencyKey: string,
+  ): Promise<TicketDto>;
 };

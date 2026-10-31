@@ -153,6 +153,22 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
         });
         return ticket;
       }),
+    assumeTicket: (ownerId, number, analystName, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        if (!isOpenStatus(ticket.status)) {
+          throw new AppError("CONFLICT", `O chamado ${number} não está aberto.`);
+        }
+        const at = new Date().toISOString();
+        ticket.status = "in_service";
+        ticket.lastStaffUpdateAt = at;
+        ticket.updates.push({
+          author: "staff",
+          message: `Atendimento assumido por ${analystName}.`,
+          createdAt: at,
+        });
+        return ticket;
+      }),
   };
   return { ticketGateway, queriedOwners, tickets };
 }

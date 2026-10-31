@@ -157,6 +157,33 @@ describe("transferir (RN07)", () => {
   });
 });
 
+describe("assumir (R31)", () => {
+  it("o chamado fica em atendimento, e o registro da equipe conta para o prazo (A17)", async () => {
+    const { service, advanceDays } = await setup();
+    const { number } = await service.create(ANA, vpnDraft);
+    await service.transfer(ANA, number, "VPN parada.");
+    advanceDays(1);
+
+    const assumed = await service.assume(ANA, number, "Rafael Lima");
+
+    expect(assumed.status).toBe("in_service");
+    expect(assumed.updates.at(-1)).toMatchObject({
+      author: "staff",
+      message: "Atendimento assumido por Rafael Lima.",
+    });
+    expect(assumed.lastStaffUpdateAt).toBe(assumed.updates.at(-1)?.createdAt);
+  });
+
+  it("RN09: não assume o chamado de outro funcionário", async () => {
+    const { service } = await setup();
+    const { number } = await service.create(ANA, vpnDraft);
+
+    await expect(service.assume("emp-bruno-tavares", number, "Rafael Lima")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+});
+
 async function resolveInDatabase(db: Database, number: string, at: Date) {
   await db
     .update(tickets)

@@ -1,5 +1,6 @@
 import {
   addTicketUpdateRequestSchema,
+  assumeTicketRequestSchema,
   createTicketRequestSchema,
   ownerOnlyRequestSchema,
   ticketFilterSchema,
@@ -41,6 +42,11 @@ export function createTicketRoutes(ticketService: TicketService) {
   routes.post("/:number/reopen", async (c) => {
     const { ownerId } = parseInput(ownerOnlyRequestSchema, await readJson(c.req));
     return c.json(await ticketService.reopen(ownerId, c.req.param("number")));
+  });
+
+  routes.post("/:number/assume", async (c) => {
+    const { ownerId, analystName } = parseInput(assumeTicketRequestSchema, await readJson(c.req));
+    return c.json(await ticketService.assume(ownerId, c.req.param("number"), analystName));
   });
 
   routes.post("/:number/transfer", async (c) => {

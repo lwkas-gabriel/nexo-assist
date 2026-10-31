@@ -65,6 +65,12 @@ export const addTicketUpdateRequestSchema = z.object({
 
 export const ownerOnlyRequestSchema = z.object({ ownerId: ownerIdSchema });
 
+/** Um analista assumiu o atendimento (tela 5, R31): o chamado fica "em atendimento". */
+export const assumeTicketRequestSchema = z.object({
+  ownerId: ownerIdSchema,
+  analystName: z.string().trim().min(1).max(120),
+});
+
 export const transferTicketRequestSchema = z.object({
   ownerId: ownerIdSchema,
   /** Resumo do caso para o analista (RN07). */
