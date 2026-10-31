@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LoginPage } from "./features/auth/LoginPage.tsx";
 import { useAuth } from "./features/auth/use-auth.ts";
 import { ChatPage } from "./features/chat/ChatPage.tsx";
+import { ConsolePage } from "./features/console/ConsolePage.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -15,7 +16,7 @@ export function App() {
   );
 }
 
-/** Decide a tela pelo usuário logado: login, chat do funcionário ou (em breve) console do analista. */
+/** Decide a tela pelo usuário logado: login, chat do funcionário ou console do analista. */
 function AuthenticatedArea() {
   const { user, isLoading, loadError, logout } = useAuth();
 
@@ -41,20 +42,8 @@ function AuthenticatedArea() {
     );
   }
 
-  // Console do analista: telas 4 e 5, nas tarefas T23 e T24.
+  // Telas 4 e 5: o console do analista.
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-desk px-6 text-center">
-      <p className="text-[14.5px] text-ink-2">
-        {user.name}, o console do analista chega nas próximas tarefas.
-      </p>
-      <button
-        type="button"
-        onClick={() => logout.mutate()}
-        disabled={logout.isPending}
-        className="text-[13.5px] font-semibold text-primary-text hover:underline"
-      >
-        Sair
-      </button>
-    </main>
+    <ConsolePage user={user} isLoggingOut={logout.isPending} onLogout={() => logout.mutate()} />
   );
 }

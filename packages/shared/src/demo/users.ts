@@ -72,6 +72,13 @@ export const DEMO_USERS = [
     department: "Logística",
   },
   {
+    id: "emp-isabela-martins",
+    name: "Isabela Martins",
+    email: "isabela.martins@nexo.com.br",
+    role: "employee",
+    department: "Jurídico",
+  },
+  {
     id: "ana-rafael-lima",
     name: "Rafael Lima",
     email: "rafael.lima@nexo.com.br",

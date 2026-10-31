@@ -12,6 +12,8 @@ type ActionChipsProps = {
   isDecisionOpen?: boolean;
   /** Id do painel de detalhe, para o botão apontar para ele. */
   decisionPanelId?: string;
+  /** O console mostra o remetente numa linha própria, com a etiqueta "IA". */
+  showAuthor?: boolean;
 };
 
 /**
@@ -24,12 +26,13 @@ export function ActionChips({
   onOpenDecision,
   isDecisionOpen = false,
   decisionPanelId,
+  showAuthor = true,
 }: ActionChipsProps) {
   const toolParts = message.parts.filter(isToolUIPart);
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="text-[12.5px] font-semibold text-ink">Nexo Assist</span>
+      {showAuthor && <span className="text-[12.5px] font-semibold text-ink">Nexo Assist</span>}
       {toolParts.length > 0 && (
         <ul
           aria-label="Ações do assistente"

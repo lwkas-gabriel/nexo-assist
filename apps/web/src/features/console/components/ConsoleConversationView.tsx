@@ -1,0 +1,193 @@
+import type { UIMessage } from "ai";
+import { ArrowLeft, Hand, Ticket } from "lucide-react";
+import { Avatar } from "../../../ui/Avatar.tsx";
+import { avatarToneFor } from "../../../ui/avatar-tones.ts";
+import { cx } from "../../../ui/cx.ts";
+import { IconButton } from "../../../ui/IconButton.tsx";
+import { Pill } from "../../../ui/Pill.tsx";
+import { messageAnalyst, messageAuthor, messageCreatedAt, textOf } from "../../chat/chat-model.ts";
+import { ActionChips } from "../../chat/components/ActionChips.tsx";
+import { decisionOf } from "../../chat/decision-model.ts";
+import type { ConsoleConversation } from "../console-api.ts";
+import { describeContactDue, messageTime, stateTag } from "../console-model.ts";
+import { SeenTicks } from "./ConversationList.tsx";
+
+type ConsoleConversationViewProps = {
+  data: ConsoleConversation;
+  now: Date;
+  /** Celular: volta para a lista (uma coluna por vez, 10.6). */
+  onBack: (() => void) | undefined;
+  /** Abaixo de 1280 px o painel de chamados é gaveta: este botão o abre. */
+  onOpenTickets: (() => void) | undefined;
+  onOpenDecision: (messageId: string, opener: HTMLElement) => void;
+  openDecisionId: string | null;
+  decisionPanelId: string;
+};
+
+function seenOf(message: UIMessage): boolean | undefined {
+  const metadata = message.metadata;
+  if (typeof metadata !== "object" || metadata === null || !("seenByEmployee" in metadata)) {
+    return undefined;
+  }
+  return metadata.seenByEmployee === true;
+}
+
+/** RF19, tela 4: a conversa transferida como o analista a lê, com o porquê de cada resposta (R28). */
+export function ConsoleConversationView(props: ConsoleConversationViewProps) {
+  const { conversation, messages } = props.data;
+  const { employee, state, handoff } = conversation;
+  const tag = stateTag(state, props.now);
+  const meta = [employee.isOnline ? "online" : null, employee.department, handoff?.ticketNumber]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <section
+      aria-labelledby="console-conversation-title"
+      className="flex min-h-0 min-w-0 flex-1 flex-col bg-console"
+    >
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-rule bg-paper pr-4 pl-3 md:pl-5">
+        {props.onBack && (
+          <IconButton
+            label="Voltar para as conversas"
+            icon={<ArrowLeft size={18} />}
+            onClick={props.onBack}
+          />
+        )}
+        <Avatar name={employee.name} size="lg" tone={avatarToneFor(employee.name)} />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h2
+            id="console-conversation-title"
+            className="truncate text-[15.5px] font-semibold text-ink"
+          >
+            {employee.name}
+          </h2>
+          <p className="truncate text-[12.5px] text-ink-3">{meta}</p>
+        </div>
+        <span role="status" className="hidden sm:inline">
+          <Pill tone={tag.tone} withDot>
+            {tag.label}
+          </Pill>
+        </span>
+        {props.onOpenTickets && (
+          <IconButton
+            label={`Chamados de ${employee.name}`}
+            icon={<Ticket size={18} />}
+            onClick={props.onOpenTickets}
+          />
+        )}
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-4 md:px-10">
+        <ol role="log" aria-label={`Conversa com ${employee.name}`} className="flex flex-col gap-4">
+          {messages.map((message) => (
+            <ConsoleMessage key={message.id} message={message} {...props} />
+          ))}
+        </ol>
+      </div>
+
+      {conversation.mode === "waiting_analyst" && handoff && (
+        <div className="shrink-0 border-t border-rule bg-paper px-5 pt-3 pb-3.5">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning-text">
+              <Hand aria-hidden size={17} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <p className="text-[14.5px] font-semibold text-ink">
+                {employee.name.split(" ")[0]} espera um atendente
+              </p>
+              <p className="text-[12.5px] text-ink-3">
+                Agent pausado · Suporte {handoff.supportLevel} ·{" "}
+                {describeContactDue(handoff.responseDueAt, props.now)}
+              </p>
+              {/* R17: o resumo para o analista não precisar reler a conversa. */}
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+                <dt className="text-ink-3">Motivo</dt>
+                <dd className="text-ink">{handoff.reason}</dd>
+                <dt className="text-ink-3">Problema</dt>
+                <dd className="text-ink">{handoff.problem}</dd>
+                <dt className="text-ink-3">Já tentado</dt>
+                <dd className="text-ink">{handoff.attempted}</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConsoleMessage({
+  message,
+  onOpenDecision,
+  openDecisionId,
+  decisionPanelId,
+}: ConsoleConversationViewProps & { message: UIMessage }) {
+  const author = messageAuthor(message);
+  const text = textOf(message);
+  const createdAt = messageCreatedAt(message);
+  const time = createdAt ? messageTime(createdAt) : null;
+  const seen = seenOf(message);
+
+  if (author === "system") {
+    return (
+      <li className="flex items-center gap-3 pt-2">
+        <span aria-hidden className="h-px flex-1 bg-system-line" />
+        <span className="max-w-[70%] text-center text-[12px] font-medium text-ink-3">
+          {text}
+          {time && ` · ${time}`}
+        </span>
+        <span aria-hidden className="h-px flex-1 bg-system-line" />
+      </li>
+    );
+  }
+
+  if (author === "employee") {
+    return (
+      <li className="flex flex-col items-start">
+        <div className="flex max-w-[78%] items-end gap-2.5 rounded-[4px_12px_12px_12px] bg-paper px-3 pt-2 pb-1.5 shadow-bubble">
+          <p className="text-[14.5px] whitespace-pre-wrap text-ink">{text}</p>
+          {time && <span className="shrink-0 text-[11px] text-ink-3">{time}</span>}
+        </div>
+      </li>
+    );
+  }
+
+  const analyst = author === "analyst" ? messageAnalyst(message) : undefined;
+  const hasDecision = author === "agent" && decisionOf(message) !== undefined;
+  return (
+    <li className="flex flex-col items-end gap-1">
+      <span className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-ink-2">
+        {author === "agent" ? "Nexo Assist" : (analyst?.name ?? "Analista")}
+        {author === "agent" && (
+          <span className="rounded-sm bg-primary-soft px-1.5 py-px text-[11px] text-primary-text">
+            IA
+          </span>
+        )}
+      </span>
+      {author === "agent" && (
+        <ActionChips
+          message={message}
+          onOpenDecision={hasDecision ? (opener) => onOpenDecision(message.id, opener) : undefined}
+          isDecisionOpen={openDecisionId === message.id}
+          decisionPanelId={decisionPanelId}
+          showAuthor={false}
+        />
+      )}
+      {text && (
+        <div
+          className={cx(
+            "flex max-w-[78%] flex-col gap-0.5 rounded-[12px_4px_12px_12px] px-3 pt-2 pb-1.5 shadow-bubble",
+            author === "agent" ? "bg-bubble-agent" : "bg-bubble-analyst",
+          )}
+        >
+          <p className="text-[14.5px] whitespace-pre-wrap text-ink">{text}</p>
+          <span className="flex items-center justify-end gap-1 text-[11px] text-ink-3">
+            {time}
+            {seen !== undefined && <SeenTicks seen={seen} />}
+          </span>
+        </div>
+      )}
+    </li>
+  );
+}
