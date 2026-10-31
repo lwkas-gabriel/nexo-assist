@@ -10,6 +10,8 @@ type ActionChipsProps = {
    */
   onOpenDecision?: ((opener: HTMLElement) => void) | undefined;
   isDecisionOpen?: boolean;
+  /** Id do painel de detalhe, para o botão apontar para ele. */
+  decisionPanelId?: string;
 };
 
 /**
@@ -17,7 +19,12 @@ type ActionChipsProps = {
  * um, conforme as tools rodam: girando enquanto rodam, com ✓ quando terminam (10.5). Com o
  * registro pronto, um botão no fim da linha abre o detalhe da decisão.
  */
-export function ActionChips({ message, onOpenDecision, isDecisionOpen = false }: ActionChipsProps) {
+export function ActionChips({
+  message,
+  onOpenDecision,
+  isDecisionOpen = false,
+  decisionPanelId,
+}: ActionChipsProps) {
   const toolParts = message.parts.filter(isToolUIPart);
 
   return (
@@ -61,9 +68,11 @@ export function ActionChips({ message, onOpenDecision, isDecisionOpen = false }:
           type="button"
           onClick={(event) => onOpenDecision(event.currentTarget)}
           aria-expanded={isDecisionOpen}
+          aria-controls={isDecisionOpen ? decisionPanelId : undefined}
           // O nome contém o texto visível (WCAG 2.5.3) e diz o que abre.
           aria-label="detalhes da decisão"
-          className="flex items-center gap-0.5 rounded-sm text-[12.5px] font-medium text-primary-text hover:underline"
+          // Alvo de toque de 24 px (WCAG 2.5.8), sem mudar a altura da linha de chips.
+          className="-my-1 flex min-h-6 items-center gap-0.5 rounded-sm px-1 text-[12.5px] font-medium text-primary-text hover:underline"
         >
           detalhes
           <ChevronRight aria-hidden size={12} />

@@ -283,14 +283,33 @@ describe("detalhe da decisão (RF05, 10.4)", () => {
     expect(screen.getByText("Relata um problema e pede atendimento.")).toBeDefined();
   });
 
-  it("R39: abaixo do limiar, a confiança aparece como baixa", () => {
+  it("R39: abaixo do limiar, a confiança aparece como baixa e a barra em aviso", () => {
     render(
       <DecisionPanel
-        decision={{ ...sampleDecision, finalConfidence: 0.3, isLowConfidence: true }}
+        decision={{ ...sampleDecision, finalConfidence: 0.49, isLowConfidence: true }}
       />,
     );
 
     expect(screen.getByText("baixa")).toBeDefined();
+    expect(screen.getByTestId("confidence-fill").className).toContain("bg-warning-text");
+  });
+
+  it("no próprio limiar (50%), a confiança já é média, sem aviso", () => {
+    render(
+      <DecisionPanel
+        decision={{ ...sampleDecision, finalConfidence: 0.5, isLowConfidence: false }}
+      />,
+    );
+
+    expect(screen.getByText("média")).toBeDefined();
+    expect(screen.getByTestId("confidence-fill").className).not.toContain("bg-warning");
+  });
+
+  it("10.4: cada passo mostra a entrada resumida e a fonte", () => {
+    render(<DecisionPanel decision={sampleDecision} />);
+
+    expect(screen.getByText("busca: vpn erro 809")).toBeDefined();
+    expect(screen.getByText("Fonte: VPN: erro 809")).toBeDefined();
   });
 
   it("ação de botão diz que foi o código, sem o modelo; sem passos, diz que respondeu direto", () => {
@@ -300,6 +319,7 @@ describe("detalhe da decisão (RF05, 10.4)", () => {
           ...sampleDecision,
           classifierConfidence: 1,
           finalConfidence: 1,
+          confidenceSource: "button",
           signals: [],
           steps: [{ tool: "ticket_selection", ok: true, outcome: "concluiu" }],
         }}

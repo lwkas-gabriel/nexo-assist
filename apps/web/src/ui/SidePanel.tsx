@@ -6,6 +6,8 @@ import { IconButton } from "./IconButton.tsx";
 
 type SidePanelProps = {
   title: string;
+  /** Id do painel, para o botão que o abre apontar para ele (`aria-controls`). */
+  id?: string;
   open: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -36,6 +38,7 @@ const INLINE_FROM: Record<NonNullable<SidePanelProps["inlineFrom"]>, Breakpoint[
  */
 export function SidePanel({
   title,
+  id,
   open,
   onClose,
   children,
@@ -50,13 +53,15 @@ export function SidePanel({
 
   if (INLINE_FROM[inlineFrom].includes(breakpoint)) {
     return (
-      <aside
-        aria-labelledby={titleId}
-        className={cx("flex shrink-0 flex-col border-l border-rule bg-paper", widthClass)}
+      <InlinePanel
+        id={id}
+        title={title}
+        titleId={titleId}
+        onClose={onClose}
+        widthClass={widthClass}
       >
-        <PanelHeader titleId={titleId} title={title} onClose={onClose} />
-        <div className="flex-1 overflow-y-auto px-5 pb-5">{children}</div>
-      </aside>
+        {children}
+      </InlinePanel>
     );
   }
 
@@ -68,7 +73,7 @@ export function SidePanel({
         : "inset-0";
 
   return (
-    <OverlayPanel title={title} titleId={titleId} onClose={onClose} placement={placement}>
+    <OverlayPanel id={id} title={title} titleId={titleId} onClose={onClose} placement={placement}>
       {children}
     </OverlayPanel>
   );
@@ -100,6 +105,47 @@ function PanelHeader({
   );
 }
 
+/**
+ * Coluna ao lado do conteúdo. Ao abrir, o foco vai para o botão de fechar: o painel costuma vir
+ * depois de tudo na ordem do Tab, e sem isso quem usa teclado atravessaria a página para chegar
+ * nele. Esc fecha, como na gaveta. Para mostrar outro conteúdo com o foco de novo no painel, o
+ * pai troca a `key`.
+ */
+function InlinePanel({
+  id,
+  title,
+  titleId,
+  onClose,
+  widthClass,
+  children,
+}: {
+  id: string | undefined;
+  title: string;
+  titleId: string;
+  onClose: () => void;
+  widthClass: string;
+  children: ReactNode;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  return (
+    <aside
+      id={id}
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+      className={cx("flex shrink-0 flex-col border-l border-rule bg-paper", widthClass)}
+    >
+      <PanelHeader titleId={titleId} title={title} onClose={onClose} closeRef={closeRef} />
+      <div className="flex-1 overflow-y-auto px-5 pb-5">{children}</div>
+    </aside>
+  );
+}
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -124,12 +170,14 @@ function trapTab(event: KeyboardEvent, container: HTMLElement) {
  * clique fora, trava a rolagem do fundo e devolve o foco a quem abriu ao fechar.
  */
 function OverlayPanel({
+  id,
   title,
   titleId,
   onClose,
   placement,
   children,
 }: {
+  id: string | undefined;
   title: string;
   titleId: string;
   onClose: () => void;
@@ -175,6 +223,7 @@ function OverlayPanel({
       />
       <div
         ref={dialogRef}
+        id={id}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

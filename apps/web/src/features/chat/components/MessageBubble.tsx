@@ -1,4 +1,5 @@
 import { isToolUIPart, type UIMessage } from "ai";
+import { useMemo } from "react";
 import type { DraftFields, DraftView } from "../chat-api.ts";
 import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf, textOf } from "../chat-model.ts";
 import { decisionOf } from "../decision-model.ts";
@@ -29,6 +30,8 @@ type MessageBubbleProps = {
   onOpenDecision: (messageId: string, opener: HTMLElement) => void;
   /** A resposta cujo detalhe está aberto, se alguma. */
   openDecisionId: string | null;
+  /** Id do painel de detalhe (aria-controls do botão). */
+  decisionPanelId: string;
   onPickOption: (option: string) => void;
   draftActions: DraftActions;
 };
@@ -86,10 +89,12 @@ function AgentMessage({
   draftActions,
   onOpenDecision,
   openDecisionId,
+  decisionPanelId,
   text,
 }: MessageBubbleProps & { text: string }) {
   const options = quickOptionsOf(message);
-  const hasDecision = decisionOf(message) !== undefined;
+  // Valida o registro só quando a mensagem muda, não a cada pedaço do streaming de outra.
+  const hasDecision = useMemo(() => decisionOf(message) !== undefined, [message]);
   const proposal = proposedDraft(message);
   const draft = proposal ? liveDraft(proposal, drafts) : undefined;
 
@@ -99,6 +104,7 @@ function AgentMessage({
         message={message}
         onOpenDecision={hasDecision ? (opener) => onOpenDecision(message.id, opener) : undefined}
         isDecisionOpen={openDecisionId === message.id}
+        decisionPanelId={decisionPanelId}
       />
       {(text || options) && (
         <div className="flex max-w-[600px] flex-col gap-3 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4 py-3">

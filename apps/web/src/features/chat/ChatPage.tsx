@@ -3,7 +3,7 @@ import { SESSION_MESSAGE_LIMIT } from "@nexo/shared/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
 import { Skeleton } from "../../ui/Feedback.tsx";
 import { cx } from "../../ui/cx.ts";
@@ -99,6 +99,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
   // Detalhe da decisão (RF05): qual resposta, e quem abriu, para o foco voltar ao fechar.
   const [openDecisionId, setOpenDecisionId] = useState<string | null>(null);
   const decisionOpenerRef = useRef<HTMLElement | null>(null);
+  const decisionPanelId = useId();
 
   /** Recarrega do servidor: contador, rascunhos, modo e registros de decisão ficam em dia. */
   function reloadView() {
@@ -184,7 +185,19 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
 
   const openDecisionMessage = messages.find((message) => message.id === openDecisionId);
   const openDecision = openDecisionMessage ? decisionOf(openDecisionMessage) : undefined;
-  const showDecision = (messageId: string, opener: HTMLElement) => {
+  // A resposta aberta saiu da conversa (janela de 200 mensagens): o painel conta como fechado,
+  // e o foco, que estava no botão dela, vai para o campo de mensagem.
+  const shownDecisionId = openDecision ? openDecisionId : null;
+  const lostOpenDecision = openDecisionId !== null && openDecision === undefined;
+  useEffect(() => {
+    if (lostOpenDecision) composerRef.current?.focus();
+  }, [lostOpenDecision]);
+  // O botão alterna: clicar de novo na mesma resposta fecha o detalhe.
+  const toggleDecision = (messageId: string, opener: HTMLElement) => {
+    if (shownDecisionId === messageId) {
+      setOpenDecisionId(null);
+      return;
+    }
     decisionOpenerRef.current = opener;
     setOpenDecisionId(messageId);
   };
@@ -221,8 +234,9 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
                       optionsActive={message === lastMessage && activeOptions !== undefined}
                       actionableDraftNumber={pendingDraft?.number}
                       isUnsent={message.id === unsentMessageId}
-                      onOpenDecision={showDecision}
-                      openDecisionId={openDecisionId}
+                      onOpenDecision={toggleDecision}
+                      openDecisionId={shownDecisionId}
+                      decisionPanelId={decisionPanelId}
                       onPickOption={pickOption}
                       draftActions={draftActions}
                     />
@@ -304,6 +318,9 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
       </div>
       {/* Coluna à direita no desktop, gaveta no tablet e folha que sobe no celular (10.6). */}
       <SidePanel
+        // Outra resposta, painel novo: o foco vai de novo para ele (coluna do desktop).
+        key={shownDecisionId ?? "fechado"}
+        id={decisionPanelId}
         title="Detalhe da decisão"
         open={openDecision !== undefined}
         onClose={closeDecision}

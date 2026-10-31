@@ -215,4 +215,72 @@ describe("tela do chat (tela 2)", () => {
     await screen.findByText("Oi.");
     expect(screen.queryByRole("button", { name: "detalhes da decisão" })).toBeNull();
   });
+
+  describe("detalhe da decisão: foco, teclado e larguras (10.6, 10.7)", () => {
+    const answered = (): ConversationView => ({
+      ...conversationAt("agent", false),
+      messages: [
+        {
+          id: "agent-1",
+          role: "assistant",
+          metadata: { author: "agent", decision: sampleDecision },
+          parts: [{ type: "text", text: "Montei o rascunho D-4." }],
+        },
+      ],
+    });
+    const openDetails = async () => {
+      const details = await screen.findByRole("button", { name: "detalhes da decisão" });
+      await userEvent.click(details);
+      return details;
+    };
+
+    it("desktop: o foco vai para o painel ao abrir, e Esc fecha devolvendo o foco", async () => {
+      stubApi(answered());
+      renderChat();
+
+      const details = await openDetails();
+
+      const close = screen.getByRole("button", { name: "Fechar Detalhe da decisão" });
+      expect(document.activeElement).toBe(close);
+      expect(details.getAttribute("aria-controls")).toBe(
+        screen.getByRole("complementary", { name: "Detalhe da decisão" }).id,
+      );
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("complementary", { name: "Detalhe da decisão" })).toBeNull();
+      expect(document.activeElement).toBe(details);
+    });
+
+    it("clicar de novo em detalhes da mesma resposta fecha o painel", async () => {
+      stubApi(answered());
+      renderChat();
+
+      const details = await openDetails();
+      await userEvent.click(details);
+
+      expect(screen.queryByRole("complementary", { name: "Detalhe da decisão" })).toBeNull();
+      expect(details.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("tablet e notebook (768–1279 px): o detalhe abre como gaveta sobre a conversa", async () => {
+      setViewportWidth(1024);
+      stubApi(answered());
+      renderChat();
+
+      await openDetails();
+
+      expect(screen.getByRole("dialog", { name: "Detalhe da decisão" })).toBeDefined();
+    });
+
+    it("celular: Esc fecha a folha e o foco volta para o botão", async () => {
+      setViewportWidth(390);
+      stubApi(answered());
+      renderChat();
+
+      const details = await openDetails();
+      await userEvent.keyboard("{Escape}");
+
+      expect(screen.queryByRole("dialog", { name: "Detalhe da decisão" })).toBeNull();
+      expect(document.activeElement).toBe(details);
+    });
+  });
 });

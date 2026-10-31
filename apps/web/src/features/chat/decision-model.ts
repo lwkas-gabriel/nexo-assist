@@ -53,11 +53,26 @@ export function stepLabel(tool: string): string {
   return CODE_STEP_LABELS[tool] ?? describeToolAction(tool);
 }
 
-/** Se a ação foi decidida por um botão, sem o modelo (confiança 100% por construção). */
-export function isCodeDecision(decision: DecisionView): boolean {
-  return decision.steps.some((step) => step.tool in CODE_STEP_LABELS);
-}
-
 export function confidencePercent(confidence: number): number {
   return Math.round(confidence * 100);
+}
+
+/**
+ * De onde veio a confiança, numa frase. A barra mostra a confiança final (com os sinais); o
+ * limiar do R39 olha a do classificador, então a frase diz as duas quando diferem.
+ */
+export function describeConfidenceOrigin(decision: DecisionView): string {
+  const final = confidencePercent(decision.finalConfidence);
+  const start = confidencePercent(decision.classifierConfidence);
+  const reduced = final === start ? "" : `; os sinais abaixo reduziram para ${final}%`;
+  if (decision.confidenceSource === "button") {
+    return "Ação por um botão: decidida pelo código, sem o modelo.";
+  }
+  if (decision.confidenceSource === "quick_answer") {
+    return `Resposta rápida pelo botão: o código conferiu a opção, sem o classificador (${start}%)${reduced}.`;
+  }
+  if (decision.confidenceSource === "neutral") {
+    return `O classificador não respondeu: valor neutro de ${start}%${reduced}.`;
+  }
+  return `O classificador deu ${start}%${reduced}.`;
 }

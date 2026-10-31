@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import { cx } from "../../../ui/cx.ts";
 import {
   confidencePercent,
+  describeConfidenceOrigin,
   extractedFields,
-  isCodeDecision,
   stepLabel,
 } from "../decision-model.ts";
 
@@ -47,11 +47,19 @@ export function DecisionPanel({ decision }: { decision: DecisionView }) {
                     className="mt-0.5 shrink-0 text-danger-text"
                   />
                 )}
-                <span>
-                  <span className="font-medium text-ink">{stepLabel(step.tool)}</span>
-                  {" · "}
-                  {step.outcome}
-                  {!step.ok && <span className="sr-only"> (com problema)</span>}
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    <span className="font-medium text-ink">{stepLabel(step.tool)}</span>
+                    {" · "}
+                    {step.outcome}
+                    {!step.ok && <span className="sr-only"> (com problema)</span>}
+                  </span>
+                  {step.input && <span className="text-[12.5px] text-ink-3">{step.input}</span>}
+                  {step.sources && (
+                    <span className="text-[12.5px] text-ink-3">
+                      Fonte: {step.sources.join("; ")}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}
@@ -112,17 +120,11 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Barra da confiança final; abaixo dela, de onde veio (classificador ou botão) e, se os sinais
- * a reduziram, quanto (R09, R40). Abaixo do limiar, em aviso: o assistente pergunta ou transfere.
+ * Barra da confiança final (a do classificador ajustada pelos sinais, R09 e R40). Em aviso
+ * quando fica abaixo do limiar; a frase de baixo diz de onde ela veio.
  */
 function ConfidenceBar({ decision }: { decision: DecisionView }) {
   const percent = confidencePercent(decision.finalConfidence);
-  const classifierPercent = confidencePercent(decision.classifierConfidence);
-  const origin = isCodeDecision(decision)
-    ? "Ação por um botão: decidida pelo código, sem o modelo."
-    : percent === classifierPercent
-      ? `O classificador deu ${classifierPercent}%.`
-      : `O classificador deu ${classifierPercent}%; os sinais abaixo reduziram para ${percent}%.`;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -138,15 +140,19 @@ function ConfidenceBar({ decision }: { decision: DecisionView }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
-        aria-valuetext={`${percent}%`}
-        className="h-1.5 overflow-hidden rounded-full bg-desk"
+        aria-valuetext={`${percent}%, ${confidenceLevel(decision.finalConfidence)}`}
+        className="h-2 overflow-hidden rounded-full border border-line-strong bg-desk"
       >
         <div
-          className={cx("h-full rounded-full", decision.isLowConfidence ? "bg-warning" : "bg-cta")}
+          data-testid="confidence-fill"
+          className={cx(
+            "h-full rounded-full",
+            decision.isLowConfidence ? "bg-warning-text" : "bg-cta",
+          )}
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="text-[12.5px] text-ink-3">{origin}</p>
+      <p className="text-[12.5px] text-ink-3">{describeConfidenceOrigin(decision)}</p>
     </div>
   );
 }
