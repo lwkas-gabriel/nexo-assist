@@ -21,6 +21,18 @@ test("o funcionário tira uma dúvida e vê o que o agent fez", async ({ page },
   ).toBeVisible();
   await expect(page.getByText(/artigo "Horário do service desk"/)).toBeVisible();
 
+  // RF05: o detalhe da decisão (coluna no desktop, folha no celular), e o foco volta ao fechar.
+  const details = page.getByRole("button", { name: "detalhes da decisão" }).first();
+  await details.click();
+  const panel = page.getByRole(testInfo.project.name === "mobile" ? "dialog" : "complementary", {
+    name: "Detalhe da decisão",
+  });
+  await expect(panel.getByText("buscou na central de ajuda")).toBeVisible();
+  await expect(panel.getByRole("meter", { name: "Confiança" })).toBeVisible();
+  await panel.getByRole("button", { name: "Fechar Detalhe da decisão" }).click();
+  await expect(panel).toBeHidden();
+  await expect(details).toBeFocused();
+
   // RF06, R38: pergunta com respostas rápidas; o clique vira a resposta do funcionário.
   await page.getByLabel("Mensagem para o Nexo").fill("O computador está lento");
   await page.getByRole("button", { name: "Enviar" }).click();

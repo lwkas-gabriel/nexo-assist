@@ -6,6 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
 import { Skeleton } from "../../ui/Feedback.tsx";
+import { cx } from "../../ui/cx.ts";
 import { SidePanel } from "../../ui/SidePanel.tsx";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import {
@@ -187,6 +188,9 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     decisionOpenerRef.current = opener;
     setOpenDecisionId(messageId);
   };
+  // Com o detalhe aberto, ele vira uma coluna no desktop: a conversa abre mão do recuo largo
+  // do protótipo para o card do rascunho não ficar espremido.
+  const sidePadding = openDecision ? "px-4 md:px-12" : "px-4 md:px-12 xl:px-[200px]";
   const closeDecision = () => {
     setOpenDecisionId(null);
     decisionOpenerRef.current?.focus();
@@ -196,7 +200,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex-1 overflow-y-auto">
-          <div className="flex min-h-full flex-col justify-end gap-5 px-4 pt-7 pb-1 md:px-12 xl:px-[200px]">
+          <div className={cx("flex min-h-full flex-col justify-end gap-5 pt-7 pb-1", sidePadding)}>
             {messages.length === 0 && (
               <p className="text-center text-[14.5px] text-ink-3">
                 Olá, {user.name.split(" ")[0]}. Conte o que está acontecendo, ou pergunte pelos seus
@@ -266,7 +270,7 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
           </div>
         </div>
 
-        <div className="shrink-0 px-4 pt-2.5 pb-[18px] md:px-12 xl:px-[200px]">
+        <div className={cx("shrink-0 pt-2.5 pb-[18px]", sidePadding)}>
           {isAtLimit ? (
             <SessionLimitNotice
               isWorking={sessionAction.isPending}
