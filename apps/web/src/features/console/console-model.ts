@@ -1,5 +1,5 @@
 import type { Tone } from "../../ui/status-styles.ts";
-import type { ConsoleConversationState } from "./console-api.ts";
+import type { ConsoleConversationState, ConsoleFilter } from "./console-api.ts";
 
 /**
  * Textos do console sem React (tela 4): a etiqueta de cada conversa e as horas da lista.
@@ -47,6 +47,36 @@ export function stateTag(
     case "agent":
       return { label: "Agent atendendo", tone: "success" };
   }
+}
+
+export type EmptyListMessage = {
+  title: string;
+  description?: string;
+  /** Com uma busca ativa, a saída é limpar a busca. */
+  canClearSearch: boolean;
+};
+
+const NO_CONVERSATIONS_YET: EmptyListMessage = {
+  title: "Nenhuma conversa ainda.",
+  description: "As conversas dos funcionários aparecem aqui assim que começam.",
+  canClearSearch: false,
+};
+const NO_CONVERSATIONS_IN_FILTER: EmptyListMessage = {
+  title: "Nenhuma conversa neste filtro.",
+  canClearSearch: false,
+};
+
+/** O que a lista vazia diz (10.5): busca sem resultado, filtro vazio ou nenhuma conversa ainda. */
+export function emptyListMessage(filter: ConsoleFilter, query: string): EmptyListMessage {
+  const searched = query.trim();
+  if (searched) {
+    return {
+      title: `Nenhuma conversa encontrada para “${searched}”.`,
+      description: "Confira o nome, o setor ou o número do chamado.",
+      canClearSearch: true,
+    };
+  }
+  return filter === "all" ? NO_CONVERSATIONS_YET : NO_CONVERSATIONS_IN_FILTER;
 }
 
 const timeFormatter = new Intl.DateTimeFormat("pt-BR", {

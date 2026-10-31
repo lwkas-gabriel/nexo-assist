@@ -1,14 +1,21 @@
 import { Check, CheckCheck, Search } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
 import { cx } from "../../../ui/cx.ts";
-import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../../ui/Feedback.tsx";
+import { Button } from "../../../ui/Button.tsx";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  Skeleton,
+  SyncNotice,
+} from "../../../ui/Feedback.tsx";
 import type { QueryView } from "../../../lib/query-view.ts";
 import { TONE_DOT_CLASSES } from "../../../ui/status-styles.ts";
 import type { ConsoleFilter, ConsoleList, ConsoleListItem } from "../console-api.ts";
 import { CONSOLE_FILTERS } from "../console-api.ts";
-import { LIST_OUT_OF_SYNC, listTime, stateTag } from "../console-model.ts";
+import { emptyListMessage, LIST_OUT_OF_SYNC, listTime, stateTag } from "../console-model.ts";
 
 const FILTER_LABELS: Record<ConsoleFilter, string> = {
   all: "Todas",
@@ -42,6 +49,12 @@ type ConversationListProps = {
 export function ConversationList(props: ConversationListProps) {
   const { view, filter } = props;
   const data = view.status === "ready" ? view.data : undefined;
+  const searchRef = useRef<HTMLInputElement>(null);
+  // "Limpar busca" some junto com o botão: o foco volta ao campo, que é de onde a pessoa partiu.
+  const clearSearch = () => {
+    props.onQuery("");
+    searchRef.current?.focus();
+  };
   return (
     <section aria-labelledby="console-list-title" className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-3 px-4 pt-4 pb-2.5">
@@ -55,6 +68,7 @@ export function ConversationList(props: ConversationListProps) {
           <Search aria-hidden size={15} className="text-ink-3" />
           <span className="sr-only">Pesquisar conversa ou chamado</span>
           <input
+            ref={searchRef}
             type="search"
             value={props.query}
             onChange={(event) => props.onQuery(event.target.value)}
@@ -97,7 +111,7 @@ export function ConversationList(props: ConversationListProps) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <ListBody {...props} />
+        <ListBody {...props} onClearSearch={clearSearch} />
       </div>
       <SyncNotice
         message={view.status === "ready" && view.isOutOfSync ? LIST_OUT_OF_SYNC : null}
@@ -107,7 +121,17 @@ export function ConversationList(props: ConversationListProps) {
   );
 }
 
-function ListBody({ view, onRetry, isRetrying, selectedId, onSelect, now }: ConversationListProps) {
+function ListBody({
+  view,
+  onRetry,
+  isRetrying,
+  filter,
+  query,
+  onClearSearch,
+  selectedId,
+  onSelect,
+  now,
+}: ConversationListProps & { onClearSearch: () => void }) {
   if (view.status === "loading") {
     return (
       <LoadingState label="Carregando conversas" className="flex flex-col gap-2 p-2">
@@ -121,8 +145,19 @@ function ListBody({ view, onRetry, isRetrying, selectedId, onSelect, now }: Conv
     return <ErrorState message={view.message} onRetry={onRetry} isRetrying={isRetrying} />;
   }
   if (view.data.conversations.length === 0) {
+    const empty = emptyListMessage(filter, query);
     return (
-      <p className="p-4 text-center text-[13.5px] text-ink-3">Nenhuma conversa neste filtro.</p>
+      <EmptyState
+        title={empty.title}
+        {...(empty.description ? { description: empty.description } : {})}
+        action={
+          empty.canClearSearch ? (
+            <Button variant="secondary" onClick={onClearSearch}>
+              Limpar busca
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
   return (

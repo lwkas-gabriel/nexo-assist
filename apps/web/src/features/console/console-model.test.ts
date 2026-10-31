@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeContactDue, listTime, stateTag } from "./console-model.ts";
+import { describeContactDue, emptyListMessage, listTime, stateTag } from "./console-model.ts";
 
 const now = new Date("2026-10-31T13:40:00Z"); // 10:40 em Brasília
 
@@ -52,5 +52,31 @@ describe("etiquetas e horas do console (tela 4)", () => {
     expect(listTime("2026-10-31T13:05:00Z", now)).toBe("10:05");
     expect(listTime("2026-10-30T13:05:00Z", now)).toBe("ontem");
     expect(listTime("2026-10-28T13:05:00Z", now)).toBe("28/10");
+  });
+
+  describe("emptyListMessage (10.5)", () => {
+    it("com busca, diz o que foi buscado e oferece limpar", () => {
+      expect(emptyListMessage("all", "  zzz ")).toEqual({
+        title: "Nenhuma conversa encontrada para “zzz”.",
+        description: "Confira o nome, o setor ou o número do chamado.",
+        canClearSearch: true,
+      });
+      expect(emptyListMessage("mine", "zzz").canClearSearch).toBe(true);
+    });
+
+    it("Todas sem nada: ainda não há conversas", () => {
+      expect(emptyListMessage("all", "")).toEqual({
+        title: "Nenhuma conversa ainda.",
+        description: "As conversas dos funcionários aparecem aqui assim que começam.",
+        canClearSearch: false,
+      });
+    });
+
+    it("outro filtro vazio: o texto do 10.5", () => {
+      expect(emptyListMessage("for_you", "   ")).toEqual({
+        title: "Nenhuma conversa neste filtro.",
+        canClearSearch: false,
+      });
+    });
   });
 });

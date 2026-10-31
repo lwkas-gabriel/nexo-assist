@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef } from "react";
 import { Avatar } from "../../../ui/Avatar.tsx";
 import { avatarToneFor } from "../../../ui/avatar-tones.ts";
 import { cx } from "../../../ui/cx.ts";
-import { SyncNotice } from "../../../ui/Feedback.tsx";
+import { EmptyState, SyncNotice } from "../../../ui/Feedback.tsx";
 import { IconButton } from "../../../ui/IconButton.tsx";
 import { Pill } from "../../../ui/Pill.tsx";
 import type { DraftView } from "../../chat/chat-api.ts";
@@ -119,6 +119,7 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-4 md:px-10">
+        {messages.length === 0 && <EmptyState title="Nenhuma mensagem nesta conversa ainda." />}
         <div role="log" aria-label={`Conversa com ${employee.name}`}>
           <ol className="flex flex-col gap-4">
             {messages.map((message, index) => {

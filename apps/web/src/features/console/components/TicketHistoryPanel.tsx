@@ -2,7 +2,13 @@ import { ArrowRightLeft } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../../ui/Button.tsx";
 import { cx } from "../../../ui/cx.ts";
-import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../../ui/Feedback.tsx";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  Skeleton,
+  SyncNotice,
+} from "../../../ui/Feedback.tsx";
 import type { QueryView } from "../../../lib/query-view.ts";
 import { TICKET_STATUS_TONES, TONE_DOT_CLASSES } from "../../../ui/status-styles.ts";
 import type { TicketSummaryView } from "../../chat/ticket-model.ts";
@@ -56,6 +62,9 @@ export function TicketHistoryPanel({
 function TicketHistory({ data }: { data: ConsoleTickets }) {
   const [showAll, setShowAll] = useState(false);
   const firstName = data.employeeName.split(" ")[0];
+  if (data.openCount === 0 && data.closedCount === 0) {
+    return <EmptyState title={`${firstName} não tem chamados.`} />;
+  }
   const others = showAll ? data.others : data.others.slice(0, OTHERS_PREVIEW);
 
   return (

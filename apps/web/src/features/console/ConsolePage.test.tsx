@@ -436,7 +436,10 @@ describe("console do analista (tela 4)", () => {
         list: "ok" as "ok" | "down" | "hold",
         mineList: "ok" as "ok" | "down" | "hold",
         conversation: "ok" as "ok" | "down",
-        tickets: "ok" as "ok" | "unavailable",
+        tickets: "ok" as "ok" | "unavailable" | "empty",
+        /** Conversas devolvidas pela lista; vazio simula filtro, busca ou nada ainda. */
+        isListEmpty: false,
+        isConversationEmpty: false,
         release: () => undefined as void,
       };
       const gate = new Promise<void>((resolve) => (control.release = resolve));
@@ -445,7 +448,7 @@ describe("console do analista (tela 4)", () => {
           const mode = input.includes("filter=mine") ? control.mineList : control.list;
           if (mode === "down") throw new TypeError("Failed to fetch");
           if (mode === "hold") await gate;
-          return json(LIST);
+          return json(control.isListEmpty ? { ...LIST, conversations: [] } : LIST);
         }
         if (input.endsWith("/tickets")) {
           return control.tickets === "unavailable"
@@ -459,10 +462,14 @@ describe("console do analista (tela 4)", () => {
                 },
                 503,
               )
-            : json(TICKETS);
+            : json(
+                control.tickets === "empty"
+                  ? { ...TICKETS, openCount: 0, closedCount: 0, thisConversation: [], others: [] }
+                  : TICKETS,
+              );
         }
         if (control.conversation === "down") throw new TypeError("Failed to fetch");
-        return json(CONVERSATION);
+        return json(control.isConversationEmpty ? { ...CONVERSATION, messages: [] } : CONVERSATION);
       });
       return control;
     }
@@ -603,6 +610,65 @@ describe("console do analista (tela 4)", () => {
 
       expect(await within(panel).findByText(overdueTicket.title)).toBeDefined();
       expect(within(panel).queryByRole("alert")).toBeNull();
+    });
+
+    describe("listas vazias", () => {
+      it("filtro sem conversas: a frase do 10.5, sem botão de limpar busca", async () => {
+        const control = controllableConsole();
+        control.isListEmpty = true;
+        renderConsole();
+        await userEvent.click(await screen.findByRole("button", { name: /^Minhas/ }));
+
+        expect(await screen.findByText("Nenhuma conversa neste filtro.")).toBeDefined();
+        expect(screen.queryByRole("button", { name: "Limpar busca" })).toBeNull();
+      });
+
+      it("Todas sem nenhuma conversa: diz que ainda não há conversas", async () => {
+        const control = controllableConsole();
+        control.isListEmpty = true;
+        renderConsole();
+
+        expect(await screen.findByText("Nenhuma conversa ainda.")).toBeDefined();
+        expect(
+          screen.getByText("As conversas dos funcionários aparecem aqui assim que começam."),
+        ).toBeDefined();
+      });
+
+      it("busca sem resultado: diz o que foi buscado; Limpar busca esvazia o campo e devolve o foco", async () => {
+        const control = controllableConsole();
+        control.isListEmpty = true;
+        renderConsole();
+        const search = await screen.findByLabelText("Pesquisar conversa ou chamado");
+        await userEvent.type(search, "zzz");
+
+        expect(await screen.findByText("Nenhuma conversa encontrada para “zzz”.")).toBeDefined();
+        expect(screen.getByText("Confira o nome, o setor ou o número do chamado.")).toBeDefined();
+        await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+
+        expect(search).toHaveProperty("value", "");
+        expect(document.activeElement).toBe(search);
+        expect(screen.queryByText(/Nenhuma conversa encontrada/)).toBeNull();
+      });
+
+      it("funcionário sem chamados: uma mensagem só, no painel", async () => {
+        const control = controllableConsole();
+        control.tickets = "empty";
+        renderConsole();
+        await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+        const panel = await screen.findByRole("complementary", { name: "Chamados de Ana" });
+        expect(await within(panel).findByText("Ana não tem chamados.")).toBeDefined();
+        expect(within(panel).queryByText("Desta conversa")).toBeNull();
+      });
+
+      it("conversa sem mensagens: diz que ainda não há mensagens", async () => {
+        const control = controllableConsole();
+        control.isConversationEmpty = true;
+        renderConsole();
+        await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+        expect(await screen.findByText("Nenhuma mensagem nesta conversa ainda.")).toBeDefined();
+      });
     });
 
     it("conversa que não carrega: erro com Tentar novamente no lugar da conversa", async () => {
