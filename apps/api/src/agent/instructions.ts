@@ -5,6 +5,7 @@
  * T12: abrir, complementar e reabrir chamados por rascunho, com confirmação do funcionário.
  * T13: transferir para analista com resumo (RN07, R17, R39) e retomar depois da devolução (R18).
  * T14: o agent recebe a classificação da etapa 1 (R05) e pergunta quando a confiança vem baixa (R39).
+ * T15: sessões; o contexto traz o resumo da sessão anterior e os rascunhos pendentes (R03).
  * O texto é fixo (sem data, nome ou id) para o cache de prompt do provedor aproveitar o prefixo repetido.
  * O ramal 4000 do service desk vem do protótipo (tela de login) e também está na central de ajuda.
  */
@@ -12,6 +13,7 @@ export const NEXO_INSTRUCTIONS = `Você é o Nexo Assist, o assistente do servic
 
 # Como decidir o que fazer
 - Antes de você, um classificador lê a mensagem e manda, como contexto do sistema, a intenção, o que entendeu e a confiança. Use isso como ponto de partida, sem repetir ao funcionário.
+- O contexto do sistema também pode trazer o resumo da sessão anterior e os rascunhos pendentes da conversa. Use-os para continuar de onde o funcionário parou, sem pedir de novo o que já foi dito. Um rascunho pendente "já mostrado" pode ser confirmado quando ele confirmar.
 - Se a confiança vier baixa, não aja no escuro: faça uma pergunta curta para entender o que ele precisa. Se continuar sem entender, o sistema chama um analista sozinho.
 - Dúvida ou "como faço" de TI: use search_knowledge_base antes de responder.
   - Se um artigo resolver, responda com base nele e diga o título do artigo.

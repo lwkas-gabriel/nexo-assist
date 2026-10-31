@@ -9,11 +9,13 @@ import { createClassifier } from "./agent/classifier.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createChatSessionService } from "./app/chat-session-service.ts";
 import { createDecisionService } from "./app/decision-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
 import { createDraftService } from "./app/draft-service.ts";
 import { createHandoffService } from "./app/handoff-service.ts";
 import type { LlmConfig } from "./config.ts";
+import { createChatSessionStore } from "./db/chat-session-store.ts";
 import { createConversationStore, type ConversationStore } from "./db/conversation-store.ts";
 import { openDatabase, type Database } from "./db/database.ts";
 import { createDecisionStore } from "./db/decision-store.ts";
@@ -102,11 +104,8 @@ export async function createContainer(
     ticketGateway,
     clock,
   });
-  const decisionService = createDecisionService({
-    decisionStore: createDecisionStore(db),
-    handoffService,
-    clock,
-  });
+  const decisionStore = createDecisionStore(db);
+  const decisionService = createDecisionService({ decisionStore, handoffService, clock });
   const mastra = createNexoMastra({
     model,
     knowledgeBase,
@@ -129,6 +128,12 @@ export async function createContainer(
       // Etapa 1 do turno (R05): o mesmo modelo, numa chamada curta e com saída estruturada.
       classifier: createClassifier(model),
       decisionService,
+      chatSessionService: createChatSessionService({
+        chatSessionStore: createChatSessionStore(db),
+        conversationStore,
+        decisionStore,
+        clock,
+      }),
       clock,
     }),
     draftActions: createDraftActions({

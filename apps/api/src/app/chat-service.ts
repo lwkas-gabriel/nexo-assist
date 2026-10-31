@@ -21,6 +21,11 @@ import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
 import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
+import {
+  toSessionView,
+  type ChatSessionService,
+  type SessionView,
+} from "./chat-session-service.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService } from "./draft-service.ts";
 
@@ -37,11 +42,14 @@ type ChatServiceDependencies = {
   draftService: DraftService;
   classifier: Classifier;
   decisionService: DecisionService;
+  chatSessionService: ChatSessionService;
   clock: Clock;
 };
 
 export type ConversationView = {
   conversation: Pick<ConversationRow, "id" | "mode"> | null;
+  /** RF10: o contador da sessão atual e o resumo da anterior. Nulo antes da primeira mensagem. */
+  session: SessionView | null;
   messages: UIMessage[];
 };
 
@@ -55,6 +63,7 @@ export function createChatService({
   draftService,
   classifier,
   decisionService,
+  chatSessionService,
   clock,
 }: ChatServiceDependencies) {
   /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
@@ -67,11 +76,13 @@ export function createChatService({
     );
   }
 
+  /** Histórico da conversa; com `since`, só a partir dessa data (a sessão atual, para o agent). */
   async function loadHistory(
     conversationId: string,
     toMessage: (row: MessageRow) => UIMessage,
+    since?: Date,
   ): Promise<UIMessage[]> {
-    const rows = await conversationStore.listRecentMessages(conversationId, HISTORY_WINDOW);
+    const rows = await conversationStore.listRecentMessages(conversationId, HISTORY_WINDOW, since);
     const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
     if (!result.success) {
       throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
@@ -90,11 +101,15 @@ export function createChatService({
     /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      if (!conversation) return { conversation: null, messages: [] };
+      if (!conversation) return { conversation: null, session: null, messages: [] };
       const messages = await loadHistory(conversation.id, toUIMessage);
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
+      const session = await chatSessionService.activeSession(conversation.id);
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
+        session: session
+          ? toSessionView(session, await chatSessionService.previousSummary(conversation.id))
+          : null,
         messages: messages.map((message) => {
           const decision = decisions.get(message.id);
           return decision
@@ -102,6 +117,16 @@ export function createChatService({
             : message;
         }),
       };
+    },
+
+    /** "Nova sessão" (RN14): encerra a atual com resumo e abre outra na mesma conversa. */
+    async startNewSession(employee: UserRow): Promise<SessionView> {
+      const conversation = await openConversationFor(employee);
+      if (busyConversations.has(conversation.id)) {
+        throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
+      }
+      const session = await chatSessionService.startNew(conversation);
+      return toSessionView(session, await chatSessionService.previousSummary(conversation.id));
     },
 
     /**
@@ -118,6 +143,7 @@ export function createChatService({
           parts: [{ type: "text", text }],
           createdAt: clock.now(),
         });
+        await chatSessionService.touch(conversation);
         return createUIMessageStream({ execute: () => undefined });
       }
       if (busyConversations.has(conversation.id)) {
@@ -127,6 +153,8 @@ export function createChatService({
       const release = () => busyConversations.delete(conversation.id);
 
       try {
+        // RN14: conta a mensagem na sessão (ou recusa, na 31ª), antes de gastar o modelo.
+        const session = await chatSessionService.countAgentMessage(conversation);
         const turnStartedAt = clock.now();
         // Etapa 1 (R05): o classificador vê a mensagem nova e um pouco do que veio antes.
         const previous = await conversationStore.listRecentMessages(
@@ -165,7 +193,14 @@ export function createChatService({
             : createUIMessageStream({ execute: () => undefined });
         }
 
-        const history = await loadHistory(conversation.id, toAgentHistoryMessage);
+        // O agent vê só a sessão atual; o que veio antes chega pelo resumo (R03, custo por turno).
+        const history = await loadHistory(
+          conversation.id,
+          toAgentHistoryMessage,
+          session.startedAt,
+        );
+        const previousSummary = await chatSessionService.previousSummary(conversation.id);
+        const pendingDrafts = await draftService.describePending(conversation.id);
         // O Mastra tipa o stream de forma genérica; no formato v7 ele produz os chunks de UI do AI SDK.
         const agentStream = (await handleChatStream({
           mastra,
@@ -176,7 +211,7 @@ export function createChatService({
           params: {
             messages: history,
             // Etapa 2: o agent recebe a classificação como contexto do sistema, não da conversa.
-            system: describeClassification(classification),
+            system: describeTurnContext(classification, previousSummary, pendingDrafts),
             requestContext: createAgentRequestContext({
               employeeId: employee.id,
               conversationId: conversation.id,
@@ -249,6 +284,21 @@ const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {
 
 function toTranscriptLine(row: MessageRow): TranscriptLine {
   return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row)) };
+}
+
+/**
+ * Contexto de sistema do turno: a classificação da etapa 1 e, se houver, o resumo da sessão anterior
+ * e os rascunhos pendentes (R03). Tudo gerado pelo código, sem texto livre do funcionário.
+ */
+function describeTurnContext(
+  classification: ClassificationResult,
+  previousSummary: string | null,
+  pendingDrafts: string | null,
+): string {
+  const lines = [describeClassification(classification)];
+  if (previousSummary) lines.push(`Resumo da sessão anterior desta conversa: ${previousSummary}`);
+  if (pendingDrafts) lines.push(`Rascunhos pendentes desta conversa: ${pendingDrafts}.`);
+  return lines.join("\n");
 }
 
 /** Faixas de confiança com os mesmos nomes do prompt do classificador. */

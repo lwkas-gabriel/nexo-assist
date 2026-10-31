@@ -97,19 +97,25 @@ export function createChatRoutes({
     return createUIMessageStreamResponse({ stream });
   });
 
+  // Ações de botão (card do rascunho, nova sessão): não gastam o modelo, mas gravam na conversa.
+  const limitButtonActions = createMiddleware<AppEnv>(async (c, next) => {
+    if (!chatLimits.draftActionsPerUser.tryConsume(currentUser(c, "employee").id)) {
+      throw new AppError(
+        "RATE_LIMITED",
+        "Muitas ações em pouco tempo. Tente novamente mais tarde.",
+      );
+    }
+    await next();
+  });
+  routes.use("/drafts/*", limitButtonActions);
+  routes.use("/sessions", limitButtonActions);
+
+  // RN14: "Nova sessão", quando a atual chega ao limite ou o funcionário quer recomeçar.
+  routes.post("/sessions", async (c) => {
+    return c.json({ session: await chatService.startNewSession(currentUser(c, "employee")) });
+  });
+
   // Botões do card de rascunho (RN04, R16): ação determinística, sem chamar o LLM (11.5).
-  routes.use(
-    "/drafts/*",
-    createMiddleware<AppEnv>(async (c, next) => {
-      if (!chatLimits.draftActionsPerUser.tryConsume(currentUser(c, "employee").id)) {
-        throw new AppError(
-          "RATE_LIMITED",
-          "Muitas ações em pouco tempo. Tente novamente mais tarde.",
-        );
-      }
-      await next();
-    }),
-  );
 
   routes.post("/drafts/:id/confirm", async (c) => {
     const draftNumber = parseInput(draftNumberSchema, c.req.param("id"));

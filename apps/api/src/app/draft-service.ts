@@ -271,6 +271,25 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
       return toDraftView(edited, clock.now());
     },
 
+    /**
+     * R03: o que está pendente na conversa, para o agent saber mesmo numa sessão nova, em que as
+     * mensagens que mostraram o rascunho já não estão no histórico dele.
+     */
+    async describePending(conversationId: string): Promise<string | null> {
+      const pending = await draftStore.listPending(conversationId);
+      if (pending.length === 0) return null;
+      return pending
+        .map((draft) => {
+          const what =
+            draft.kind === "create"
+              ? `chamado novo "${draft.content.title}"`
+              : `complemento ao chamado ${draft.ticketNumber}`;
+          const shown = draft.shownAt ? "já mostrado ao funcionário" : "ainda não mostrado";
+          return `D-${draft.number}: ${what} (${shown})`;
+        })
+        .join("; ");
+    },
+
     /** O rascunho como o card mostra (o card visual chega na T19). */
     async view(request: DraftRef) {
       return toDraftView(await ownDraft(request), clock.now());

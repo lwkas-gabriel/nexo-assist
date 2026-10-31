@@ -185,12 +185,17 @@ function draftFrom(userText: string) {
   };
 }
 
-/** Último "D-n" que o agent escreveu na conversa: o rascunho que o funcionário viu. */
+/**
+ * Último "D-n" que o agent escreveu na conversa, ou que o contexto de sistema lista como pendente
+ * (numa sessão nova, as mensagens que o mostraram já não estão no histórico, R03).
+ */
 function lastDraftIdShown(prompt: LanguageModelV4Prompt): string | undefined {
-  const agentTexts = prompt
-    .filter((message) => message.role === "assistant")
-    .flatMap((message) => message.content.map((part) => (part.type === "text" ? part.text : "")));
-  return agentTexts.join(" ").match(DRAFT_ID_IN_TEXT)?.at(-1);
+  const texts = prompt.flatMap((message) => {
+    if (message.role === "system") return [message.content];
+    if (message.role !== "assistant") return [];
+    return message.content.map((part) => (part.type === "text" ? part.text : ""));
+  });
+  return texts.join(" ").match(DRAFT_ID_IN_TEXT)?.at(-1);
 }
 
 function lastUserText(prompt: LanguageModelV4Prompt): string {
