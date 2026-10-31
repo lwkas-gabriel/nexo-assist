@@ -3,9 +3,10 @@ import { SESSION_MESSAGE_LIMIT } from "@nexo/shared/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
 import { Skeleton } from "../../ui/Feedback.tsx";
+import { SidePanel } from "../../ui/SidePanel.tsx";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import {
   cancelDraft,
@@ -28,6 +29,8 @@ import {
   textOf,
 } from "./chat-model.ts";
 import { ChatShell } from "./ChatShell.tsx";
+import { DecisionPanel } from "./components/DecisionPanel.tsx";
+import { decisionOf } from "./decision-model.ts";
 import { Composer, SessionLimitNotice } from "./components/Composer.tsx";
 import { MessageBubble, type DraftActions } from "./components/MessageBubble.tsx";
 
@@ -92,6 +95,9 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
   const endRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
   const mode = view.conversation?.mode ?? "agent";
+  // Detalhe da decisão (RF05): qual resposta, e quem abriu, para o foco voltar ao fechar.
+  const [openDecisionId, setOpenDecisionId] = useState<string | null>(null);
+  const decisionOpenerRef = useRef<HTMLElement | null>(null);
 
   /** Recarrega do servidor: contador, rascunhos, modo e registros de decisão ficam em dia. */
   function reloadView() {
@@ -175,109 +181,135 @@ function ChatConversation({ user, view }: { user: CurrentUser; view: Conversatio
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
+  const openDecisionMessage = messages.find((message) => message.id === openDecisionId);
+  const openDecision = openDecisionMessage ? decisionOf(openDecisionMessage) : undefined;
+  const showDecision = (messageId: string, opener: HTMLElement) => {
+    decisionOpenerRef.current = opener;
+    setOpenDecisionId(messageId);
+  };
+  const closeDecision = () => {
+    setOpenDecisionId(null);
+    decisionOpenerRef.current?.focus();
+  };
+
   return (
-    <>
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex min-h-full flex-col justify-end gap-5 px-4 pt-7 pb-1 md:px-12 xl:px-[200px]">
-          {messages.length === 0 && (
-            <p className="text-center text-[14.5px] text-ink-3">
-              Olá, {user.name.split(" ")[0]}. Conte o que está acontecendo, ou pergunte pelos seus
-              chamados.
-            </p>
-          )}
-          <div role="log" aria-label="Conversa com o Nexo Assist" className="flex flex-col gap-5">
-            <ol className="flex flex-col gap-5">
-              {messages.map((message, index) => (
-                <MessageWithSummary
-                  key={message.id}
-                  showSummaryBefore={summaryIndex === index}
-                  summary={view.session?.previousSummary ?? null}
-                >
-                  <MessageBubble
-                    message={message}
-                    drafts={view.drafts}
-                    optionsActive={message === lastMessage && activeOptions !== undefined}
-                    actionableDraftNumber={pendingDraft?.number}
-                    isUnsent={message.id === unsentMessageId}
-                    onPickOption={pickOption}
-                    draftActions={draftActions}
-                  />
-                </MessageWithSummary>
-              ))}
-              {summaryIndex === messages.length && view.session?.previousSummary && (
-                <SessionSummaryCard summary={view.session.previousSummary} />
-              )}
-            </ol>
-            {status === "submitted" && (
-              <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
-                <LoaderCircle size={12} aria-hidden className="animate-spin" />
-                Nexo Assist está pensando…
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col justify-end gap-5 px-4 pt-7 pb-1 md:px-12 xl:px-[200px]">
+            {messages.length === 0 && (
+              <p className="text-center text-[14.5px] text-ink-3">
+                Olá, {user.name.split(" ")[0]}. Conte o que está acontecendo, ou pergunte pelos seus
+                chamados.
               </p>
             )}
-          </div>
-          {error && (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-4 py-3"
-            >
-              <p className="flex-1 text-[13.5px] text-danger-text">
-                {describeChatError(error)}
-                {sessionAction.error && ` ${sessionAction.error.message}`}
-              </p>
-              <div className="flex gap-1.5">
-                {mode === "agent" && (
-                  <Button
-                    variant="secondary"
-                    onClick={talkToAnalyst}
-                    disabled={sessionAction.isPending}
+            <div role="log" aria-label="Conversa com o Nexo Assist" className="flex flex-col gap-5">
+              <ol className="flex flex-col gap-5">
+                {messages.map((message, index) => (
+                  <MessageWithSummary
+                    key={message.id}
+                    showSummaryBefore={summaryIndex === index}
+                    summary={view.session?.previousSummary ?? null}
                   >
-                    Falar com um analista
-                  </Button>
+                    <MessageBubble
+                      message={message}
+                      drafts={view.drafts}
+                      optionsActive={message === lastMessage && activeOptions !== undefined}
+                      actionableDraftNumber={pendingDraft?.number}
+                      isUnsent={message.id === unsentMessageId}
+                      onOpenDecision={showDecision}
+                      openDecisionId={openDecisionId}
+                      onPickOption={pickOption}
+                      draftActions={draftActions}
+                    />
+                  </MessageWithSummary>
+                ))}
+                {summaryIndex === messages.length && view.session?.previousSummary && (
+                  <SessionSummaryCard summary={view.session.previousSummary} />
                 )}
-                {failedMessage && !isAtLimit && (
-                  <Button variant="secondary" onClick={() => retry(failedMessage)}>
-                    Tentar novamente
-                  </Button>
-                )}
-              </div>
+              </ol>
+              {status === "submitted" && (
+                <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
+                  <LoaderCircle size={12} aria-hidden className="animate-spin" />
+                  Nexo Assist está pensando…
+                </p>
+              )}
             </div>
+            {error && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-4 py-3"
+              >
+                <p className="flex-1 text-[13.5px] text-danger-text">
+                  {describeChatError(error)}
+                  {sessionAction.error && ` ${sessionAction.error.message}`}
+                </p>
+                <div className="flex gap-1.5">
+                  {mode === "agent" && (
+                    <Button
+                      variant="secondary"
+                      onClick={talkToAnalyst}
+                      disabled={sessionAction.isPending}
+                    >
+                      Falar com um analista
+                    </Button>
+                  )}
+                  {failedMessage && !isAtLimit && (
+                    <Button variant="secondary" onClick={() => retry(failedMessage)}>
+                      Tentar novamente
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+        </div>
+
+        <div className="shrink-0 px-4 pt-2.5 pb-[18px] md:px-12 xl:px-[200px]">
+          {isAtLimit ? (
+            <SessionLimitNotice
+              isWorking={sessionAction.isPending}
+              error={sessionAction.error ? sessionAction.error.message : null}
+              onNewSession={() => sessionAction.mutate(startNewSession)}
+              onTalkToAnalyst={talkToAnalyst}
+            />
+          ) : (
+            <Composer
+              ref={composerRef}
+              isBusy={isBusy}
+              onSend={send}
+              onPickOption={pickOption}
+              counter={{
+                used: view.session?.agentMessages ?? 0,
+                limit: view.session?.limit ?? SESSION_MESSAGE_LIMIT,
+              }}
+              quickOptions={activeOptions?.options ?? []}
+              onConfirmDraft={
+                pendingDraft
+                  ? () => {
+                      // Ctrl/⌘+Enter repetido durante a confirmação, ou com o agent respondendo,
+                      // não manda outra (RN04).
+                      if (!draftActions.isWorking) draftActions.confirm(pendingDraft);
+                    }
+                  : undefined
+              }
+            />
           )}
-          <div ref={endRef} />
         </div>
       </div>
-
-      <div className="shrink-0 px-4 pt-2.5 pb-[18px] md:px-12 xl:px-[200px]">
-        {isAtLimit ? (
-          <SessionLimitNotice
-            isWorking={sessionAction.isPending}
-            error={sessionAction.error ? sessionAction.error.message : null}
-            onNewSession={() => sessionAction.mutate(startNewSession)}
-            onTalkToAnalyst={talkToAnalyst}
-          />
-        ) : (
-          <Composer
-            ref={composerRef}
-            isBusy={isBusy}
-            onSend={send}
-            onPickOption={pickOption}
-            counter={{
-              used: view.session?.agentMessages ?? 0,
-              limit: view.session?.limit ?? SESSION_MESSAGE_LIMIT,
-            }}
-            quickOptions={activeOptions?.options ?? []}
-            onConfirmDraft={
-              pendingDraft
-                ? () => {
-                    // Ctrl/⌘+Enter repetido durante a confirmação, ou com o agent respondendo,
-                    // não manda outra (RN04).
-                    if (!draftActions.isWorking) draftActions.confirm(pendingDraft);
-                  }
-                : undefined
-            }
-          />
-        )}
-      </div>
-    </>
+      {/* Coluna à direita no desktop, gaveta no tablet e folha que sobe no celular (10.6). */}
+      <SidePanel
+        title="Detalhe da decisão"
+        open={openDecision !== undefined}
+        onClose={closeDecision}
+        inlineFrom="desktop"
+        mobileMode="sheet"
+        widthClass="w-[360px]"
+      >
+        {openDecision && <DecisionPanel decision={openDecision} />}
+      </SidePanel>
+    </div>
   );
 }
 

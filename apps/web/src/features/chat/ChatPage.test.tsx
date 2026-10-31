@@ -3,9 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setViewportWidth } from "../../test-setup.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import type { ConversationView } from "./chat-api.ts";
 import { ChatPage } from "./ChatPage.tsx";
+import { sampleDecision } from "./decision.fixture.ts";
 
 const ANA: CurrentUser = {
   id: "emp-ana-souza",
@@ -147,5 +149,70 @@ describe("tela do chat (tela 2)", () => {
     expect(sentBodies[0]).toMatchObject({ text: "VPN caiu" });
     expect(typeof (sentBodies[0] as { id?: unknown }).id).toBe("string");
     expect(screen.getAllByText("VPN caiu")).toHaveLength(1);
+  });
+
+  it("RF05: detalhes abre o painel da decisão; fechar devolve o foco ao botão", async () => {
+    const answered: ConversationView = {
+      ...conversationAt("agent", false),
+      messages: [
+        {
+          id: "agent-1",
+          role: "assistant",
+          metadata: { author: "agent", decision: sampleDecision },
+          parts: [{ type: "text", text: "Montei o rascunho D-4." }],
+        },
+      ],
+    };
+    stubApi(answered);
+    renderChat();
+
+    const details = await screen.findByRole("button", { name: "detalhes da decisão" });
+    await userEvent.click(details);
+
+    const panel = screen.getByRole("complementary", { name: "Detalhe da decisão" });
+    expect(panel.textContent).toContain("A VPN não conecta e há reunião às 14h.");
+    expect(details.getAttribute("aria-expanded")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "Fechar Detalhe da decisão" }));
+    expect(screen.queryByRole("complementary", { name: "Detalhe da decisão" })).toBeNull();
+    expect(document.activeElement).toBe(details);
+  });
+
+  it("10.6: no celular, o detalhe sobe como folha (diálogo) sobre a conversa", async () => {
+    setViewportWidth(390);
+    const answered: ConversationView = {
+      ...conversationAt("agent", false),
+      messages: [
+        {
+          id: "agent-1",
+          role: "assistant",
+          metadata: { author: "agent", decision: sampleDecision },
+          parts: [{ type: "text", text: "Oi." }],
+        },
+      ],
+    };
+    stubApi(answered);
+    renderChat();
+
+    await userEvent.click(await screen.findByRole("button", { name: "detalhes da decisão" }));
+
+    expect(screen.getByRole("dialog", { name: "Detalhe da decisão" })).toBeDefined();
+  });
+
+  it("resposta ainda sem registro (em streaming, ou falha ao gravar) não tem botão de detalhes", async () => {
+    stubApi({
+      ...conversationAt("agent", false),
+      messages: [
+        {
+          id: "agent-1",
+          role: "assistant",
+          metadata: { author: "agent" },
+          parts: [{ type: "text", text: "Oi." }],
+        },
+      ],
+    });
+    renderChat();
+
+    await screen.findByText("Oi.");
+    expect(screen.queryByRole("button", { name: "detalhes da decisão" })).toBeNull();
   });
 });

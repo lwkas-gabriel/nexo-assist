@@ -2,7 +2,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DraftView } from "../chat-api.ts";
+import { sampleDecision } from "../decision.fixture.ts";
 import { Composer, SessionLimitNotice } from "./Composer.tsx";
+import { DecisionPanel } from "./DecisionPanel.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
 
@@ -258,5 +260,60 @@ describe("respostas rápidas (RF06)", () => {
     );
 
     expect(screen.getByRole("button", { name: "Só eu" })).toHaveProperty("disabled", true);
+  });
+});
+
+describe("detalhe da decisão (RF05, 10.4)", () => {
+  it("mostra o que entendeu, o que fez, as regras, a confiança e o porquê", () => {
+    render(<DecisionPanel decision={sampleDecision} />);
+
+    expect(screen.getByText("A VPN não conecta e há reunião às 14h.")).toBeDefined();
+    expect(screen.getByText("Rede e VPN")).toBeDefined();
+    expect(screen.getByText("buscou na central de ajuda")).toBeDefined();
+    expect(screen.getByText("RN11: somente você + compromisso hoje → Alta")).toBeDefined();
+    expect(screen.getByRole("meter", { name: "Confiança" }).getAttribute("aria-valuenow")).toBe(
+      "75",
+    );
+    expect(
+      screen.getByText("O classificador deu 90%; os sinais abaixo reduziram para 75%."),
+    ).toBeDefined();
+    expect(
+      screen.getByText("−15 pontos: a central de ajuda não tinha artigo sobre isso"),
+    ).toBeDefined();
+    expect(screen.getByText("Relata um problema e pede atendimento.")).toBeDefined();
+  });
+
+  it("R39: abaixo do limiar, a confiança aparece como baixa", () => {
+    render(
+      <DecisionPanel
+        decision={{ ...sampleDecision, finalConfidence: 0.3, isLowConfidence: true }}
+      />,
+    );
+
+    expect(screen.getByText("baixa")).toBeDefined();
+  });
+
+  it("ação de botão diz que foi o código, sem o modelo; sem passos, diz que respondeu direto", () => {
+    render(
+      <DecisionPanel
+        decision={{
+          ...sampleDecision,
+          classifierConfidence: 1,
+          finalConfidence: 1,
+          signals: [],
+          steps: [{ tool: "ticket_selection", ok: true, outcome: "concluiu" }],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText("Ação por um botão: decidida pelo código, sem o modelo."),
+    ).toBeDefined();
+    expect(screen.getByText("escolha na lista de chamados")).toBeDefined();
+  });
+
+  it("resposta sem nenhuma ação diz isso, em vez de uma lista vazia", () => {
+    render(<DecisionPanel decision={{ ...sampleDecision, steps: [] }} />);
+
+    expect(screen.getByText("Respondi direto, sem consultar nada.")).toBeDefined();
   });
 });

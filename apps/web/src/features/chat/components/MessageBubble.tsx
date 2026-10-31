@@ -1,6 +1,7 @@
 import { isToolUIPart, type UIMessage } from "ai";
 import type { DraftFields, DraftView } from "../chat-api.ts";
 import { liveDraft, messageAuthor, proposedDraft, quickOptionsOf, textOf } from "../chat-model.ts";
+import { decisionOf } from "../decision-model.ts";
 import { ActionChips } from "./ActionChips.tsx";
 import { DraftCard } from "./DraftCard.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
@@ -24,6 +25,10 @@ type MessageBubbleProps = {
   actionableDraftNumber: number | undefined;
   /** O envio falhou antes de a mensagem chegar ao servidor. */
   isUnsent: boolean;
+  /** Abre o detalhe da decisão desta resposta (RF05); `opener` recebe o foco de volta ao fechar. */
+  onOpenDecision: (messageId: string, opener: HTMLElement) => void;
+  /** A resposta cujo detalhe está aberto, se alguma. */
+  openDecisionId: string | null;
   onPickOption: (option: string) => void;
   draftActions: DraftActions;
 };
@@ -79,15 +84,22 @@ function AgentMessage({
   actionableDraftNumber,
   onPickOption,
   draftActions,
+  onOpenDecision,
+  openDecisionId,
   text,
 }: MessageBubbleProps & { text: string }) {
   const options = quickOptionsOf(message);
+  const hasDecision = decisionOf(message) !== undefined;
   const proposal = proposedDraft(message);
   const draft = proposal ? liveDraft(proposal, drafts) : undefined;
 
   return (
     <li className="flex flex-col gap-1.5">
-      <ActionChips message={message} />
+      <ActionChips
+        message={message}
+        onOpenDecision={hasDecision ? (opener) => onOpenDecision(message.id, opener) : undefined}
+        isDecisionOpen={openDecisionId === message.id}
+      />
       {(text || options) && (
         <div className="flex max-w-[600px] flex-col gap-3 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4 py-3">
           {text && (
