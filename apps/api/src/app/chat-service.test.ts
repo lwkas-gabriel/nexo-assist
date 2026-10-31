@@ -64,26 +64,58 @@ describe("falhas do modelo no chat", () => {
 });
 
 describe("ids das mensagens", () => {
-  it("a conversa recarregada mantém os ids da tela: a do funcionário e a do stream", async () => {
+  async function setup() {
     const { chatService, authService } = await createTestContainer();
     const { user: employee } = await authService.login({
       email: "ana.souza@nexo.com.br",
       password: "x",
       remember: false,
     });
-
-    const stream = await chatService.sendMessage(employee, "Como configuro a VPN?", {
-      ip: "local",
-      messageId: "msg-da-tela",
-    });
-    let streamMessageId: string | undefined;
-    const reader = stream.getReader();
-    for (let result = await reader.read(); !result.done; result = await reader.read()) {
-      if (result.value.type === "start") streamMessageId = result.value.messageId;
+    /** Envia e lê o stream até o fim; devolve o id da resposta do agent. */
+    async function send(text: string, messageId: string) {
+      const stream = await chatService.sendMessage(employee, text, { ip: "local", messageId });
+      let streamMessageId: string | undefined;
+      const reader = stream.getReader();
+      for (let result = await reader.read(); !result.done; result = await reader.read()) {
+        if (result.value.type === "start") streamMessageId = result.value.messageId;
+      }
+      return streamMessageId;
     }
+    const employeeTexts = async () =>
+      (await chatService.getConversation(employee)).messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.parts);
+    return { chatService, employee, send, employeeTexts };
+  }
+
+  it("a conversa recarregada mantém os ids da tela: a do funcionário e a do stream", async () => {
+    const { chatService, employee, send } = await setup();
+
+    const streamMessageId = await send("Como configuro a VPN?", "msg-da-tela");
 
     const { messages } = await chatService.getConversation(employee);
     expect(messages.map((message) => message.id)).toEqual(["msg-da-tela", streamMessageId]);
+  });
+
+  it("reenviar a mesma mensagem (Tentar novamente) não a grava duas vezes", async () => {
+    const { send, employeeTexts } = await setup();
+
+    await send("Como configuro a VPN?", "msg-da-tela");
+    await send("Como configuro a VPN?", "msg-da-tela");
+
+    expect(await employeeTexts()).toHaveLength(1);
+  });
+
+  it("id repetido com outro texto não é reenvio: grava a mensagem nova", async () => {
+    const { send, employeeTexts } = await setup();
+
+    await send("Como configuro a VPN?", "msg-da-tela");
+    await send("E o e-mail no celular?", "msg-da-tela");
+
+    expect(await employeeTexts()).toEqual([
+      [{ type: "text", text: "Como configuro a VPN?" }],
+      [{ type: "text", text: "E o e-mail no celular?" }],
+    ]);
   });
 });
 

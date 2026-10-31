@@ -79,7 +79,17 @@ export function createConversationStore(db: Database) {
       return row;
     },
 
-    /** Grava uma mensagem com id gerado pelo servidor e atualiza a data da conversa. */
+    /** Uma mensagem desta conversa pelo id (para reconhecer um reenvio depois de uma falha). */
+    async findMessage(conversationId: string, id: string): Promise<MessageRow | undefined> {
+      const [row] = await db
+        .select()
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversationId), eq(messages.id, id)))
+        .limit(1);
+      return row;
+    },
+
+    /** Grava uma mensagem (com o id sugerido, se livre) e atualiza a data da conversa. */
     async appendMessage(message: NewMessage): Promise<MessageRow> {
       const values = { ...message, parts: JSON.stringify(message.parts) };
       // O id sugerido só vale se estiver livre; repetido (retry, colisão), o servidor gera outro.

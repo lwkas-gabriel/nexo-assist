@@ -94,6 +94,31 @@ export function createChatService({
     );
   }
 
+  /**
+   * Grava a mensagem do funcionário com o id da bolha da tela. Se a mesma mensagem (id, autor e
+   * texto) já está na conversa, é o "Tentar novamente" de uma resposta que falhou depois de a
+   * mensagem ser gravada: não duplica. Com id de outra mensagem, grava com um id novo.
+   */
+  async function saveEmployeeMessage(
+    conversationId: string,
+    employeeId: string,
+    text: string,
+    createdAt: Date,
+    messageId: string | undefined,
+  ): Promise<void> {
+    const parts = [{ type: "text", text }];
+    const saved = messageId && (await conversationStore.findMessage(conversationId, messageId));
+    if (saved && saved.author === "employee" && saved.parts === JSON.stringify(parts)) return;
+    await conversationStore.appendMessage({
+      ...(messageId ? { id: messageId } : {}),
+      conversationId,
+      author: "employee",
+      authorId: employeeId,
+      parts,
+      createdAt,
+    });
+  }
+
   /** Histórico da conversa; com `since`, só a partir dessa data (a sessão atual, para o agent). */
   async function loadHistory(
     conversationId: string,
@@ -198,13 +223,13 @@ export function createChatService({
             "RATE_LIMITED",
             "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
           );
-        await conversationStore.appendMessage({
-          conversationId: conversation.id,
-          author: "employee",
-          authorId: employee.id,
-          parts: [{ type: "text", text }],
-          createdAt: clock.now(),
-        });
+        await saveEmployeeMessage(
+          conversation.id,
+          employee.id,
+          text,
+          clock.now(),
+          client.messageId,
+        );
         await chatSessionService.touch(conversation);
         return createUIMessageStream({ execute: () => undefined });
       }
@@ -237,14 +262,13 @@ export function createChatService({
           CLASSIFIER_CONTEXT,
         );
         const classification = await classifier.classify(previous.map(toTranscriptLine), text);
-        await conversationStore.appendMessage({
-          ...(client.messageId ? { id: client.messageId } : {}),
-          conversationId: conversation.id,
-          author: "employee",
-          authorId: employee.id,
-          parts: [{ type: "text", text }],
-          createdAt: turnStartedAt,
-        });
+        await saveEmployeeMessage(
+          conversation.id,
+          employee.id,
+          text,
+          turnStartedAt,
+          client.messageId,
+        );
         // A classificação leva segundos: a conversa pode ter sido transferida nesse meio-tempo
         // (por exemplo, um chamado crítico confirmado pelo botão). Aí a mensagem fica para o
         // analista e o agent não responde (RN08).
