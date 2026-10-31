@@ -12,7 +12,11 @@ const clock = { now: () => new Date("2026-10-27T18:00:00Z") };
 /** Chama a tool como o agent chamaria: com o funcionário da sessão no contexto do turno. */
 function callTools(
   ticketGateway: TicketGateway,
-  requestContext: RequestContext = createAgentRequestContext(ANA),
+  requestContext: RequestContext = createAgentRequestContext({
+    employeeId: ANA,
+    conversationId: "conversa-de-teste",
+    startedAt: clock.now(),
+  }),
 ) {
   const tools = createTicketTools({ ticketGateway, clock });
   return {

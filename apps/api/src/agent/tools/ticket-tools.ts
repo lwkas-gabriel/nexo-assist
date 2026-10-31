@@ -1,10 +1,10 @@
 import { createTool } from "@mastra/core/tools";
 import { parseTicketNumber, type Clock } from "@nexo/shared/domain";
-import { AppError } from "@nexo/shared/errors";
 import { z } from "zod";
 import type { TicketGateway } from "../../ports/ticket-gateway.ts";
 import { employeeIdFrom } from "../agent-context.ts";
 import { toTicketDetails, toTicketSummary } from "../ticket-view.ts";
+import { toolFailure } from "./tool-failure.ts";
 
 export const LIST_MY_TICKETS_TOOL_ID = "list_my_tickets";
 export const GET_TICKET_TOOL_ID = "get_ticket";
@@ -13,22 +13,6 @@ type TicketToolsDependencies = {
   ticketGateway: TicketGateway;
   clock: Clock;
 };
-
-/**
- * Falhas do sistema de chamados viram respostas que o agent explica ao funcionário, em vez de
- * quebrar o turno. "Não encontrado" cobre também o chamado de outra pessoa, sem revelar que ele
- * existe (RN09). Qualquer outra falha vira "tickets_error": o detalhe fica só no log do servidor.
- */
-function toolFailure(error: unknown) {
-  if (error instanceof AppError && error.code === "TICKETS_UNAVAILABLE") {
-    return { ok: false as const, reason: "tickets_unavailable" as const };
-  }
-  if (error instanceof AppError && error.code === "NOT_FOUND") {
-    return { ok: false as const, reason: "not_found" as const };
-  }
-  console.error("Falha inesperada ao consultar o sistema de chamados", error);
-  return { ok: false as const, reason: "tickets_error" as const };
-}
 
 /**
  * As tools não recebem quem é o funcionário: ele vem da sessão, pelo contexto do turno.

@@ -7,8 +7,10 @@ import { GENERIC_AGENT_ERROR_MESSAGE, QUOTA_EXCEEDED_MESSAGE } from "../agent/ag
 import { createNexoMastra } from "../agent/nexo-agent.ts";
 import { createConversationStore } from "../db/conversation-store.ts";
 import { openDatabase } from "../db/database.ts";
+import { createDraftStore } from "../db/draft-store.ts";
 import { createUserStore } from "../db/user-store.ts";
 import { createFakeTicketGateway } from "../test-support.ts";
+import { createDraftService } from "./draft-service.ts";
 import { createChatService } from "./chat-service.ts";
 
 /** Modelo que sempre falha como o provedor falharia (chave inválida, cota esgotada...). */
@@ -33,11 +35,17 @@ async function chatChunksWith(model: MockLanguageModelV4): Promise<UIMessageChun
   const employee = await userStore.findById("emp-ana-souza");
   if (!employee) throw new Error("Ana não está nos dados de demonstração");
 
+  const { ticketGateway } = createFakeTicketGateway();
   const chatService = createChatService({
     mastra: createNexoMastra({
       model,
       knowledgeBase: { search: () => [] },
-      ticketGateway: createFakeTicketGateway().ticketGateway,
+      ticketGateway,
+      draftService: createDraftService({
+        draftStore: createDraftStore(db),
+        ticketGateway,
+        clock: systemClock,
+      }),
       clock: systemClock,
     }),
     conversationStore: createConversationStore(db),

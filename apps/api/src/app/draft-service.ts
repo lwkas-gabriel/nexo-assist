@@ -36,6 +36,9 @@ type DraftServiceDependencies = {
 /** Campos que o agent extrai da conversa. A prioridade não está aqui: ela sai da matriz (RN11). */
 export type NewTicketInput = Partial<Record<keyof z.infer<typeof newTicketInputSchema>, unknown>>;
 
+/** Qual rascunho, de quem e, quando a ação vem de uma conversa, de qual. */
+type DraftRef = { employeeId: string; draftNumber: number; conversationId?: string };
+
 const URGENCY_FIELD_LABEL = "urgência (se há trabalho parado, compromisso hoje ou alternativa)";
 
 /**
@@ -43,10 +46,16 @@ const URGENCY_FIELD_LABEL = "urgência (se há trabalho parado, compromisso hoje
  * atualiza. Tools do agent e botões da tela usam este mesmo caso de uso.
  */
 export function createDraftService({ draftStore, ticketGateway, clock }: DraftServiceDependencies) {
-  /** O rascunho do funcionário; de outra pessoa ou inexistente responde igual (RN09). */
-  async function ownDraft(employeeId: string, draftNumber: number): Promise<Draft> {
+  /**
+   * O rascunho do funcionário, na conversa indicada (quando há uma). De outra pessoa, de outra
+   * conversa ou inexistente responde igual (RN09).
+   */
+  async function ownDraft({ employeeId, draftNumber, conversationId }: DraftRef): Promise<Draft> {
     const draft = await draftStore.find(draftNumber);
-    if (!draft || draft.employeeId !== employeeId) {
+    const isOwn =
+      draft?.employeeId === employeeId &&
+      (conversationId === undefined || draft.conversationId === conversationId);
+    if (!draft || !isOwn) {
       throw new AppError("NOT_FOUND", `Rascunho D-${draftNumber} não encontrado.`);
     }
     return draft;
@@ -156,16 +165,8 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
      * Pelo chat (R04), `shownBefore` é o início do turno: o rascunho precisa existir, sem mudanças,
      * desde antes da mensagem que confirmou. Assim o agent nunca propõe e confirma no mesmo turno.
      */
-    async confirm(request: {
-      employeeId: string;
-      draftNumber: number;
-      conversationId?: string;
-      shownBefore?: Date;
-    }) {
-      const draft = await ownDraft(request.employeeId, request.draftNumber);
-      if (request.conversationId && draft.conversationId !== request.conversationId) {
-        throw new AppError("NOT_FOUND", `Rascunho D-${draft.number} não encontrado.`);
-      }
+    async confirm(request: DraftRef & { shownBefore?: Date }) {
+      const draft = await ownDraft(request);
       requirePending(draft);
       if (request.shownBefore && draft.updatedAt.getTime() >= request.shownBefore.getTime()) {
         throw new AppError(
@@ -184,16 +185,16 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
       return { draft: toDraftView(confirmed, clock.now()), ticket };
     },
 
-    async cancel(request: { employeeId: string; draftNumber: number }) {
-      const draft = await ownDraft(request.employeeId, request.draftNumber);
+    async cancel(request: DraftRef) {
+      const draft = await ownDraft(request);
       requirePending(draft);
       const cancelled = await draftStore.setStatus(draft.number, "cancelled", clock.now());
       return toDraftView(cancelled, clock.now());
     },
 
     /** R16: o funcionário corrige os campos no card; a prioridade é recalculada pela matriz. */
-    async edit(request: { employeeId: string; draftNumber: number; changes: NewTicketInput }) {
-      const draft = await ownDraft(request.employeeId, request.draftNumber);
+    async edit(request: DraftRef & { changes: NewTicketInput }) {
+      const draft = await ownDraft(request);
       requirePending(draft);
       if (draft.kind !== "create") {
         throw new AppError("INVALID_REQUEST", "Só rascunhos de chamado novo podem ser editados.");
@@ -214,8 +215,8 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
       return toDraftView(edited, clock.now());
     },
 
-    async view(request: { employeeId: string; draftNumber: number }) {
-      return toDraftView(await ownDraft(request.employeeId, request.draftNumber), clock.now());
+    async view(request: DraftRef) {
+      return toDraftView(await ownDraft(request), clock.now());
     },
   };
 

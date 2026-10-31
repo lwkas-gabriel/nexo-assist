@@ -1,14 +1,20 @@
 import { randomBytes } from "node:crypto";
 import type { TicketDto } from "@nexo/shared/contracts";
-import { isOpenStatus } from "@nexo/shared/domain";
+import { DEMO_USERS } from "@nexo/shared/demo";
+import { isOpenStatus, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import { createApp } from "./app.ts";
+import { createDraftService } from "./app/draft-service.ts";
 import {
   createContainer,
   type Container,
   type ContainerConfig,
   type ContainerOverrides,
 } from "./container.ts";
+import { createConversationStore } from "./db/conversation-store.ts";
+import { openDatabase } from "./db/database.ts";
+import { createDraftStore } from "./db/draft-store.ts";
+import { createUserStore } from "./db/user-store.ts";
 import type { TicketGateway } from "./ports/ticket-gateway.ts";
 
 /**
@@ -129,6 +135,26 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
     transferTicket: notYetSupported,
   };
   return { ticketGateway, queriedOwners, tickets };
+}
+
+/**
+ * Caso de uso de rascunhos sobre um banco em memória, com as pessoas de demonstração e uma
+ * conversa já aberta para o funcionário (os rascunhos pertencem a uma conversa).
+ */
+export async function createTestDraftService(
+  ticketGateway: TicketGateway,
+  clock: Clock,
+  employeeId = "emp-ana-souza",
+) {
+  const { db } = await openDatabase(":memory:");
+  await createUserStore(db).upsertAll(DEMO_USERS);
+  const conversation = await createConversationStore(db).create(employeeId, clock.now());
+  const draftService = createDraftService({
+    draftStore: createDraftStore(db),
+    ticketGateway,
+    clock,
+  });
+  return { draftService, conversationId: conversation.id };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */

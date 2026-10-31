@@ -72,12 +72,13 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
       const release = () => busyConversations.delete(conversation.id);
 
       try {
+        const turnStartedAt = clock.now();
         await conversationStore.appendMessage({
           conversationId: conversation.id,
           author: "employee",
           authorId: employee.id,
           parts: [{ type: "text", text }],
-          createdAt: clock.now(),
+          createdAt: turnStartedAt,
         });
         const history = await loadHistory(conversation.id);
         // O Mastra tipa o stream de forma genérica; no formato v7 ele produz os chunks de UI do AI SDK.
@@ -86,7 +87,15 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
           agentId: NEXO_AGENT_ID,
           version: "v7",
           // O funcionário vem da sessão: as tools só consultam os chamados dele (RN09).
-          params: { messages: history, requestContext: createAgentRequestContext(employee.id) },
+          // O início do turno separa o rascunho que ele já viu do que o agent acabou de propor (R04).
+          params: {
+            messages: history,
+            requestContext: createAgentRequestContext({
+              employeeId: employee.id,
+              conversationId: conversation.id,
+              startedAt: turnStartedAt,
+            }),
+          },
           // O erro original (provedor, stack trace) fica no log; o funcionário vê uma mensagem amigável.
           onError: (error) => {
             // Pode ser o modelo ou uma tool que falhou sem tratamento: o erro registrado diz qual.
