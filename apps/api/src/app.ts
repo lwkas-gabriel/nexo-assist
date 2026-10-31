@@ -28,6 +28,8 @@ export function createApp(container: Container, { cookieSecure, webDistDirectory
   api.use("*", loadSession(container.authService));
 
   api.get("/health", (c) => c.json({ status: "ok" }));
+  // Números da tela de login (A11): públicos, agregados e sem dado de pessoa.
+  api.get("/stats", async (c) => c.json(await container.statsService.loginStats()));
   api.route(
     "/auth",
     createAuthRoutes({

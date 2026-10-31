@@ -13,6 +13,7 @@ import { createChatSessionService } from "./app/chat-session-service.ts";
 import { createDecisionService } from "./app/decision-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
 import { createDraftService } from "./app/draft-service.ts";
+import { createStatsService, type StatsService } from "./app/stats-service.ts";
 import { createHandoffService } from "./app/handoff-service.ts";
 import type { LlmConfig } from "./config.ts";
 import { createChatSessionStore } from "./db/chat-session-store.ts";
@@ -22,6 +23,7 @@ import { createDecisionStore } from "./db/decision-store.ts";
 import { createDraftStore } from "./db/draft-store.ts";
 import { createHandoffStore } from "./db/handoff-store.ts";
 import { createSessionStore } from "./db/session-store.ts";
+import { createStatsStore } from "./db/stats-store.ts";
 import { createUsageCounterStore } from "./db/usage-counter-store.ts";
 import { createUserStore } from "./db/user-store.ts";
 import { createAgentQuota, type ChatLimits } from "./app/agent-quota.ts";
@@ -66,6 +68,7 @@ export type Container = {
   authService: AuthService;
   chatService: ChatService;
   draftActions: DraftActions;
+  statsService: StatsService;
   conversationStore: ConversationStore;
   chatLimits: ChatLimits;
   loginLimiter: RateLimiter;
@@ -184,6 +187,7 @@ export async function createContainer(
     }),
     conversationStore,
     chatLimits,
+    statsService: createStatsService({ statsStore: createStatsStore(db), clock }),
     loginLimiter: createRateLimiter({
       limit: LOGINS_PER_IP_PER_MINUTE,
       windowMs: MINUTE_MS,
