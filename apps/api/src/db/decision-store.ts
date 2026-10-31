@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { DecisionTrace } from "../agent/decision-trace.ts";
 import type { Database } from "./database.ts";
 import { decisionTraces } from "./schema.ts";
@@ -22,13 +22,10 @@ export function createDecisionStore(db: Database) {
       });
     },
 
-    /** Confiança final do turno anterior a este, na mesma conversa (R39). */
-    async previousConfidence(conversationId: string, exceptMessageId: string) {
+    /** Confiança final do turno mais recente da conversa (R39). */
+    async latestConfidence(conversationId: string) {
       const row = await db.query.decisionTraces.findFirst({
-        where: and(
-          eq(decisionTraces.conversationId, conversationId),
-          ne(decisionTraces.messageId, exceptMessageId),
-        ),
+        where: eq(decisionTraces.conversationId, conversationId),
         orderBy: desc(decisionTraces.createdAt),
       });
       return row?.finalConfidence;

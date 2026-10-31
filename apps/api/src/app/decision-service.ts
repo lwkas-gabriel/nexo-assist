@@ -8,7 +8,7 @@ import {
   type DecisionTrace,
 } from "../agent/decision-trace.ts";
 import type { DecisionStore } from "../db/decision-store.ts";
-import type { HandoffService, HandoffView } from "./handoff-service.ts";
+import type { HandoffService } from "./handoff-service.ts";
 
 type DecisionServiceDependencies = {
   decisionStore: DecisionStore;
@@ -27,60 +27,79 @@ export type TurnOutcome = {
 };
 
 /**
- * Registro de decisão de cada turno (RF05) e o limiar de confiança (R39): confiança baixa leva o
- * agent a perguntar; se continuar baixa no turno seguinte, o código transfere para um analista,
- * sem depender de o agent decidir isso.
+ * Registro de decisão de cada turno (RF05) e o limiar de confiança (R39): com confiança baixa, o
+ * agent pergunta; se a mensagem seguinte também chegar com confiança baixa, o código transfere para
+ * um analista antes de o agent falar. Assim o funcionário não recebe uma pergunta que ninguém vai
+ * acompanhar, e o turno não gasta uma chamada ao modelo.
  */
 export function createDecisionService({
   decisionStore,
   handoffService,
   clock,
 }: DecisionServiceDependencies) {
-  /** Dois turnos seguidos com confiança baixa, sem o agent já ter transferido neste turno. */
-  async function shouldHandoff(outcome: TurnOutcome, trace: DecisionTrace) {
-    if (!trace.isLowConfidence) return false;
-    if (trace.steps.some((step) => step.tool === "handoff_to_analyst" && step.ok)) return false;
-    const previous = await decisionStore.previousConfidence(
-      outcome.conversationId,
-      outcome.messageId,
-    );
-    return previous !== undefined && previous < LOW_CONFIDENCE_THRESHOLD;
+  async function save(outcome: TurnOutcome, trace: DecisionTrace) {
+    const now = clock.now();
+    await decisionStore.create({
+      messageId: outcome.messageId,
+      conversationId: outcome.conversationId,
+      trace,
+      classifierTokens: outcome.classification.ok ? (outcome.classification.tokens ?? null) : null,
+      latencyMs: now.getTime() - outcome.startedAt.getTime(),
+      createdAt: now,
+    });
   }
 
   return {
-    async record(
-      outcome: TurnOutcome,
-    ): Promise<{ trace: DecisionTrace; handoff: HandoffView | null }> {
+    async record(outcome: TurnOutcome): Promise<DecisionTrace> {
       const trace = buildDecisionTrace(outcome.classification, outcome.response);
-      const now = clock.now();
-      await decisionStore.create({
-        messageId: outcome.messageId,
-        conversationId: outcome.conversationId,
-        trace,
-        classifierTokens: outcome.classification.ok
-          ? (outcome.classification.tokens ?? null)
-          : null,
-        latencyMs: now.getTime() - outcome.startedAt.getTime(),
-        createdAt: now,
-      });
+      await save(outcome, trace);
+      return trace;
+    },
 
-      if (!(await shouldHandoff(outcome, trace))) return { trace, handoff: null };
+    /**
+     * R39: segunda mensagem seguida com confiança baixa vai para um analista, sem o agent.
+     * Devolve o aviso que o funcionário recebe, ou null se o agent deve responder normalmente.
+     */
+    async escalateLowConfidence(turn: Omit<TurnOutcome, "messageId" | "response">) {
+      const { classification } = turn.classification;
+      if (classification.confidence >= LOW_CONFIDENCE_THRESHOLD) return null;
+      const previous = await decisionStore.latestConfidence(turn.conversationId);
+      if (previous === undefined || previous >= LOW_CONFIDENCE_THRESHOLD) return null;
+
+      let transfer: Awaited<ReturnType<HandoffService["transfer"]>>;
       try {
-        const handoff = await handoffService.handoff({
-          employeeId: outcome.employeeId,
-          conversationId: outcome.conversationId,
+        transfer = await handoffService.transfer({
+          employeeId: turn.employeeId,
+          conversationId: turn.conversationId,
           reason: "low_confidence",
           summary: {
-            problem: trace.understood,
-            attempted: "O agent pediu esclarecimento, mas continuou sem segurança para resolver.",
+            problem: classification.understood,
+            attempted:
+              "O agent pediu esclarecimento, mas a mensagem seguinte continuou sem deixar claro o que fazer.",
           },
         });
-        return { trace, handoff };
       } catch (error) {
-        // A conversa já saiu do agent neste turno (por exemplo, um chamado crítico confirmado).
-        if (error instanceof AppError && error.code === "CONFLICT") return { trace, handoff: null };
+        // Outra ação já tirou a conversa do agent: o turno segue como pausa.
+        if (error instanceof AppError && error.code === "CONFLICT") return null;
         throw error;
       }
+
+      const response: UIMessage = {
+        id: transfer.notice.id,
+        role: "assistant",
+        parts: [{ type: "text", text: transfer.notice.text }],
+      };
+      const trace = buildDecisionTrace(turn.classification, response, {
+        steps: [
+          { tool: "handoff_to_analyst", ok: true, outcome: "transferência feita pelo código" },
+        ],
+        rules: [
+          "R39: confiança baixa em duas mensagens seguidas → analista",
+          `A03: ${transfer.view.reason} → Suporte ${transfer.view.supportLevel}`,
+        ],
+      });
+      await save({ ...turn, messageId: transfer.notice.id, response }, trace);
+      return { notice: transfer.notice.text, handoff: transfer.view };
     },
 
     /** Registros das respostas do agent, para a tela mostrar o detalhe da decisão. */

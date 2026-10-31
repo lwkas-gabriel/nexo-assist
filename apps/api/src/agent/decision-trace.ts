@@ -95,9 +95,11 @@ const round = (value: number) => Math.round(value * 100) / 100;
 export function buildDecisionTrace(
   classification: ClassificationResult,
   response: UIMessage,
+  /** Ações que o código tomou sozinho no turno, sem o agent (ex.: transferência pelo limiar). */
+  codeActions: { steps: DecisionStep[]; rules: string[] } = { steps: [], rules: [] },
 ): DecisionTrace {
-  const steps: DecisionStep[] = [];
-  const rules: string[] = [];
+  const steps: DecisionStep[] = [...codeActions.steps];
+  const rules: string[] = [...codeActions.rules];
   const codes = new Set<SignalCode>(classification.ok ? [] : ["classifier_unavailable"]);
 
   for (const part of response.parts.filter(isToolUIPart)) {

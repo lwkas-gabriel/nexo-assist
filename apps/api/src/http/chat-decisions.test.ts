@@ -80,13 +80,23 @@ describe("limiar de confiança (R39)", () => {
     const { say, conversation } = await setup();
     await say("Tá dando alguma coisa estranha, não sei explicar");
 
-    await say("Sei lá, continua estranho");
+    const stream = await say("Sei lá, continua estranho");
 
+    // O agent nem foi chamado: o funcionário recebe só o aviso da transferência.
+    expect(stream).not.toContain("tool-");
+    expect(stream).toContain("o agent não teve segurança para resolver");
     const saved = await conversation();
     expect(saved.conversation?.mode).toBe("waiting_analyst");
-    expect(saved.messages.at(-1)?.parts[0]?.text).toContain(
-      "o agent não teve segurança para resolver",
-    );
+    expect(saved.messages.at(-1)?.metadata).toMatchObject({
+      author: "system",
+      decision: {
+        isLowConfidence: true,
+        steps: [{ tool: "handoff_to_analyst", outcome: "transferência feita pelo código" }],
+        rules: expect.arrayContaining([
+          "R39: confiança baixa em duas mensagens seguidas → analista",
+        ]) as string[],
+      },
+    });
   });
 
   it("uma resposta com confiança boa no meio zera a sequência", async () => {

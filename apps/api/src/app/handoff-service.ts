@@ -94,7 +94,8 @@ export function createHandoffService({
     }
   }
 
-  async function handoff(request: HandoffRequest) {
+  /** Transfere e devolve também a mensagem de sistema que avisou o funcionário. */
+  async function transfer(request: HandoffRequest) {
     const conversation = await conversationStore.findById(request.conversationId);
     if (!conversation || conversation.employeeId !== request.employeeId) {
       throw new AppError("NOT_FOUND", "Conversa não encontrada.");
@@ -127,7 +128,7 @@ export function createHandoffService({
       responseDueAt: handoffResponseDue(reason, ticketFacts?.priority, now),
       createdAt: now,
     });
-    await conversationStore.appendMessage({
+    const notice = await conversationStore.appendMessage({
       conversationId: conversation.id,
       author: "system",
       authorId: null,
@@ -139,11 +140,16 @@ export function createHandoffService({
       linked.status === "found"
         ? await transferTicket(request.employeeId, linked.ticket, created)
         : created;
-    return toHandoffView(row);
+    return { view: toHandoffView(row), notice: { id: notice.id, text: handoffLine(created) } };
+  }
+
+  async function handoff(request: HandoffRequest) {
+    return (await transfer(request)).view;
   }
 
   return {
     handoff,
+    transfer,
 
     /**
      * A04: caso crítico transfere direto, avisando. Chamado crítico recém-criado leva a conversa

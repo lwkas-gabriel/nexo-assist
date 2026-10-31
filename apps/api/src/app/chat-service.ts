@@ -148,6 +148,18 @@ export function createChatService({
           parts: [{ type: "text", text }],
           createdAt: turnStartedAt,
         });
+        // R39: segunda mensagem seguida sem dar para entender vai para um analista, sem o agent.
+        const escalation = await decisionService.escalateLowConfidence({
+          employeeId: employee.id,
+          conversationId: conversation.id,
+          classification,
+          startedAt: turnStartedAt,
+        });
+        if (escalation) {
+          release();
+          return systemNoticeStream(escalation.notice);
+        }
+
         const history = await loadHistory(conversation.id, toAgentHistoryMessage);
         // O Mastra tipa o stream de forma genérica; no formato v7 ele produz os chunks de UI do AI SDK.
         const agentStream = (await handleChatStream({
@@ -212,6 +224,19 @@ export function createChatService({
 }
 
 export type ChatService = ReturnType<typeof createChatService>;
+
+/** Resposta sem o agent: o aviso do sistema, no mesmo formato de stream que a tela já lê. */
+function systemNoticeStream(text: string): ReadableStream<UIMessageChunk> {
+  return createUIMessageStream({
+    execute: ({ writer }) => {
+      const id = "system-notice";
+      writer.write({ type: "start", messageMetadata: { author: "system" } });
+      writer.write({ type: "text-start", id });
+      writer.write({ type: "text-delta", id, delta: text });
+      writer.write({ type: "text-end", id });
+    },
+  });
+}
 
 const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {
   employee: "Funcionário",
