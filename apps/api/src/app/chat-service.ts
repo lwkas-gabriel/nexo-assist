@@ -28,7 +28,7 @@ import {
 } from "./chat-session-service.ts";
 import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
-import type { DraftService } from "./draft-service.ts";
+import type { DraftService, DraftView } from "./draft-service.ts";
 import type { HandoffService } from "./handoff-service.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
@@ -60,6 +60,8 @@ export type ConversationView = {
   /** RF10: o contador da sessão atual e o resumo da anterior. Nulo antes da primeira mensagem. */
   session: SessionView | null;
   messages: UIMessage[];
+  /** Estado atual dos rascunhos da conversa: o card mostra o que aconteceu depois (RF07). */
+  drafts: DraftView[];
 };
 
 /**
@@ -118,12 +120,13 @@ export function createChatService({
     /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      if (!conversation) return { conversation: null, session: null, messages: [] };
+      if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
       const messages = await loadHistory(conversation.id, toUIMessage);
       const decisions = await decisionService.forMessages(messages.map((message) => message.id));
       return {
         conversation: { id: conversation.id, mode: conversation.mode },
         session: await chatSessionService.view(conversation),
+        drafts: await draftService.listForConversation(employee.id, conversation.id),
         messages: messages.map((message) => {
           const decision = decisions.get(message.id);
           return decision
@@ -414,7 +417,7 @@ function toUIMessage(row: MessageRow): UIMessage {
   return {
     id: row.id,
     role: row.author === "employee" ? "user" : "assistant",
-    metadata: { author: row.author },
+    metadata: { author: row.author, createdAt: row.createdAt.toISOString() },
     parts: JSON.parse(row.parts) as UIMessage["parts"],
   };
 }

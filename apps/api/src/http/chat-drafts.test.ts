@@ -61,6 +61,25 @@ describe("rascunho pelo chat e pelos botões do card (RN04)", () => {
     );
   });
 
+  it("RF07: a conversa traz o estado atual de cada rascunho, para o card", async () => {
+    const { ana, say, request } = await setup();
+    await say(ana, OPEN_TICKET_TEXT);
+    await request(ana, "POST", "/drafts/D-1/confirm");
+
+    const response = await request(ana, "GET", "");
+
+    expect(await response.json()).toMatchObject({
+      drafts: [
+        {
+          draftId: "D-1",
+          status: "confirmed",
+          ticketNumber: expect.stringMatching(/^INC-\d{5}$/) as string,
+          fields: { category: "other", affected: "just_me", urgency: "blocked" },
+        },
+      ],
+    });
+  });
+
   it("R04: confirmar digitando, na mensagem seguinte, cria o chamado", async () => {
     const { ana, say, fake } = await setup();
     await say(ana, OPEN_TICKET_TEXT);

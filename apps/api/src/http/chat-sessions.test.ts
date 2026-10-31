@@ -73,6 +73,7 @@ describe("sessões de atendimento (RF10, RN14)", () => {
       agentMessages: 2,
       limit: 30,
       isAtLimit: false,
+      startedAt: "2026-10-27T12:01:00.000Z",
       previousSummary: null,
     });
   });

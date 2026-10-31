@@ -288,7 +288,16 @@ export function createDraftService({ draftStore, ticketGateway, clock }: DraftSe
         .join("; ");
     },
 
-    /** O rascunho como o card mostra (o card visual chega na T19). */
+    /** Estado atual de todos os rascunhos da conversa, para cada card mostrar o seu (RF07). */
+    async listForConversation(employeeId: string, conversationId: string) {
+      const drafts = await draftStore.listByConversation(conversationId);
+      const now = clock.now();
+      return drafts
+        .filter((draft) => draft.employeeId === employeeId)
+        .map((draft) => toDraftView(draft, now));
+    },
+
+    /** O rascunho como o card mostra. */
     async view(request: DraftRef) {
       return toDraftView(await ownDraft(request), clock.now());
     },
@@ -379,7 +388,7 @@ export function toDraftView(draft: Draft, now: Date) {
     return { ...base, update: { message: draft.content.message } };
   }
 
-  const { title, description, type, category, affected, priority } = draft.content;
+  const { title, description, type, category, affected, urgency, priority } = draft.content;
   const deadlineFrom = draft.status === "confirmed" ? draft.updatedAt : now;
   return {
     ...base,
@@ -394,6 +403,8 @@ export function toDraftView(draft: Draft, now: Date) {
       slaRule: SLA_LABELS[priority],
       firstResponseBy: formatBrasiliaDateTime(computeDeadline(priority, deadlineFrom)),
     },
+    /** Os campos como códigos, para o card de edição (R16) preencher o formulário. */
+    fields: { title, description, type, category, affected, urgency },
   };
 }
 

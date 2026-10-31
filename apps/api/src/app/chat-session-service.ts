@@ -168,6 +168,8 @@ export function createChatSessionService({
           agentMessages: 0,
           limit: SESSION_MESSAGE_LIMIT,
           isAtLimit: false,
+          // A próxima mensagem é que abre a sessão nova; até lá, ela não tem início.
+          startedAt: null,
           previousSummary: await summarize(active),
         };
       }
@@ -184,6 +186,8 @@ export function toSessionView(session: ChatSessionRow, previousSummary: string |
     agentMessages: session.agentMessages,
     limit: SESSION_MESSAGE_LIMIT,
     isAtLimit: isSessionAtLimit(session),
+    /** Onde a tela põe o resumo da sessão anterior, entre as mensagens. */
+    startedAt: session.startedAt.toISOString() as string | null,
     previousSummary,
   };
 }

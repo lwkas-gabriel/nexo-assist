@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { MAX_UPDATE_MESSAGE_CHARS } from "@nexo/shared/contracts";
 import { URGENCY_LEVELS, ticketDraftSchema } from "@nexo/shared/domain";
-import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./database.ts";
 import { drafts, type DraftKind, type DraftRow, type DraftStatus } from "./schema.ts";
@@ -98,6 +98,14 @@ export function createDraftStore(db: Database) {
     async find(number: number): Promise<Draft | undefined> {
       const row = await db.query.drafts.findFirst({ where: eq(drafts.number, number) });
       return row ? toDraft(row) : undefined;
+    },
+
+    async listByConversation(conversationId: string): Promise<Draft[]> {
+      const rows = await db.query.drafts.findMany({
+        where: eq(drafts.conversationId, conversationId),
+        orderBy: asc(drafts.number),
+      });
+      return rows.map(toDraft);
     },
 
     /** Rascunhos ainda pendentes da conversa (no máximo um, pela regra abaixo). */

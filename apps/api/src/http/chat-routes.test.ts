@@ -61,7 +61,12 @@ describe("chat do funcionário", () => {
   it("antes da primeira mensagem, não há conversa", async () => {
     const { conversation } = await loggedInAsAna();
 
-    expect(await conversation()).toEqual({ conversation: null, session: null, messages: [] });
+    expect(await conversation()).toEqual({
+      conversation: null,
+      session: null,
+      messages: [],
+      drafts: [],
+    });
   });
 
   it("responde em streaming e grava a mensagem e a resposta (com as ações do agent)", async () => {
