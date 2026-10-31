@@ -643,3 +643,14 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - **"Hardware › Notebook" do protótipo fica "Hardware":** subcategoria é opcional (A09) e o seed não tem.
 - **Validado com o Gemini real** (duas mensagens): com um chamado, ele consultou direto e resumiu o prazo sem repetir o card; com três, disse quantos eram e perguntou qual, sem a lista linha por linha.
 - **Conferência visual:** lista e card em 1440 px e no celular; ajustados os cantos da lista (o raio "2xl" não existe nos tokens), a fonte do número e a cor do status.
+
+### 64. Revisão adversarial da T21 e correções
+- **Revisão independente** (sub-agente novo, sem o contexto da implementação, com esforço alto): 10 achados, nenhum crítico. O revisor confirmou os dois primeiros com scripts temporários contra as rotas, com o modelo falso. Todos tratados.
+- **Importantes:**
+  - **O resumo da transferência afirmava "sem atualização dentro do prazo" sem conferir.** Com o número de um chamado de outra pessoa, o analista lia esse número e um vencimento inexistente; com um chamado em dia, a frase falsa ia para o histórico do chamado. Agora o número é normalizado, o chamado é conferido com o funcionário (de outra pessoa ou inexistente: 404) e o resumo só fala do prazo quando ele venceu de fato.
+  - **"Não, obrigado" aceitava qualquer número**, e o assistente afirmava que "o INC-99999 continua com a equipe de TI". Agora só vale para a oferta da resposta mais recente (o chamado aberto e vencido que ela mostrou); fora disso, 409 sem gravar nada.
+  - **"Não, obrigado" decidia com a conversa lida antes da trava** (a mesma corrida que a T19b já tinha corrigido na seleção). Agora relê dentro da trava.
+  - **Durante o streaming, respostas antigas voltavam a mostrar a oferta,** com os botões desabilitados; a condição incluía "o agent está respondendo". Agora a oferta fica só na resposta mais recente.
+  - **Lista e card no mesmo turno** mostravam o seletor ativo abaixo da resposta já dada. Com o chamado consultado, o seletor não aparece.
+- **Menores, todos tratados:** "Adicionar informação" no limite da sessão (sem campo de mensagem, não fazia nada); erro antigo aparecendo numa resposta nova; o campo de mensagem não esperava a ação do chamado; "Não, obrigado" sem nome no detalhe da decisão; cor de "prazo vencido" diferente do FRONTEND.md sem registro (o desvio, que segue o protótipo, foi registrado; o `ticketTone` sem uso saiu).
+- **Lição:** o "Não, obrigado" repetiu um padrão que a resposta rápida (T19b) já tinha resolvido: o servidor aceitar o que o cliente diz que foi oferecido. Toda ação estruturada que responde a uma oferta precisa conferir a oferta gravada, não o pedido.
