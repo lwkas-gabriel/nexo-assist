@@ -15,9 +15,10 @@
 - **Raios:** 6, 8, 12, 16 e 999 (pílulas). Balões de chat com um canto de 4 px (lado de quem fala).
 - **Sombras:** 3 níveis (`sm`, `card`, `cta`) copiados do arquivo.
 - **Ícones:** Lucide (`lucide-react`): bot, headset, check, check-check, chevron-right, search, send-horizontal, log-out, user-round, mail, lock, key-round, rotate-ccw-key, message-square, arrow-right-left, hand, eye, x, ellipsis-vertical.
+- **Implementação (T17):** os valores vêm do próprio `nexo.pen` (variáveis do arquivo) e viram o tema do Tailwind 4 em `apps/web/src/styles/tokens.css`. Os tons completos são `success #00BD6C` (suave `#00BD6C14`, texto `#00804A`), `warning #F5A500` (`#F5A50018`, `#946300`) e `danger #EE343B` (`#EE343B12`, `#C4161D`). As sombras: `sm` `0 1px 2px #1B24310D`, `card` com `0 6px 18px #1B24310A` a mais e `cta` `0 1px 2px #0062C433, 0 6px 16px #0062C426`.
 - **Layout:** desktop 1440 × 900. Chat: sidebar + área principal com mensagens em coluna central (padding lateral de 200 px). Console: rail 64 + lista 380 + conversa (flex) + painel de chamados 340.
 
-### 10.2 Mapa de status → visual (um único arquivo `statusStyles.ts`)
+### 10.2 Mapa de status → visual (um único arquivo, `apps/web/src/ui/status-styles.ts`)
 | Status / rótulo | Cor |
 |---|---|
 | Aguardando analista, Aguardando atendente, Aguardando confirmação, Agent pediu ajuda · confiança X%, "há N dias" (atrasado) | warning |

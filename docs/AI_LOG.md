@@ -436,3 +436,19 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   8. Um IPv6 trocando de endereço dentro da própria rede escapava do limite por IP; agora conta pela rede /64. Fica para a T29 confirmar, no Railway, que o proxy põe o IP real no fim do `X-Forwarded-For`.
 - **Lição:** "maxRetries: 1" parecia autoexplicativo, e o comentário do código afirmava o efeito sem prova. Só um teste que conta as chamadas mostrou o real. O mesmo vale para a outra decisão, "o teto diário recusa antes de gastar": o contador existia, mas media o dia errado.
 
+---
+
+## T17: design tokens e componentes base (31/10/2026)
+
+### 52. T17: os tokens saem do arquivo do protótipo, não de uma cópia
+- **IA gerou:**
+  - o tema do Tailwind 4 com os tokens do protótipo. A IA leu as variáveis direto do `nexo.pen` (é um JSON) e descobriu que o FRONTEND.md não tinha os valores de sucesso, aviso e perigo nem as sombras completas. Os valores do tema são os do arquivo;
+  - as fontes locais via `@fontsource`, sem CDN externo, e os ícones Lucide;
+  - um mapa único de status para cor (10.2);
+  - os componentes base de `ui/`, com acessibilidade embutida: rótulo ligado ao campo, erro anunciado, nome obrigatório no botão só com ícone e foco visível;
+  - o `SidePanel`, que é coluna no desktop, gaveta modal no tablet e folha de baixo no celular (10.6). Fecha com Esc, foca o botão de fechar e devolve o foco ao sair.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - Tailwind 4 com o tema no próprio CSS (`@theme`), em vez de um arquivo de configuração em JavaScript: os tokens ficam num lugar só, legíveis como CSS.
+  - As telas do esqueleto (login e chat) não foram refeitas agora. Um CSS provisório passou a usar os tokens, e as telas são refeitas na T18 e na T19, uma tela por tarefa, como manda o plano.
+  - Os testes de componente rodam num projeto do Vitest próprio, no jsdom. Como o jsdom não implementa `matchMedia`, a largura da janela é simulada para testar as três formas do painel.
+

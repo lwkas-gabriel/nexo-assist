@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T16 concluídas; próxima T17 (design tokens e componentes base). Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T17 concluídas; próxima T18 (tela de login). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -156,7 +156,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T16 Rate limit e teto de custo (RT10, RT13, A13) — **concluída**. Além dos limites que já existiam (por funcionário, tetos globais calibrados pela cota, login por IP, mensagens ao analista e botões), entrou o limite de 60 mensagens ao agent por IP por hora (A13: qualquer senha entra, então uma pessoa poderia usar todas as contas). Cada turno passou a gravar os tokens do agent, além dos do classificador, e o comando `usage:report` resume custo e latência por turno e por conversa. Medição real com o Gemini: cerca de 10,7 mil tokens por turno, 32 mil por conversa, latência p50 de 3,8 s (AI_LOG 50). Revisão adversarial independente: 8 achados, todos tratados (AI_LOG 51); entre eles, o Mastra fazia 6 tentativas por chamada ao modelo (agora 2), e os tetos diários passaram para o banco, no dia da cota do Gemini, com um teto por IP. **Decisão:** sem teto de tokens; no plano gratuito o limite que importa é o de requisições, já coberto pelos tetos globais.
 
 **Fase 3 — Interface**
-- [ ] T17 Design tokens (10.1), `statusStyles` (10.2), componentes base, `SidePanel` e breakpoints (10.6) (RT04, A18)
+- [x] T17 Design tokens (10.1), `statusStyles` (10.2), componentes base, `SidePanel` e breakpoints (10.6) (RT04, A18) — **concluída**. Tailwind 4 com os tokens extraídos do próprio `nexo.pen` como tema (`apps/web/src/styles/tokens.css`), incluindo os tons de sucesso, aviso e perigo e as sombras exatas, que o FRONTEND.md não listava; fontes locais via `@fontsource`. Componentes base em `apps/web/src/ui/`, mapa único de status (`status-styles.ts`) e `SidePanel` responsivo, com testes de componente no jsdom (AI_LOG 52). As telas do esqueleto usam os tokens por um CSS provisório (`legacy.css`) até a T18 e a T19.
 - [ ] T18 Tela 1 Login (RF01, A11)
 - [ ] T19 Tela 2 chat: streaming, chips progressivos, opções rápidas (teclas 1–4), DraftCard com Tipo e estados criado/cancelado, Ctrl/⌘+Enter (RF03, RF04, RF06, RF07, R26, R33–R35)
 - [ ] T19b Ações estruturadas: handlers determinísticos para cliques (R38, 11.5)
