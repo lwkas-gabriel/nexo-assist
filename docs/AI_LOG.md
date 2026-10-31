@@ -366,3 +366,21 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
   - O teste de que o agent pergunta quando a confiança é baixa depende do prompt, e o modelo de teste não verifica isso. Foi conferido com o Gemini real (item 46) e entra na avaliação roteirizada da T27.
 - **Lição:** o limiar parecia simples, mas tinha três problemas de desenho: a medida, o período e a corrida com outras ações. Nenhum aparecia nos testes do caminho feliz.
 
+---
+
+## T15: sessões e limite de 30 mensagens (30/10/2026)
+
+### 48. T15: a sessão é um trecho da conversa, não uma conversa nova
+- **IA gerou:**
+  - a tabela `chat_sessions` dentro da conversa;
+  - a contagem das mensagens ao agent num UPDATE condicional ao limite, para duas mensagens simultâneas não passarem juntas da 30ª (RN14). Mensagens para o analista não contam (R42);
+  - o fim por 8 h de inatividade, que não vale com a conversa com um analista (R41);
+  - o "Nova sessão" por rota própria, e o contador e o resumo da sessão anterior entregues à tela (RF10);
+  - um código de erro próprio (`SESSION_LIMIT`), para a tela distinguir o limite da sessão do limite de uso.
+- **Decisões tomadas pela IA, sem consultar o usuário:**
+  - O resumo da sessão é **montado pelo código**, com os assuntos que o classificador entendeu e as linhas de sistema (rascunhos confirmados, transferências). Ele não usa o modelo: não gasta cota, não inventa e pode ser testado.
+  - O agent vê só a sessão atual, para o custo por turno não crescer com a conversa, e recebe o resumo da anterior no contexto de sistema. A tela continua mostrando o histórico inteiro (RF11).
+- **Erros pegos pela IA:**
+  - Ao criar o repositório de sessões, a IA sobrescreveu o `session-store.ts` existente, o das sessões de login, porque usou o mesmo nome. Percebeu na hora, restaurou o original do git e renomeou o novo para `chat-session-store.ts`.
+  - O teste "o rascunho pendente continua valendo na sessão nova" mostrou um buraco: o agent da sessão nova não tinha como saber que existia um rascunho pendente, porque a mensagem que o mostrou ficou na sessão anterior. O contexto de sistema passou a listar os rascunhos pendentes (R03). Validado com o Gemini real: numa sessão nova, "pode criar aquele chamado" confirmou o D-8 certo.
+
