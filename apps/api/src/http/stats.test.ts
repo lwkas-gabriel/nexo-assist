@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createFakeTicketGateway, createTestApp, createTestContainer } from "../test-support.ts";
 
 type Stats = {
-  firstResponseSeconds: number | null;
-  resolvedWithoutQueuePercent: number | null;
-  analystsOnline: number;
+  averageReplySeconds: number | null;
+  answeredWithoutAnalystPercent: number | null;
+  analystsSignedIn: number;
 };
 
 async function setup() {
@@ -33,9 +33,9 @@ describe("números da tela de login (A11)", () => {
     const { stats } = await setup();
 
     expect(await stats()).toEqual({
-      firstResponseSeconds: null,
-      resolvedWithoutQueuePercent: null,
-      analystsOnline: 0,
+      averageReplySeconds: null,
+      answeredWithoutAnalystPercent: null,
+      analystsSignedIn: 0,
     });
   });
 
@@ -46,13 +46,12 @@ describe("números da tela de login (A11)", () => {
     await login("rafael.lima@nexo.com.br");
     await sayAs(ana, "Qual o horário do service desk?");
     await sayAs(bruno, "Quero falar com um analista");
-    // O cache de 30 s não esconde os números novos depois de passar.
     advanceMinutes(1);
 
     expect(await stats()).toEqual({
-      firstResponseSeconds: 0,
-      resolvedWithoutQueuePercent: 50,
-      analystsOnline: 1,
+      averageReplySeconds: 0,
+      answeredWithoutAnalystPercent: 50,
+      analystsSignedIn: 1,
     });
   });
 });
