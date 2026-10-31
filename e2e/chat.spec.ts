@@ -2,13 +2,14 @@ import { expect, test } from "@playwright/test";
 import { loginAs } from "./support/login.ts";
 
 /**
- * Cada teste usa um funcionário diferente: as conversas ficam salvas no servidor,
- * e testes rodando em paralelo não podem se misturar.
+ * Cada teste que envia mensagem usa um funcionário só dele: as conversas ficam salvas no servidor
+ * e o agent atende um turno por vez em cada conversa (R06), então testes em paralelo não podem
+ * dividir a mesma conversa.
  */
 test("o funcionário tira uma dúvida e vê o que o agent fez", async ({ page }, testInfo) => {
   await loginAs(
     page,
-    testInfo.project.name === "mobile" ? "bruno.tavares@nexo.com.br" : "carla.mendes@nexo.com.br",
+    testInfo.project.name === "mobile" ? "fabio.nunes@nexo.com.br" : "carla.mendes@nexo.com.br",
   );
 
   await page.getByLabel("Mensagem para o Nexo").fill("Qual o horário do service desk?");

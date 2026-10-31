@@ -1,6 +1,8 @@
 /** Como cada ação do agent aparece para o funcionário, no estilo do protótipo ("consultou seus chamados"). */
 const TOOL_ACTION_LABELS: Record<string, string> = {
   search_knowledge_base: "buscou na central de ajuda",
+  list_my_tickets: "consultou seus chamados",
+  get_ticket: "consultou o chamado",
 };
 
 const UNKNOWN_ACTION_LABEL = "executou uma ação";

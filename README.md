@@ -78,12 +78,12 @@ O `pnpm db:seed` recria os chamados de exemplo (Anexo B) com datas relativas ao 
 
 Qualquer senha funciona (requisito do desafio). A própria tela de login lista as contas:
 
-| E-mail                                                                                                        | Quem é                                                           |
-| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `ana.souza@nexo.com.br`                                                                                       | Ana Souza, funcionária (Financeiro): a dos chamados do protótipo |
-| `bruno.tavares@nexo.com.br`, `carla.mendes@nexo.com.br`, `diego.ramos@nexo.com.br`, `elisa.prado@nexo.com.br` | Outros funcionários                                              |
-| `rafael.lima@nexo.com.br`                                                                                     | Rafael Lima, analista (Suporte N2)                               |
-| `juliana.costa@nexo.com.br`                                                                                   | Juliana Costa, analista (Suporte N1)                             |
+| E-mail                                                                                                                                                                 | Quem é                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ana.souza@nexo.com.br`                                                                                                                                                | Ana Souza, funcionária (Financeiro): a dos chamados do protótipo |
+| `bruno.tavares@nexo.com.br`, `carla.mendes@nexo.com.br`, `diego.ramos@nexo.com.br`, `elisa.prado@nexo.com.br`, `fabio.nunes@nexo.com.br`, `gabriela.rocha@nexo.com.br` | Outros funcionários                                              |
+| `rafael.lima@nexo.com.br`                                                                                                                                              | Rafael Lima, analista (Suporte N2)                               |
+| `juliana.costa@nexo.com.br`                                                                                                                                            | Juliana Costa, analista (Suporte N1)                             |
 
 As conversas ficam salvas no banco: dá para sair, voltar outro dia e continuar de onde parou.
 
