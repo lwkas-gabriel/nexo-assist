@@ -32,13 +32,15 @@
 **Console (T23), seguindo o protótipo:** "Agent atendendo" usa success, como no `nexo.pen` (a tabela dizia primary/neutro); o topo da conversa diz "Aguardando atendente" em warning, e a lista, "Transferida · INC-x" ou "contato em N min" em danger. "Resolvida pelo agent" não aparece: o sistema não tem esse estado (uma conversa resolvida continua com o agent). O item selecionado na lista tem contorno, não fundo `desk`, e as etiquetas coloridas sobre `desk` ganham fundo `paper` próprio (regra do 10.7).
 
 ### 10.3 Rotas e telas
-| Rota | Tela | Papel |
+> **Tabela substituída na T25 pela navegação por hash ([ADR-0011](decisions/0011-navegacao-por-hash.md)):** não há roteador nem as rotas `/atendimento`, `/perfil` e `/console/:conversaId`. A tabela fica como o desenho original.
+
+| Rota (desenho original) | Tela | Papel |
 |---|---|---|
 | `/login` | Tela 1 | público |
 | `/atendimento` | Telas 2 e 3 (mesma tela, estados diferentes) | funcionário |
 | `/perfil` | Meu perfil | funcionário |
 | `/console` e `/console/:conversaId` | Telas 4 e 5 | analista |
-Guardas de rota por papel; sessão expirada → `/login` com aviso. **T25:** sem roteador; o funcionário navega por hash (`#/` e `#/perfil`), o analista tem uma página só (o console), e o papel decide a tela depois do login.
+Guardas de rota por papel; sessão expirada → `/login` com aviso. **T25:** sem roteador; o funcionário navega por hash (`#/` e `#/perfil`), o analista tem uma página só (o console), e o papel decide a tela depois do login. Ao sair, o hash é limpo. Com o perfil aberto, a conversa continua montada e escondida (ADR-0011).
 
 ### 10.4 Componentes (reutilizáveis entre chat e console)
 - **Base (`ui/`):** Button (primary/secondary/danger-soft/ghost), Pill/Badge, Avatar (iniciais), Card, IconButton, TextField, Checkbox, Skeleton, Toast, EmptyState, Kbd (atalho).

@@ -65,7 +65,7 @@ Objetivo: achar o que quebraria, causaria retrabalho ou contradiz o próprio pla
 | R33 | Atalho ⌘↵ não existe no Windows | **[corrigir]** Ctrl+Enter no Windows/Linux, ⌘+Enter no Mac; o Kbd mostra conforme o SO |
 | R34 | Opções numeradas sugerem atalho de teclado | **[corrigir]** Teclas 1–4 quando o campo de texto está vazio |
 | R35 | "resposta até 13:43" é calculado no rascunho; se a confirmação vier 20 min depois, o prazo muda | **[corrigir]** Prazo recalculado ao confirmar; se mudar, o card criado mostra o valor novo |
-| R36 | "Disponível" do analista e "contato em 25 min" | **[corrigir]** Disponível é só visual, salvo no perfil (A21); a contagem regressiva é recalculada no cliente a cada minuto |
+| R36 | "Disponível" do analista e "contato em 25 min" | **[corrigir]** Disponível é só visual, salvo no navegador (A21; a T25 manteve assim, o perfil é do funcionário, AI_LOG 71); a contagem regressiva é recalculada no cliente a cada minuto |
 | R37 | O mock não mostra contas de demonstração; o avaliador não sabe com que e-mail entrar | **[corrigir]** Bloco discreto "Contas de demonstração" abaixo do formulário (A22), também listadas no README |
 
 ### Rodada 3: backend × requisitos não funcionais
