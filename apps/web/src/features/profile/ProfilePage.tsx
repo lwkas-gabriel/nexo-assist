@@ -14,7 +14,7 @@ export function ProfilePage({ user }: { user: CurrentUser }) {
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-8 md:px-10 md:py-12">
-      <div className="flex max-w-[600px] flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-2xl font-bold text-ink">Meu perfil</h2>
           <p className="text-[14.5px] text-ink-3">Seus dados de acesso ao service desk de TI.</p>
@@ -42,18 +42,13 @@ export function ProfilePage({ user }: { user: CurrentUser }) {
               </h3>
               <p className="text-[13.5px] text-ink-3">Definida pela TI</p>
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => setShowResetNotice(true)}
-              aria-expanded={showResetNotice}
-              aria-controls="profile-reset-notice"
-            >
+            <Button variant="secondary" onClick={() => setShowResetNotice(true)}>
               <RotateCcwKey aria-hidden size={15} />
               Redefinir senha
             </Button>
           </div>
+          {/* A região é sempre visível; o leitor de tela ouve a troca do texto (não é um disclosure). */}
           <div
-            id="profile-reset-notice"
             role="status"
             className="flex items-start gap-2 bg-desk px-6 py-3 text-[13px] text-ink-3"
           >

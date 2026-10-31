@@ -20,6 +20,14 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener("hashchange", onChange);
 }
 
+/**
+ * Tira o hash da URL sem criar entrada no histórico. Ao sair, a próxima pessoa a entrar não pode
+ * cair direto no perfil de quem saiu (nem o analista ficar com "#/perfil" na URL do console).
+ */
+export function clearPageHash() {
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
 export function useHashPage(): EmployeePage {
   return useSyncExternalStore(subscribe, () => pageFromHash(window.location.hash));
 }

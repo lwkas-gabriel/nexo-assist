@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import { ProfilePage } from "./ProfilePage.tsx";
 
@@ -24,13 +24,16 @@ describe("Meu perfil (RF24, A01)", () => {
   });
 
   it("A01: Redefinir senha avisa que é uma simulação, sem enviar nada", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
     render(<ProfilePage user={ANA} />);
+    expect(screen.getByRole("status").textContent).toContain("O link de redefinição vai para");
 
     await userEvent.click(screen.getByRole("button", { name: "Redefinir senha" }));
 
+    // A região viva é a mesma de antes: o leitor de tela ouve a troca do texto.
     expect(screen.getByRole("status").textContent).toContain("qualquer senha entra");
-    expect(
-      screen.getByRole("button", { name: "Redefinir senha" }).getAttribute("aria-expanded"),
-    ).toBe("true");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

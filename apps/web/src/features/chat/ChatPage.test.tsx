@@ -2,7 +2,7 @@ import type { ConversationMode } from "@nexo/shared/domain";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import type { ConversationView } from "./chat-api.ts";
@@ -73,6 +73,10 @@ function renderChat() {
 describe("tela do chat (tela 2)", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+  });
+  // A página vem do hash da URL, que o jsdom compartilha entre os testes do arquivo.
+  afterEach(() => {
+    window.location.hash = "";
   });
 
   it("RN14: no limite, falar com um analista transfere e devolve o campo de mensagem", async () => {
@@ -701,20 +705,131 @@ describe("tela do chat (tela 2)", () => {
 
   describe("navegação para Meu perfil (T25, 10.3)", () => {
     it("o link da navegação abre o perfil e marca a página atual; voltar reabre o chat", async () => {
-      window.location.hash = "";
       stubApi(conversationAt("agent", false));
       renderChat();
       await screen.findByLabelText("Mensagem para o Nexo");
+      // Na carga inicial o foco não é roubado.
+      expect(document.activeElement).toBe(document.body);
 
       await userEvent.click(screen.getAllByRole("link", { name: "Meu perfil" })[0] as HTMLElement);
 
-      expect(await screen.findByRole("heading", { level: 1, name: "Meu perfil" })).toBeDefined();
+      const title = await screen.findByRole("heading", { level: 1, name: "Meu perfil" });
       expect(
         screen.getAllByRole("link", { name: "Meu perfil" })[0]?.getAttribute("aria-current"),
       ).toBe("page");
+      // A troca de página leva o foco ao título novo (anuncia a página e parte dali).
+      expect(document.activeElement).toBe(title);
+      // No perfil, a conversa e a pílula de status não aparecem (protótipo: só o breadcrumb).
+      expect(screen.queryByRole("textbox", { name: "Mensagem para o Nexo" })).toBeNull();
+      expect(screen.queryByText("Assistente online")).toBeNull();
+
       await userEvent.click(screen.getAllByRole("link", { name: "Atendimento" })[0] as HTMLElement);
-      expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
-      window.location.hash = "";
+
+      expect(await screen.findByRole("textbox", { name: "Mensagem para o Nexo" })).toBeDefined();
+      expect(screen.getByText("Assistente online")).toBeDefined();
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { level: 1, name: "Atendimento" }),
+      );
+    });
+
+    it("no celular, o link do topo troca de ícone e de rótulo, e o título acompanha", async () => {
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      await screen.findByLabelText("Mensagem para o Nexo");
+      // Os links da lateral vêm antes no documento; o do topo é o último.
+      const topLink = () =>
+        screen.getAllByRole("link", { name: /Meu perfil|Voltar ao atendimento/ }).at(-1);
+      expect(topLink()?.getAttribute("aria-label")).toBe("Meu perfil");
+      expect(topLink()?.querySelector(".lucide-user-round")).not.toBeNull();
+
+      await userEvent.click(topLink() as HTMLElement);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Meu perfil" })).toBeDefined();
+      expect(topLink()?.getAttribute("aria-label")).toBe("Voltar ao atendimento");
+      expect(topLink()?.getAttribute("href")).toBe("#/");
+      expect(topLink()?.querySelector(".lucide-message-square")).not.toBeNull();
+      expect(screen.queryByRole("heading", { level: 1, name: "Atendimento" })).toBeNull();
+    });
+
+    it("o texto digitado no campo sobrevive a Atendimento, Meu perfil e Atendimento", async () => {
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "minha VPN caiu");
+
+      await userEvent.click(screen.getAllByRole("link", { name: "Meu perfil" })[0] as HTMLElement);
+      await screen.findByRole("heading", { level: 1, name: "Meu perfil" });
+      await userEvent.click(screen.getAllByRole("link", { name: "Atendimento" })[0] as HTMLElement);
+
+      expect(await screen.findByRole("textbox", { name: "Mensagem para o Nexo" })).toHaveProperty(
+        "value",
+        "minha VPN caiu",
+      );
+    });
+
+    it("trocar para o perfil no meio de um envio não aborta a requisição; a conversa segue", async () => {
+      const encoder = new TextEncoder();
+      let current = conversationAt("agent", false);
+      let signal: AbortSignal | null | undefined;
+      let sentId = "";
+      let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+      const stream = new ReadableStream<Uint8Array>({
+        start: (controller) => void (streamController = controller),
+      });
+      const sse = (chunk: unknown) => encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`);
+      vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+        if (init?.method === "POST" && input === "/api/chat/messages") {
+          signal = init.signal;
+          sentId = (JSON.parse(init.body as string) as { id: string }).id;
+          return Promise.resolve(
+            new Response(stream, {
+              headers: {
+                "content-type": "text/event-stream",
+                "x-vercel-ai-ui-message-stream": "v1",
+              },
+            }),
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify(current), { status: 200 }));
+      });
+      renderChat();
+      await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "VPN caiu{Enter}");
+      await waitFor(() => expect(signal).toBeDefined());
+      streamController?.enqueue(sse({ type: "start" }));
+      streamController?.enqueue(sse({ type: "text-start", id: "t1" }));
+      streamController?.enqueue(sse({ type: "text-delta", id: "t1", delta: "Vou olhar a VPN" }));
+
+      await userEvent.click(screen.getAllByRole("link", { name: "Meu perfil" })[0] as HTMLElement);
+      await screen.findByRole("heading", { level: 1, name: "Meu perfil" });
+
+      // Sem o abort, o servidor não grava a resposta parcial como final (RN14).
+      expect(signal?.aborted).toBe(false);
+
+      current = {
+        ...current,
+        messages: [
+          {
+            id: sentId,
+            role: "user",
+            metadata: { author: "employee" },
+            parts: [{ type: "text", text: "VPN caiu" }],
+          },
+          {
+            id: "agent-1",
+            role: "assistant",
+            metadata: { author: "agent" },
+            parts: [{ type: "text", text: "Vou olhar a VPN agora." }],
+          },
+        ],
+      };
+      streamController?.enqueue(sse({ type: "text-delta", id: "t1", delta: " agora." }));
+      streamController?.enqueue(sse({ type: "text-end", id: "t1" }));
+      streamController?.enqueue(sse({ type: "finish" }));
+      streamController?.close();
+      await userEvent.click(screen.getAllByRole("link", { name: "Atendimento" })[0] as HTMLElement);
+
+      expect(await screen.findByText("Vou olhar a VPN agora.")).toBeDefined();
+      expect(screen.getAllByText("VPN caiu")).toHaveLength(1);
+      expect(signal?.aborted).toBe(false);
     });
   });
 });

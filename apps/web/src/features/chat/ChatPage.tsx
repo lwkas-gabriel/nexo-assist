@@ -89,36 +89,43 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       isLoggingOut={isLoggingOut}
       onLogout={onLogout}
     >
-      {page === "profile" ? (
-        <ProfilePage user={user} />
-      ) : conversation.isPending ? (
-        <div
-          aria-busy="true"
-          aria-label="Carregando sua conversa"
-          className="flex flex-1 flex-col gap-4 px-4 py-7 md:px-12 xl:px-[200px]"
-        >
-          <Skeleton className="h-10 w-2/3 self-end" />
-          <Skeleton className="h-24 w-3/4" />
-          <Skeleton className="h-10 w-1/2 self-end" />
-        </div>
-      ) : conversation.data === undefined ? (
-        <div
-          role="alert"
-          className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
-        >
-          <p className="text-[14.5px] text-ink-2">{conversation.error?.message}</p>
-          <Button variant="secondary" onClick={() => void conversation.refetch()}>
-            Tentar novamente
-          </Button>
-        </div>
-      ) : (
-        <ChatConversation
-          user={user}
-          view={conversation.data}
-          // Uma consulta do polling falhou: a conversa e o que está sendo digitado ficam na tela.
-          isOutOfSync={conversation.isError}
-        />
-      )}
+      {/*
+        A conversa fica montada com o perfil aberto, só escondida (`hidden` tira da tela, do foco e
+        da árvore de acessibilidade). Se saísse da árvore, o `useChat` abortaria o envio em curso e
+        o servidor gravaria a resposta parcial do agent como final, contando no limite (RN14); o
+        rascunho do campo, a edição do card e o "Tentar novamente" também se perderiam.
+      */}
+      <div hidden={page === "profile"} className="flex min-h-0 flex-1 flex-col">
+        {conversation.isPending ? (
+          <div
+            aria-busy="true"
+            aria-label="Carregando sua conversa"
+            className="flex flex-1 flex-col gap-4 px-4 py-7 md:px-12 xl:px-[200px]"
+          >
+            <Skeleton className="h-10 w-2/3 self-end" />
+            <Skeleton className="h-24 w-3/4" />
+            <Skeleton className="h-10 w-1/2 self-end" />
+          </div>
+        ) : conversation.data === undefined ? (
+          <div
+            role="alert"
+            className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
+          >
+            <p className="text-[14.5px] text-ink-2">{conversation.error?.message}</p>
+            <Button variant="secondary" onClick={() => void conversation.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        ) : (
+          <ChatConversation
+            user={user}
+            view={conversation.data}
+            // Uma consulta do polling falhou: a conversa e o que está sendo digitado ficam na tela.
+            isOutOfSync={conversation.isError}
+          />
+        )}
+      </div>
+      {page === "profile" && <ProfilePage user={user} />}
     </ChatShell>
   );
 }

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { clearPageHash } from "../../lib/use-hash-page.ts";
 import { fetchCurrentUser, login, logout, type LoginInput } from "./auth-api.ts";
 
 const CURRENT_USER_KEY = ["current-user"] as const;
@@ -18,6 +19,7 @@ export function useAuth() {
     // Ao sair, nada do usuário anterior fica em memória (inclusive a conversa).
     onSettled: () => {
       queryClient.clear();
+      clearPageHash();
       queryClient.setQueryData(CURRENT_USER_KEY, null);
     },
   });

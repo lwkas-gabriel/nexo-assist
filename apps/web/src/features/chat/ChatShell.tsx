@@ -1,6 +1,6 @@
 import type { ConversationMode } from "@nexo/shared/domain";
 import { ChevronRight, LogOut, MessageSquare, UserRound } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Avatar } from "../../ui/Avatar.tsx";
 import { IconButton } from "../../ui/IconButton.tsx";
 import { Pill } from "../../ui/Pill.tsx";
@@ -51,6 +51,15 @@ export function ChatShell({
     mode === "analyst" && analyst
       ? `Com ${analyst.name} · ${analyst.department}`
       : MODE_LABELS[mode];
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const shownPageRef = useRef(page);
+  // A troca de página não recarrega nada: o foco vai ao título novo, que o leitor de tela lê. Na
+  // carga inicial o foco não é roubado (a página já abre nela).
+  useEffect(() => {
+    if (shownPageRef.current === page) return;
+    shownPageRef.current = page;
+    titleRef.current?.focus();
+  }, [page]);
   return (
     <div className="flex h-dvh bg-paper">
       <nav
@@ -105,13 +114,22 @@ export function ChatShell({
             <span className="hidden text-ink-3 md:inline">Service desk de TI</span>
             <ChevronRight size={14} aria-hidden className="hidden text-ink-3 md:block" />
             {/* O título da página; no celular, só para o leitor de tela (a marca ocupa o topo). */}
-            <h1 className="sr-only font-semibold text-ink md:not-sr-only">{PAGE_TITLES[page]}</h1>
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              className="sr-only font-semibold text-ink outline-none md:not-sr-only"
+            >
+              {PAGE_TITLES[page]}
+            </h1>
           </div>
-          {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta). */}
+          {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta).
+              No perfil a pílula some, como no protótipo (só o breadcrumb). */}
           <span role="status">
-            <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
-              {modeLabel}
-            </Pill>
+            {page === "chat" && (
+              <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
+                {modeLabel}
+              </Pill>
+            )}
           </span>
           {/* No celular, a barra do topo faz o papel da lateral: perfil (ou volta) e sair. */}
           <a
