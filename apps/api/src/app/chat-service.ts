@@ -127,6 +127,9 @@ export function createChatService({
     limit: number = HISTORY_WINDOW,
   ): Promise<UIMessage[]> {
     const rows = await conversationStore.listRecentMessages(conversationId, limit, since);
+    // Conversa sem mensagens (a primeira foi recusada, por exemplo) é válida: o AI SDK recusa a
+    // lista vazia, então ela nem passa pela validação.
+    if (rows.length === 0) return [];
     const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
     if (!result.success) {
       throw new AppError("INTERNAL", "Histórico da conversa ilegível.");

@@ -63,6 +63,23 @@ describe("falhas do modelo no chat", () => {
   );
 });
 
+describe("conversa sem mensagens", () => {
+  it("abre vazia, sem erro (a primeira mensagem pode ter sido recusada)", async () => {
+    const { chatService, authService, conversationStore } = await createTestContainer();
+    const { user: employee } = await authService.login({
+      email: "ana.souza@nexo.com.br",
+      password: "x",
+      remember: false,
+    });
+    await conversationStore.create(employee.id, new Date());
+
+    const view = await chatService.getConversation(employee);
+
+    expect(view.conversation).not.toBeNull();
+    expect(view.messages).toEqual([]);
+  });
+});
+
 describe("ids das mensagens", () => {
   async function setup() {
     const { chatService, authService } = await createTestContainer();
