@@ -8,6 +8,7 @@ import type {
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
+import { CLASSIFIER_MARKER, type Classification } from "./classifier.ts";
 import { CONFIRM_DRAFT_TOOL_ID, PROPOSE_TICKET_DRAFT_TOOL_ID } from "./tools/draft-tools.ts";
 import { HANDOFF_TO_ANALYST_TOOL_ID } from "./tools/handoff-tool.ts";
 import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "./tools/search-knowledge-base.ts";
@@ -23,6 +24,8 @@ import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "./tools/ticket-tool
  *    propose_ticket_draft com o próprio texto; número de chamado → get_ticket;
  *    "chamado"/"status" → list_my_tickets; o resto → central de ajuda.
  * 2. Resultado da tool → responde com base nele.
+ * O classificador (etapa 1) recebe um JSON roteirizado pelo mesmo texto; "não sei explicar" e
+ * mensagens vagas saem com confiança baixa, para os testes do limiar (R39).
  *
  * Implementa as duas formas de chamada (com e sem streaming) a partir do mesmo roteiro.
  */
@@ -66,6 +69,9 @@ const DRAFT_ID_IN_TEXT = /\bD-\d+\b/g;
 const ANALYST_IN_TEXT = /\b(analista|atendente)\b/i;
 
 function nextStep(prompt: LanguageModelV4Prompt): Step {
+  if (isClassifierCall(prompt)) {
+    return { kind: "answer", text: JSON.stringify(classify(lastUserText(prompt))) };
+  }
   const lastMessage = prompt.at(-1);
   if (lastMessage?.role === "tool") {
     return { kind: "answer", text: answerFromToolResult(lastMessage.content) };
@@ -134,6 +140,32 @@ function toStreamParts(step: Step): LanguageModelV4StreamPart[] {
     ...body,
     { type: "finish", usage: NO_USAGE, finishReason: finishReasonOf(step) },
   ];
+}
+
+function isClassifierCall(prompt: LanguageModelV4Prompt): boolean {
+  return prompt.some(
+    (message) => message.role === "system" && message.content.includes(CLASSIFIER_MARKER),
+  );
+}
+
+const VAGUE_IN_TEXT = /\b(não sei explicar|sei lá|alguma coisa estranha|não sei o que)\b/i;
+
+/** Classificação roteirizada da mensagem nova (a última linha do prompt do classificador). */
+function classify(prompt: string): Classification {
+  const text = prompt.split("Mensagem nova do funcionário:").at(-1)?.trim() ?? prompt;
+  const base = {
+    understood: text.slice(0, 120),
+    extracted: {},
+    reason: "Roteiro do modelo de teste.",
+  };
+  if (VAGUE_IN_TEXT.test(text)) return { ...base, intent: "unclear", confidence: 0.3 };
+  if (ANALYST_IN_TEXT.test(text)) return { ...base, intent: "talk_to_analyst", confidence: 0.95 };
+  if (CONFIRMATION_IN_TEXT.test(text)) return { ...base, intent: "confirm_draft", confidence: 0.9 };
+  if (OPEN_TICKET_IN_TEXT.test(text)) return { ...base, intent: "new_ticket", confidence: 0.9 };
+  if (TICKET_NUMBER_IN_TEXT.test(text) || /chamado|status/i.test(text)) {
+    return { ...base, intent: "ticket_status", confidence: 0.85 };
+  }
+  return { ...base, intent: "it_question", confidence: 0.8 };
 }
 
 /**
