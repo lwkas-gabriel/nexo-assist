@@ -24,6 +24,12 @@ function stubApi(routes: Record<string, ApiReply>) {
   return calls;
 }
 
+/**
+ * Senha qualquer, gerada a cada execução: o login da demonstração aceita qualquer uma, e nenhum
+ * valor parecido com credencial fica escrito no código (o GitGuardian acusa pares e-mail/senha).
+ */
+const ANY_PASSWORD = crypto.randomUUID();
+
 const NO_STATS = {
   status: 200,
   body: { averageReplySeconds: null, answeredWithoutAnalystPercent: null, analystsSignedIn: 0 },
@@ -67,14 +73,14 @@ describe("tela de login (RF01, tela 1)", () => {
     renderLogin();
 
     await userEvent.type(screen.getByLabelText("E-mail corporativo"), "ana.souza@nexo.com.br");
-    await userEvent.type(screen.getByLabelText("Senha"), "qualquer");
+    await userEvent.type(screen.getByLabelText("Senha"), ANY_PASSWORD);
     await userEvent.click(screen.getByLabelText("Manter conectado neste computador"));
     await userEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
     await waitFor(() => expect(calls.some((call) => call.path === "/auth/login")).toBe(true));
     expect(calls.find((call) => call.path === "/auth/login")?.body).toEqual({
       email: "ana.souza@nexo.com.br",
-      password: "qualquer",
+      password: ANY_PASSWORD,
       remember: true,
     });
   });
@@ -90,7 +96,7 @@ describe("tela de login (RF01, tela 1)", () => {
     renderLogin();
 
     await userEvent.type(screen.getByLabelText("E-mail corporativo"), "x@nexo.com.br");
-    await userEvent.type(screen.getByLabelText("Senha"), "x");
+    await userEvent.type(screen.getByLabelText("Senha"), ANY_PASSWORD);
     await userEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
     expect((await screen.findByRole("alert")).textContent).toBe("E-mail ou senha inválidos.");

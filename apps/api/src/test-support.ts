@@ -52,7 +52,8 @@ export async function createTestApp(container?: Container) {
     const response = await app.request("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "qualquer-senha" }),
+      // Qualquer senha entra na demonstração; gerada para não haver credencial escrita no código.
+      body: JSON.stringify({ email, password: randomBytes(8).toString("hex") }),
     });
     if (response.status !== 200) throw new Error(`Login de teste falhou: ${response.status}`);
     const cookie = response.headers.get("set-cookie")?.split(";")[0];

@@ -518,3 +518,9 @@ Ferramenta: Claude Code (modelo Claude Opus 5.5) na extensão do VS Code, em mod
      - o texto de privacidade prometia um reset periódico que não existe e omitia que o plano gratuito do Gemini pode usar o conteúdo.
 - **Lição:** a conferência visual da IA olhou só o estado inicial da tela. Estados abertos (painel, erro, dica) também precisam de captura. E número de painel é dado: o rótulo tem de dizer exatamente o que é medido.
 
+### 56. Alerta do GitGuardian: par e-mail/senha num teste
+- **O usuário avisou:** o GitGuardian, no CI do GitHub, acusou algo "hardcodado" na tela de login.
+- **Causa:** não era o componente, era o teste dele (`LoginPage.test.tsx`), que digitava a senha literal `"qualquer"` junto com o e-mail `ana.souza@nexo.com.br`. O detector de credenciais genéricas reconhece o par como usuário e senha. O gitleaks do nosso CI não acusou. Não é segredo real, porque o login da demonstração aceita qualquer senha, mas fere a regra do projeto de não haver credencial escrita no código.
+- **Correção:** a senha dos testes passou a ser gerada a cada execução. Isso vale para o teste da tela, para o ajudante de testes da api e para o E2E, que também usavam `"qualquer-senha"`. O mesmo critério já valia para o token de serviço nos testes.
+- **Fica com o usuário:** o valor antigo continua no histórico do git. Como não é uma credencial de verdade, não justifica reescrever o histórico; o incidente pode ser marcado como resolvido (credencial de teste) no painel do GitGuardian.
+
