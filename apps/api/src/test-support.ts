@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { TicketDto } from "@nexo/shared/contracts";
+import { isOpenStatus } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import { createApp } from "./app.ts";
 import {
@@ -64,9 +65,7 @@ export function createFakeTicketGateway(tickets: TicketDto[] = []) {
       queriedOwners.push(ownerId);
       const owned = ownedBy(ownerId);
       return Promise.resolve(
-        filter === "all"
-          ? owned
-          : owned.filter((ticket) => !["resolved", "cancelled"].includes(ticket.status)),
+        filter === "all" ? owned : owned.filter((ticket) => isOpenStatus(ticket.status)),
       );
     },
     getTicket: (ownerId, number) => {

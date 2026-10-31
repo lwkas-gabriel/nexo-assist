@@ -89,7 +89,8 @@ export function createChatService({ mastra, conversationStore, clock }: ChatServ
           params: { messages: history, requestContext: createAgentRequestContext(employee.id) },
           // O erro original (provedor, stack trace) fica no log; o funcionário vê uma mensagem amigável.
           onError: (error) => {
-            console.error("Falha do modelo no turno do agent", error);
+            // Pode ser o modelo ou uma tool que falhou sem tratamento: o erro registrado diz qual.
+            console.error("Falha no turno do agent", error);
             return describeAgentError(error);
           },
         })) as ReadableStream<UIMessageChunk>;

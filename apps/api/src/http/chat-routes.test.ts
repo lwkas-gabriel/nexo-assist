@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { systemClock } from "@nexo/shared/domain";
 import { describe, expect, it } from "vitest";
 import { createContainer } from "../container.ts";
-import { createTestApp, testConfig } from "../test-support.ts";
+import {
+  createFakeTicketGateway,
+  createTestApp,
+  createTestContainer,
+  sampleTicket,
+  testConfig,
+} from "../test-support.ts";
 import { createRateLimiter } from "./rate-limiter.ts";
 
 const ANA_EMAIL = "ana.souza@nexo.com.br";
@@ -114,6 +120,19 @@ describe("chat do funcionário", () => {
 
     expect(blocked.status).toBe(429);
     expect(await blocked.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
+  });
+
+  it("RN09: a consulta de chamados pelo chat usa o funcionário da sessão (rota → agent → tool)", async () => {
+    const brunoTicket = sampleTicket({ number: "INC-20480", ownerId: "emp-bruno-tavares" });
+    const { ticketGateway, queriedOwners } = createFakeTicketGateway([sampleTicket(), brunoTicket]);
+    const { send } = await loggedInAsAna(await createTestContainer({ ticketGateway }));
+
+    const stream = await (await send({ text: "Qual o status do meu chamado?" })).text();
+
+    expect(stream).toContain("list_my_tickets");
+    expect(stream).toContain("INC-20311");
+    expect(stream).not.toContain("INC-20480");
+    expect(queriedOwners).toEqual(["emp-ana-souza"]);
   });
 
   it("ADR-0010: o teto por minuto vale para todos juntos (protege a cota do modelo)", async () => {

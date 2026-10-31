@@ -15,8 +15,9 @@ type TicketToolsDependencies = {
 };
 
 /**
- * Falhas esperadas viram respostas que o agent explica ao funcionário, em vez de quebrar o turno.
- * "Não encontrado" cobre também o chamado de outra pessoa, sem revelar que ele existe (RN09).
+ * Falhas do sistema de chamados viram respostas que o agent explica ao funcionário, em vez de
+ * quebrar o turno. "Não encontrado" cobre também o chamado de outra pessoa, sem revelar que ele
+ * existe (RN09). Qualquer outra falha vira "tickets_error": o detalhe fica só no log do servidor.
  */
 function toolFailure(error: unknown) {
   if (error instanceof AppError && error.code === "TICKETS_UNAVAILABLE") {
@@ -25,7 +26,8 @@ function toolFailure(error: unknown) {
   if (error instanceof AppError && error.code === "NOT_FOUND") {
     return { ok: false as const, reason: "not_found" as const };
   }
-  throw error;
+  console.error("Falha inesperada ao consultar o sistema de chamados", error);
+  return { ok: false as const, reason: "tickets_error" as const };
 }
 
 /**
