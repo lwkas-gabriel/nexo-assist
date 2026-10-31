@@ -16,6 +16,7 @@ import type { HandoffStore } from "../db/handoff-store.ts";
 import type { HandoffRow } from "../db/schema.ts";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { nextMode } from "./conversation-state.ts";
+import { slaStatusOfTicket } from "./ticket-sla.ts";
 
 type HandoffServiceDependencies = {
   conversationStore: ConversationStore;
@@ -101,7 +102,7 @@ export function createHandoffService({
     if (!moved) throw new AppError("CONFLICT", "A conversa mudou de estado; tente de novo.");
 
     const id = randomUUID();
-    const supportLevel = supportLevelFor(request.reason, ticket?.priority);
+    const supportLevel = supportLevelFor(request.reason, ticket && handoffTicket(ticket, now));
     const summaryText = describeSummary(request.reason, request.summary);
     const ticketTransferred = await transferTicket(request.employeeId, ticket, id, summaryText);
     const row = await handoffStore.create({
@@ -158,6 +159,12 @@ export function createHandoffService({
 }
 
 export type HandoffService = ReturnType<typeof createHandoffService>;
+
+/** O que o nível de suporte precisa saber do chamado ligado (A03). */
+function handoffTicket(ticket: TicketDto, now: Date) {
+  const sla = slaStatusOfTicket(ticket, now);
+  return { priority: ticket.priority, isOverdue: sla.isTracked && sla.isOverdue };
+}
 
 function describeSummary(reason: HandoffReason, summary: HandoffSummary): string {
   return `Motivo: ${HANDOFF_REASON_LABELS[reason]}. Problema: ${summary.problem} Já tentado: ${summary.attempted}`;

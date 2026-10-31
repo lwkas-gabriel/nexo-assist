@@ -64,12 +64,12 @@ describe("transferência para analista (RF16, RN07)", () => {
       ticketNumber: "inc 20311",
     });
 
-    // A02: o prazo segue a prioridade do chamado (média, 3 dias úteis).
+    // A02: chamado médio vencido não espera mais 3 dias úteis: contato em 4 horas úteis.
     expect(handoff).toMatchObject({
       supportLevel: "N2",
       ticketNumber: "INC-20311",
       ticketTransferred: true,
-      responseBy: "30/10, 09:00",
+      responseBy: "27/10, 13:00",
     });
     expect(fake.tickets[0]?.status).toBe("waiting_analyst");
     expect(fake.tickets[0]?.updates.at(-1)?.message).toContain("Notebook lento há 5 dias.");
@@ -91,6 +91,24 @@ describe("transferência para analista (RF16, RN07)", () => {
 
     expect(handoff.ticketTransferred).toBe(false);
     expect(await conversation()).toMatchObject({ mode: "waiting_analyst" });
+  });
+
+  it("A03: chamado vencido vai para o N2 mesmo que o agent registre o pedido do funcionário", async () => {
+    const { handoffService, conversationId, fake } = await setup();
+    // Sem resposta da TI desde 16/10: os 3 dias úteis da prioridade média já passaram.
+    fake.tickets.push(
+      sampleTicket({ number: "INC-20290", lastStaffUpdateAt: "2026-10-16T17:20:00.000Z" }),
+    );
+
+    const handoff = await handoffService.handoff({
+      employeeId: ANA,
+      conversationId,
+      reason: "employee_request",
+      summary,
+      ticketNumber: "INC-20290",
+    });
+
+    expect(handoff.supportLevel).toBe("N2");
   });
 
   it("RN09: chamado de outra pessoa não é ligado à transferência", async () => {

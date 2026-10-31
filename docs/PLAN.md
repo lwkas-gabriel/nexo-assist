@@ -98,8 +98,8 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 | ID | Ponto | Pergunta ao recrutador | Suposição padrão |
 |---|---|---|---|
 | A01 | Mock tem 6ª tela "Meu perfil" com "Redefinir senha", fora do PRD | Ela faz parte do escopo? | Implementar só leitura; "Redefinir senha" mostra aviso de simulação |
-| A02 | Mock: transferência diz "analista fala em até **2 h úteis**" e "Agent pausado · até 12:05"; nenhum prazo de 2 h existe no Anexo A | Qual o prazo de atendimento após transferência? | Usar o SLA da prioridade do chamado vinculado; sem chamado, usar Alta (4 h úteis) |
-| A03 | Suporte N1 vs N2: mock transfere para N2, PRD não diz como escolher | Há regra de roteamento N1/N2? | Vencido, crítico ou baixa confiança → N2; pedido simples → N1 |
+| A02 | Mock: transferência diz "analista fala em até **2 h úteis**" e "Agent pausado · até 12:05"; nenhum prazo de 2 h existe no Anexo A | Qual o prazo de atendimento após transferência? | Crítico: 1 h (o SLA da prioridade). Os demais, com ou sem chamado vinculado: 4 h úteis (o SLA de Alta). *Revisto na T13:* usar o SLA de qualquer prioridade fazia um chamado médio já vencido esperar mais 3 dias úteis depois de transferido |
+| A03 | Suporte N1 vs N2: mock transfere para N2, PRD não diz como escolher | Há regra de roteamento N1/N2? | Vencido, crítico ou baixa confiança → N2; pedido simples → N1. Decidido pelo chamado ligado, não só pelo motivo que o agent registra (T13) |
 | A04 | Anexo A diz que chamado vencido **gera** transferência; o mock mostra o agent **oferecendo** | Transferir automático ou oferecer? | Oferecer (como no mock); crítico transfere direto, avisando |
 | A05 | "Sessão" no limite de 30 mensagens: login, dia ou conversa? Contam mensagens do funcionário ou todas? | Definição de sessão | Conta só mensagens do funcionário; sessão termina em 30 mensagens ou 8 h de inatividade; a nova sessão herda histórico, resumo e pendências (ver R03) |
 | A06 | Matriz impacto × urgência incompleta (ex.: equipe afetada mas com alternativa) | Tabela completa? | Matriz explícita no código (ver §6) e testada; casos de fronteira subindo um nível |

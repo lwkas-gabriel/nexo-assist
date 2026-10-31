@@ -22,25 +22,24 @@ export const HANDOFF_REASON_LABELS: Record<HandoffReason, string> = {
 export const SUPPORT_LEVELS = ["N1", "N2"] as const;
 export type SupportLevel = (typeof SUPPORT_LEVELS)[number];
 
+/** O que importa do chamado ligado para decidir o nível e o prazo. */
+export type HandoffTicket = { priority: TicketPriority; isOverdue: boolean };
+
 /**
- * A03: crítico, vencido ou sem segurança do agent vão para o Suporte N2. Pedido do funcionário
- * vai para o N1, a não ser que o chamado ligado seja crítico.
+ * A03: vai para o Suporte N2 o que é crítico, está vencido ou deixou o agent sem segurança, venha o
+ * pedido de quem vier. Decidido pelo chamado, não só pelo motivo que o agent escolheu: um chamado
+ * vencido vai para o N2 mesmo que o agent registre "o funcionário pediu". O resto vai para o N1.
  */
-export function supportLevelFor(
-  reason: HandoffReason,
-  ticketPriority?: TicketPriority,
-): SupportLevel {
+export function supportLevelFor(reason: HandoffReason, ticket?: HandoffTicket): SupportLevel {
   if (reason !== "employee_request") return "N2";
-  return ticketPriority === "critical" ? "N2" : "N1";
+  return ticket?.priority === "critical" || ticket?.isOverdue ? "N2" : "N1";
 }
 
-/** A02: sem chamado ligado, o analista responde no prazo de uma prioridade Alta. */
-const DEFAULT_HANDOFF_PRIORITY: TicketPriority = "high";
-
 /**
- * A02: até quando um analista fala com o funcionário. Usa o SLA da prioridade do chamado ligado;
- * sem chamado, o de prioridade Alta (4 horas úteis).
+ * A02: até quando um analista fala com o funcionário. Crítico: 1 hora (o prazo da prioridade).
+ * Os demais: 4 horas úteis, o prazo de Alta. Um chamado médio vencido não pode esperar mais
+ * 3 dias úteis só porque foi transferido (o protótipo mostra contato em até 2 h úteis).
  */
 export function handoffResponseDue(ticketPriority: TicketPriority | undefined, now: Date): Date {
-  return computeDeadline(ticketPriority ?? DEFAULT_HANDOFF_PRIORITY, now);
+  return computeDeadline(ticketPriority === "critical" ? "critical" : "high", now);
 }

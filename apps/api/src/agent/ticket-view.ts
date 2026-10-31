@@ -12,6 +12,7 @@ import {
   isOpenStatus,
   slaClockStart,
 } from "@nexo/shared/domain";
+import { toSlaTrackedTicket } from "../app/ticket-sla.ts";
 
 /** Quantas atualizações recentes o agent vê ao consultar um chamado (contexto sem desperdício). */
 const RECENT_UPDATES = 5;
@@ -29,16 +30,8 @@ const UPDATE_AUTHOR_LABELS: Record<UpdateAuthor, string> = {
  * e o prazo já calculado pelas regras do domínio (RN12). O agent não faz conta nem converte fuso.
  */
 export function toTicketSummary(ticket: TicketDto, now: Date) {
-  const createdAt = new Date(ticket.createdAt);
-  const lastStaffUpdateAt = ticket.lastStaffUpdateAt
-    ? new Date(ticket.lastStaffUpdateAt)
-    : undefined;
-  const slaTicket = {
-    status: ticket.status,
-    priority: ticket.priority,
-    createdAt,
-    ...(lastStaffUpdateAt ? { lastStaffUpdateAt } : {}),
-  };
+  const slaTicket = toSlaTrackedTicket(ticket);
+  const { createdAt, lastStaffUpdateAt } = slaTicket;
   const sla = getSlaStatus(slaTicket, now);
 
   return {
