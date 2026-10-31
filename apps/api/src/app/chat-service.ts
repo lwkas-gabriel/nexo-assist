@@ -35,6 +35,7 @@ import type { HandoffService } from "./handoff-service.ts";
 import { isSessionAtLimit } from "./session-state.ts";
 import {
   declinedOfferText,
+  offeredTicketNumber,
   quickAnswerClassification,
   selectedTicketParts,
 } from "./structured-actions.ts";
@@ -127,6 +128,27 @@ export function createChatService({
     });
   }
 
+  /**
+   * O chamado da oferta, conferido com o funcionário da sessão: de outra pessoa ou inexistente,
+   * 404 (o botão só aparece para os dele). Com o sistema de chamados fora, a transferência segue
+   * sem afirmar o vencimento: chamar um analista não pode depender do legado.
+   */
+  async function overdueTicketFor(
+    employeeId: string,
+    ticketNumber: string,
+  ): Promise<{ isOverdue: boolean } | undefined> {
+    try {
+      const ticket = toTicketDetails(
+        await ticketGateway.getTicket(employeeId, ticketNumber),
+        clock.now(),
+      );
+      return { isOverdue: ticket.isOpen && ticket.deadline?.isOverdue === true };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "TICKETS_UNAVAILABLE") return undefined;
+      throw error;
+    }
+  }
+
   /** R38: resposta rápida clicada, classificada pelo código (ou undefined, se não confere). */
   async function classifyQuickAnswer(
     previous: MessageRow[],
@@ -206,18 +228,27 @@ export function createChatService({
      * quando a sessão chegou ao limite e a mensagem por texto já não é aceita.
      */
     async requestAnalyst(employee: UserRow, options: { ticketNumber?: string } = {}) {
+      const ticketNumber = options.ticketNumber
+        ? parseTicketNumber(options.ticketNumber)
+        : undefined;
+      if (options.ticketNumber && !ticketNumber) {
+        throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      }
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
-        // Com o chamado (oferta de um chamado vencido, tela 3), o motivo é o prazo; o handoff
-        // confere com o chamado de verdade e volta para "pedido do funcionário" se não venceu.
+        // Com o chamado (oferta de um chamado vencido, tela 3), o resumo só afirma o que o código
+        // conferiu: o chamado é dele (RN09) e está vencido. O handoff confere o motivo de novo.
+        const offered = ticketNumber
+          ? await overdueTicketFor(employee.id, ticketNumber)
+          : undefined;
         const transfer = await handoffService.transfer({
           employeeId: employee.id,
           conversationId: conversation.id,
-          reason: options.ticketNumber ? "overdue" : "employee_request",
-          ...(options.ticketNumber ? { ticketNumber: options.ticketNumber } : {}),
+          reason: offered?.isOverdue ? "overdue" : "employee_request",
+          ...(ticketNumber ? { ticketNumber } : {}),
           summary: {
-            problem: options.ticketNumber
-              ? `O funcionário pediu um analista para o chamado ${options.ticketNumber}, sem atualização dentro do prazo.`
+            problem: offered?.isOverdue
+              ? `O funcionário pediu um analista para o chamado ${ticketNumber}, sem atualização da TI dentro do prazo.`
               : "O funcionário pediu um analista pelo botão do chat.",
             attempted: await chatSessionService.describeCurrent(conversation),
           },
@@ -294,6 +325,14 @@ export function createChatService({
       if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
+        // Só vale para a oferta que a resposta mais recente fez, sem nada dito depois dela.
+        const [last] = await conversationStore.listRecentMessages(conversation.id, 1);
+        if (!last || offeredTicketNumber(toUIMessage(last)) !== ticketNumber) {
+          throw new AppError("CONFLICT", "Essa oferta não está mais valendo.");
+        }
+        // Relida dentro da trava: um crítico confirmado pelo card pode ter transferido a conversa
+        // (A04); aí o "Não, obrigado" fica para o analista e ninguém responde (RN08).
+        const current = await conversationStore.findById(conversation.id);
         await chatSessionService.touch(conversation);
         await saveEmployeeMessage(
           conversation.id,
@@ -302,7 +341,7 @@ export function createChatService({
           clock.now(),
           undefined,
         );
-        if (!agentMayReply(conversation.mode)) return;
+        if (!current || !agentMayReply(current.mode)) return;
         const reply = await conversationStore.appendMessage({
           conversationId: conversation.id,
           author: "agent",
@@ -312,7 +351,7 @@ export function createChatService({
         });
         await decisionService.recordButtonAction({
           conversationId: conversation.id,
-          conversationVersion: conversation.version,
+          conversationVersion: current.version,
           messageId: reply.id,
           description: `Funcionário recusou a oferta de analista para o ${ticketNumber}.`,
           at: reply.createdAt,

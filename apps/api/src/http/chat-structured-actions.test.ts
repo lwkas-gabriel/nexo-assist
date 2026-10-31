@@ -54,7 +54,7 @@ async function setup(duringGetTicket?: () => Promise<void>) {
     ).json()) as ConversationResponse;
   /** Chamadas ao classificador: todas as do modelo menos as do agent. */
   const classifierCalls = () => recording.counter.calls - recording.agentCalls();
-  return { post, say, conversation, recording, classifierCalls, container };
+  return { post, say, conversation, recording, classifierCalls, container, fake };
 }
 
 describe("resposta rápida pelo botão (R38, 11.5)", () => {
@@ -178,38 +178,106 @@ describe("seleção de um chamado na lista (11.5, tela 3)", () => {
 });
 
 describe("oferta de analista para um chamado vencido (tela 3, RN07)", () => {
+  /** A oferta existe depois que o funcionário escolhe o chamado vencido da lista. */
+  async function withOffer() {
+    const context = await setup();
+    await context.post("/actions/select-ticket", { ticketNumber: "INC-20311" });
+    return context;
+  }
+
   it("Não, obrigado é respondido pelo código, sem chamar o modelo", async () => {
-    const { post, conversation, recording } = await setup();
+    const { post, conversation, recording } = await withOffer();
 
     const response = await post("/actions/decline-offer", { ticketNumber: "INC-20311" });
 
     expect(response.status).toBe(200);
     expect(recording.counter.calls).toBe(0);
-    const [decline, reply] = (await conversation()).messages;
+    const [decline, reply] = (await conversation()).messages.slice(-2);
     expect(decline?.parts).toEqual([{ type: "text", text: "Não, obrigado" }]);
     expect(reply?.parts[0]?.text).toMatch(/^Combinado\. O INC-20311 continua com a equipe de TI/);
     expect(reply?.metadata?.decision).toMatchObject({ confidenceSource: "button" });
   });
 
-  it("RN08: com a conversa num analista, o Não, obrigado fica para ele, sem resposta", async () => {
-    const { post, conversation } = await setup();
-    await post("/handoff", {});
+  it("sem oferta na resposta mais recente, ou para outro chamado, é recusado e nada é gravado", async () => {
+    const { post, conversation } = await withOffer();
+    const before = (await conversation()).messages.length;
+
+    const otherTicket = await post("/actions/decline-offer", { ticketNumber: "INC-20400" });
+    const unknownTicket = await post("/actions/decline-offer", { ticketNumber: "INC-99999" });
+
+    expect(otherTicket.status).toBe(409);
+    expect(unknownTicket.status).toBe(409);
+    expect((await conversation()).messages).toHaveLength(before);
+  });
+
+  it("oferta antiga (o funcionário já escreveu depois) não vale mais", async () => {
+    const { post, say } = await withOffer();
+    await say({ text: "Meu computador está lento" });
+
+    const response = await post("/actions/decline-offer", { ticketNumber: "INC-20311" });
+
+    expect(response.status).toBe(409);
+  });
+
+  it("RN08: transferida antes do clique (crítico pelo card), o Não, obrigado fica para o analista", async () => {
+    const { post, conversation, container } = await withOffer();
+    const open = await container.conversationStore.findOpenByEmployee("emp-ana-souza");
+    if (!open) throw new Error("conversa de teste sem abrir");
+    await container.conversationStore.changeMode(open, {
+      mode: "waiting_analyst",
+      assignedAnalystId: null,
+      now: new Date(),
+    });
 
     await post("/actions/decline-offer", { ticketNumber: "INC-20311" });
 
     const { messages } = await conversation();
     expect(messages.at(-1)?.parts).toEqual([{ type: "text", text: "Não, obrigado" }]);
+    expect(messages.at(-1)?.metadata?.author).toBe("employee");
   });
 
   it("Falar com um analista com o chamado vencido transfere pelo prazo, ligado ao chamado", async () => {
-    const { post } = await setup();
+    const { post, fake } = await setup();
 
-    const response = await post("/handoff", { ticketNumber: "INC-20311" });
+    const response = await post("/handoff", { ticketNumber: "inc 20311" });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       handoff: { reason: "chamado com prazo vencido", ticketNumber: "INC-20311" },
     });
+    const ticket = fake.tickets.find((candidate) => candidate.number === "INC-20311");
+    expect(ticket?.updates.at(-1)?.message).toMatch(
+      /INC-20311, sem atualização da TI dentro do prazo/,
+    );
+  });
+
+  it("chamado dentro do prazo: o resumo não afirma vencimento", async () => {
+    const { post, fake } = await setup();
+    const ticket = fake.tickets.find((candidate) => candidate.number === "INC-20311");
+    if (!ticket) throw new Error("chamado de teste ausente");
+    ticket.lastStaffUpdateAt = new Date().toISOString();
+
+    const response = await post("/handoff", { ticketNumber: "INC-20311" });
+
+    expect(await response.json()).toMatchObject({
+      handoff: { reason: "o funcionário pediu um analista" },
+    });
+    expect(ticket.updates.at(-1)?.message).not.toMatch(/prazo/);
+  });
+
+  it("RN09: chamado de outra pessoa não é aceito, e ninguém é transferido", async () => {
+    const { post, conversation } = await setup();
+
+    const response = await post("/handoff", { ticketNumber: "INC-20400" });
+
+    expect(response.status).toBe(404);
+    expect((await conversation()).conversation?.mode ?? "agent").toBe("agent");
+  });
+
+  it("número que não é texto é recusado na entrada", async () => {
+    const { post } = await setup();
+
+    expect((await post("/handoff", { ticketNumber: 123 })).status).toBe(400);
   });
 
   it("sem corpo, o Falar com um analista continua sendo o pedido do funcionário", async () => {

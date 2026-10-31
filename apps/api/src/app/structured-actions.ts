@@ -102,6 +102,32 @@ export function describeSelectedTicket(
   return lines.join(" ");
 }
 
+const offeredTicketSchema = z.object({
+  type: z.literal(`tool-${GET_TICKET_TOOL_ID}`),
+  state: z.literal("output-available"),
+  output: z.object({
+    ok: z.literal(true),
+    ticket: z.object({
+      number: z.string(),
+      isOpen: z.literal(true),
+      deadline: z.object({ isOverdue: z.literal(true) }),
+    }),
+  }),
+});
+
+/**
+ * O chamado vencido que a resposta oferece levar a um analista (RN07, A04), se oferece: a mesma
+ * condição da tela (aberto e com o prazo vencido). Assim o "Não, obrigado" só vale para uma oferta
+ * que existiu de verdade.
+ */
+export function offeredTicketNumber(message: UIMessage | undefined): string | undefined {
+  if (!message || message.role !== "assistant") return undefined;
+  const offered = message.parts
+    .map((part) => offeredTicketSchema.safeParse(part))
+    .findLast((parsed) => parsed.success);
+  return offered?.data.output.ticket.number;
+}
+
 /** "Não, obrigado" à oferta de analista: o chamado segue na fila, e a porta fica aberta. */
 export function declinedOfferText(ticketNumber: string): string {
   return `Combinado. O ${ticketNumber} continua com a equipe de TI; se mudar de ideia, é só me pedir um analista.`;
