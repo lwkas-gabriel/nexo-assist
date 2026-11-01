@@ -28,4 +28,14 @@ test.describe("analista", () => {
 
     expect(await violationsOf(page, "landmark-one-main")).toEqual([]);
   });
+
+  test("no celular, com a conversa aberta, a página tem um título de nível 1", async ({ page }) => {
+    await page.setViewportSize(PHONE_VIEWPORT);
+    await forgeWaitingConversation(page);
+    await page.goto("/");
+    await page.getByRole("button", { name: /Ana Souza/ }).click();
+    await expect(page.getByRole("heading", { level: 2, name: "Ana Souza" })).toBeVisible();
+
+    expect(await violationsOf(page, "page-has-heading-one")).toEqual([]);
+  });
 });

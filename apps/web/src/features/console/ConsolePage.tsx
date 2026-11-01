@@ -357,6 +357,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
 
       {showConversation && (
         <main className="flex min-w-0 flex-1">
+          {/* No celular a lista (e o título "Conversas") sai da tela com a conversa aberta. */}
+          {isMobile && <h1 className="sr-only">Console</h1>}
           {selectedId === null ? (
             <div className="flex flex-1 items-center justify-center bg-console px-6 text-center text-[14.5px] text-ink-3">
               Escolha uma conversa na lista.
