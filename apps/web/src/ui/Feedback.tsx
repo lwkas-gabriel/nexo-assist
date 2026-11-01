@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { isMacPlatform, modifierKeyLabel } from "../lib/platform.ts";
+import { useAnnounceAfterMount } from "../lib/use-announce-after-mount.ts";
 import { Button } from "./Button.tsx";
 import { cx } from "./cx.ts";
 import { TONE_CLASSES, type Tone } from "./status-styles.ts";
@@ -14,7 +15,10 @@ export function Skeleton({ className }: { className?: string }) {
 
 /**
  * Carregando (10.5). O rótulo é lido pelo leitor de tela; os blocos de skeleton são só visuais e
- * ficam escondidos da árvore de acessibilidade.
+ * ficam escondidos da árvore de acessibilidade. A região viva nasce vazia e o rótulo entra pouco
+ * depois (10.7): uma região que já nasce com o texto costuma não ser anunciada. Sem `aria-busy`,
+ * que faz o leitor de tela esperar a região assentar. O `sr-only` é absoluto e não entra no `gap`
+ * de quem organiza os blocos.
  */
 export function LoadingState({
   label,
@@ -25,9 +29,12 @@ export function LoadingState({
   className?: string;
   children: ReactNode;
 }) {
+  const announcedLabel = useAnnounceAfterMount(label);
   return (
-    <div role="status" aria-busy="true" className={className}>
-      <span className="sr-only">{label}</span>
+    <div className={className}>
+      <span role="status" className="sr-only">
+        {announcedLabel}
+      </span>
       <div aria-hidden className="contents">
         {children}
       </div>

@@ -792,7 +792,7 @@ describe("console do analista (tela 4)", () => {
 
         expect(screen.queryByText("Nenhuma conversa neste filtro.")).toBeNull();
         expect(screen.queryByText("Nenhuma conversa ainda.")).toBeNull();
-        expect(screen.getByText("Carregando conversas")).toBeDefined();
+        expect(await screen.findByText("Carregando conversas")).toBeDefined();
         await act(() => {
           release();
           return gate;
@@ -812,7 +812,7 @@ describe("console do analista (tela 4)", () => {
 
         // O campo já está vazio, mas a lista ainda é a da busca "zzz" (a consulta espera 300 ms).
         expect(screen.queryByText("Nenhuma conversa ainda.")).toBeNull();
-        expect(screen.getByText("Carregando conversas")).toBeDefined();
+        expect(await screen.findByText("Carregando conversas")).toBeDefined();
         expect(await screen.findByText("Nenhuma conversa ainda.")).toBeDefined();
       });
 

@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { ANNOUNCE_AFTER_MOUNT_MS } from "../lib/use-announce-after-mount.ts";
 import { setViewportWidth } from "../test-setup.ts";
 import { Avatar } from "./Avatar.tsx";
 import { avatarToneFor } from "./avatar-tones.ts";
@@ -121,15 +122,26 @@ describe("estados de carregamento, erro e vazio (10.5)", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("LoadingState: o rótulo é anunciado e os skeletons ficam escondidos do leitor de tela", () => {
-    render(
-      <LoadingState label="Carregando conversas">
-        <div data-testid="bloco" />
-      </LoadingState>,
-    );
+  it("LoadingState: a região nasce vazia e o rótulo entra depois, sem aria-busy, para o leitor de tela anunciar", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <LoadingState label="Carregando conversas">
+          <div data-testid="bloco" />
+        </LoadingState>,
+      );
 
-    expect(screen.getByRole("status").textContent).toBe("Carregando conversas");
-    expect(screen.getByTestId("bloco").closest("[aria-hidden]")).not.toBeNull();
+      const region = screen.getByRole("status");
+      expect(region.textContent).toBe("");
+      expect(document.querySelector("[aria-busy]")).toBeNull();
+
+      await act(() => vi.advanceTimersByTimeAsync(ANNOUNCE_AFTER_MOUNT_MS + 10));
+      expect(screen.getByRole("status")).toBe(region);
+      expect(region.textContent).toBe("Carregando conversas");
+      expect(screen.getByTestId("bloco").closest("[aria-hidden]")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("SyncNotice: a região já existe vazia, e só o texto muda", () => {
