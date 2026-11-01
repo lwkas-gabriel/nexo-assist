@@ -156,7 +156,8 @@ export function ChatShell({
             className="md:hidden"
           />
         </header>
-        {children}
+        {/* Estrutura fixa: nada aqui condiciona a conversa, que precisa continuar montada (ADR-0011). */}
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       </div>
     </div>
   );

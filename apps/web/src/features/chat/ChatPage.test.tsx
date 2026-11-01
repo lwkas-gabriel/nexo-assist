@@ -865,6 +865,24 @@ describe("tela do chat (tela 2)", () => {
       expect(screen.queryByRole("heading", { level: 1, name: "Atendimento" })).toBeNull();
     });
 
+    it("a conversa e o perfil ficam dentro de um landmark main, o mesmo ao trocar de página", async () => {
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      const field = await screen.findByLabelText("Mensagem para o Nexo");
+
+      const main = screen.getByRole("main");
+      expect(main.contains(field)).toBe(true);
+      expect(within(main).getByRole("log", { name: "Conversa com o Nexo Assist" })).toBeDefined();
+
+      await userEvent.click(screen.getAllByRole("link", { name: "Meu perfil" })[0] as HTMLElement);
+      await screen.findByRole("heading", { level: 1, name: "Meu perfil" });
+
+      // Nada remonta: o campo continua o mesmo nó (escondido), e o perfil está no mesmo main.
+      expect(screen.getByRole("main")).toBe(main);
+      expect(main.contains(field)).toBe(true);
+      expect(within(main).getByRole("heading", { level: 2, name: "Meu perfil" })).toBeDefined();
+    });
+
     it("o texto digitado no campo sobrevive a Atendimento, Meu perfil e Atendimento", async () => {
       stubApi(conversationAt("agent", false));
       renderChat();
