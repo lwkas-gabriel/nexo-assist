@@ -98,7 +98,7 @@ export function ConversationList(props: ConversationListProps) {
                   isActive ? "bg-primary-soft text-primary-text" : "bg-desk text-ink-2",
                 )}
               >
-                {FILTER_LABELS[option]}
+                {FILTER_LABELS[option]}{" "}
                 {option !== "all" && count !== undefined && (
                   <span
                     className={cx("font-semibold", isActive ? "text-primary-text" : "text-ink-3")}

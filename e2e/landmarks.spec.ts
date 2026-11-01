@@ -38,4 +38,12 @@ test.describe("analista", () => {
 
     expect(await violationsOf(page, "page-has-heading-one")).toEqual([]);
   });
+
+  test("os filtros da lista têm nome acessível que contém o texto visível", async ({ page }) => {
+    await forgeWaitingConversation(page);
+    await page.goto("/");
+    await expect(page.getByRole("group", { name: "Filtro das conversas" })).toBeVisible();
+
+    expect(await violationsOf(page, "label-content-name-mismatch")).toEqual([]);
+  });
 });
