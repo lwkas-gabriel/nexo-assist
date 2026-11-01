@@ -141,6 +141,9 @@ function ConversationArea({
   onRetry: () => void;
   isRetrying: boolean;
 }) {
+  // O "Tentar novamente" some quando dá certo, e o foco cairia no <body>: a conversa que aparece
+  // depois de uma nova tentativa da pessoa leva o foco ao campo de mensagem.
+  const [hasRetried, setHasRetried] = useState(false);
   if (view.status === "loading") {
     return (
       <LoadingState
@@ -157,7 +160,10 @@ function ConversationArea({
     return (
       <ErrorState
         message={view.message}
-        onRetry={onRetry}
+        onRetry={() => {
+          setHasRetried(true);
+          onRetry();
+        }}
         isRetrying={isRetrying}
         className="flex-1 justify-center"
       />
@@ -170,6 +176,7 @@ function ConversationArea({
       isOutOfSync={view.isOutOfSync}
       onRetry={onRetry}
       isRetrying={isRetrying}
+      shouldFocusComposerOnMount={hasRetried}
     />
   );
 }
@@ -182,12 +189,15 @@ function ChatConversation({
   isOutOfSync,
   onRetry,
   isRetrying,
+  shouldFocusComposerOnMount,
 }: {
   user: CurrentUser;
   view: ConversationView;
   isOutOfSync: boolean;
   onRetry: () => void;
   isRetrying: boolean;
+  /** A conversa apareceu por causa de um "Tentar novamente" da pessoa (nunca na carga). */
+  shouldFocusComposerOnMount: boolean;
 }) {
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
@@ -391,6 +401,12 @@ function ChatConversation({
     if (!justReachedLimit || !hasSentRef.current) return;
     if (document.activeElement === document.body) limitNoticeRef.current?.focus();
   }, [isAtLimit]);
+  useEffect(() => {
+    // Só se o foco se perdeu (no <body>): quem já foi para outro lugar fica onde está.
+    if (shouldFocusComposerOnMount && document.activeElement === document.body) {
+      composerRef.current?.focus();
+    }
+  }, [shouldFocusComposerOnMount]);
   // Sem lista de dependências de propósito: o alvo (o campo que reaparece, o botão que volta a
   // ficar habilitado) só existe numa renderização posterior à que pediu o foco.
   useEffect(() => {

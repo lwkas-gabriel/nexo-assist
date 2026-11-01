@@ -194,3 +194,20 @@ test.describe("analista com uma conversa aguardando", () => {
     await expect(page.getByRole("button", { name: "Assumir atendimento" })).toBeFocused();
   });
 });
+
+test.describe("funcionário que tenta de novo", () => {
+  test.use({ storageState: SHARED_SESSIONS.ana.file });
+
+  test("a conversa que volta depois de Tentar novamente leva o foco ao campo de mensagem", async ({
+    page,
+  }) => {
+    await page.route(CHAT_URL, (route) => route.abort("internetdisconnected"));
+    await page.goto("/");
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page.unroute(CHAT_URL);
+
+    await page.getByRole("button", { name: RETRY_LABEL }).click();
+
+    await expect(page.getByLabel("Mensagem para o Nexo")).toBeFocused();
+  });
+});
