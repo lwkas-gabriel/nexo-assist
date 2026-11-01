@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
-import type { ConversationView } from "./chat-api.ts";
+import type { ConversationView, DraftView } from "./chat-api.ts";
 import { ANNOUNCE_AFTER_MOUNT_MS } from "../../lib/use-announce-after-mount.ts";
 import { ChatPage } from "./ChatPage.tsx";
 import { sampleDecision } from "./decision.fixture.ts";
@@ -1113,6 +1113,142 @@ describe("tela do chat (tela 2)", () => {
 
       const field = await screen.findByLabelText("Mensagem para o analista");
       await waitFor(() => expect(document.activeElement).toBe(field));
+    });
+  });
+
+  describe("foco depois de uma ação que falha (10.7)", () => {
+    const CONFLICT = {
+      error: { code: "CONFLICT", message: "Essa ação não está mais valendo." },
+    };
+    const pendingDraft: DraftView = {
+      draftId: "D-7",
+      number: 7,
+      kind: "create",
+      status: "pending",
+      ticketNumber: null,
+      ticket: {
+        title: "VPN não conecta no notebook",
+        description: "Desde ontem o notebook não conecta na VPN.",
+        type: "Incidente",
+        category: "Rede e VPN",
+        affected: "Somente você",
+        priority: "Alta",
+        priorityReason: null,
+        slaRule: "4 horas úteis",
+        firstResponseBy: "27/10, 13:43",
+      },
+      fields: {
+        title: "VPN não conecta no notebook",
+        description: "Desde ontem o notebook não conecta na VPN.",
+        type: "incident",
+        category: "network_vpn",
+        affected: "just_me",
+        urgency: "deadline_today",
+      },
+    };
+
+    /**
+     * A api com um POST que fica pendente até `release()` e então falha com 409. Enquanto ele
+     * corre, o teste faz o que o navegador faz com um botão que fica desabilitado: tira dele o
+     * foco (o jsdom não o faz; o E2E em e2e/focus.spec.ts prova num navegador de verdade).
+     */
+    function stubHeldFailure(view: ConversationView, failingPath: string) {
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+        if (init?.method === "POST" && input === failingPath) {
+          await gate;
+          return new Response(JSON.stringify(CONFLICT), { status: 409 });
+        }
+        if (init?.method === "POST" && input === "/api/chat/messages") {
+          return new Response(JSON.stringify(RATE_LIMITED), { status: 429 });
+        }
+        return new Response(JSON.stringify(input === "/api/chat" ? view : {}), { status: 200 });
+      });
+      return {
+        failNow: async (button: HTMLElement, { isFocusLost = true } = {}) => {
+          await waitFor(() => expect(button).toHaveProperty("disabled", true));
+          if (isFocusLost && document.activeElement === button) {
+            // O jsdom não solta o foco de um botão desabilitado, e `blur()` nele não faz nada.
+            button.removeAttribute("disabled");
+            button.blur();
+            button.setAttribute("disabled", "");
+          }
+          if (isFocusLost) expect(document.activeElement).toBe(document.body);
+          await act(async () => {
+            release();
+            await gate;
+          });
+        },
+      };
+    }
+
+    it("Confirmar que falha devolve o foco ao botão", async () => {
+      const view: ConversationView = {
+        ...conversationAt("agent", false),
+        messages: [agentWithTool("a-1", "propose_ticket_draft", { ok: true, draft: pendingDraft })],
+        drafts: [pendingDraft],
+      };
+      const { failNow } = stubHeldFailure(view, "/api/chat/drafts/7/confirm");
+      renderChat();
+      const confirm = await screen.findByRole("button", { name: /Confirmar/ });
+
+      await userEvent.click(confirm);
+      await failNow(confirm);
+
+      expect(await screen.findByText("Essa ação não está mais valendo.")).toBeDefined();
+      await waitFor(() => expect(document.activeElement).toBe(confirm));
+    });
+
+    it("a oferta de analista que falha devolve o foco ao botão clicado", async () => {
+      const view: ConversationView = {
+        ...conversationAt("agent", false),
+        messages: [
+          agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+        ],
+      };
+      const { failNow } = stubHeldFailure(view, "/api/chat/handoff");
+      renderChat();
+      const decline = await screen.findByRole("button", { name: "Falar com um analista" });
+
+      await userEvent.click(decline);
+      await failNow(decline);
+
+      expect(await screen.findByText("Essa ação não está mais valendo.")).toBeDefined();
+      await waitFor(() => expect(document.activeElement).toBe(decline));
+    });
+
+    it("Falar com um analista, no alerta de falha, devolve o foco ao botão se a transferência falha", async () => {
+      const { failNow } = stubHeldFailure(conversationAt("agent", false), "/api/chat/handoff");
+      renderChat();
+      await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "VPN caiu{Enter}");
+      const alert = await screen.findByRole("alert");
+      const talk = within(alert).getByRole("button", { name: "Falar com um analista" });
+
+      await userEvent.click(talk);
+      await failNow(talk);
+
+      await waitFor(() => expect(document.activeElement).toBe(talk));
+    });
+
+    it("quem levou o foco para outro lugar enquanto a ação corria o mantém lá", async () => {
+      const view: ConversationView = {
+        ...conversationAt("agent", false),
+        messages: [
+          agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),
+        ],
+      };
+      const { failNow } = stubHeldFailure(view, "/api/chat/handoff");
+      renderChat();
+      const decline = await screen.findByRole("button", { name: "Falar com um analista" });
+      await userEvent.click(decline);
+      const field = screen.getByLabelText("Mensagem para o Nexo");
+      field.focus();
+
+      await failNow(decline, { isFocusLost: false });
+
+      expect(await screen.findByText("Essa ação não está mais valendo.")).toBeDefined();
+      expect(document.activeElement).toBe(field);
     });
   });
 

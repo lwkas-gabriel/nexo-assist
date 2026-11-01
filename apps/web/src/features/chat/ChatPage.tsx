@@ -195,7 +195,17 @@ function ChatConversation({
   const limitNoticeRef = useRef<HTMLParagraphElement>(null);
   const hasSentRef = useRef(false);
   const wasAtLimitRef = useRef<boolean | null>(null);
-  const pendingComposerFocusRef = useRef(false);
+  // Para onde o foco vai assim que der: ao campo de mensagem, ou de volta ao botão que a pessoa
+  // clicou (ele fica desabilitado enquanto a ação corre e o navegador joga o foco no <body>).
+  const pendingFocusRef = useRef<"composer" | "opener" | null>(null);
+  const actionOpenerRef = useRef<HTMLElement | null>(null);
+  const rememberOpener = () => {
+    actionOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  };
+  const returnFocusToOpener = () => {
+    pendingFocusRef.current = "opener";
+  };
   const mode = view.conversation?.mode ?? "agent";
   // Só com os analistas (ou com um turno em curso que esta tela não iniciou) a conversa é
   // recarregada sozinha; com o agent, quem recarrega é a própria tela, ao fim de cada resposta.
@@ -241,6 +251,8 @@ function ChatConversation({
   // Botões do card: ações determinísticas, sem o modelo (11.5). O erro fica no card que falhou.
   const draftAction = useMutation({
     mutationFn: ({ run }: DraftAction) => run(),
+    onMutate: rememberOpener,
+    onError: returnFocusToOpener,
     onSuccess: async () => {
       await refresh();
       composerRef.current?.focus();
@@ -249,9 +261,11 @@ function ChatConversation({
   // Nova sessão e "Falar com um analista": separadas do card, com o erro no próprio aviso.
   const sessionAction = useMutation({
     mutationFn: (run: () => Promise<unknown>) => run(),
+    onMutate: rememberOpener,
+    onError: returnFocusToOpener,
     onSuccess: async () => {
       clearError();
-      pendingComposerFocusRef.current = true;
+      pendingFocusRef.current = "composer";
       await refresh();
     },
   });
@@ -259,6 +273,8 @@ function ChatConversation({
   // Tela 3: escolher um chamado e responder à oferta de analista, sem o modelo (11.5).
   const ticketAction = useMutation({
     mutationFn: ({ run }: { messageId: string; run: () => Promise<unknown> }) => run(),
+    onMutate: rememberOpener,
+    onError: returnFocusToOpener,
     onSuccess: async () => {
       await refresh();
       composerRef.current?.focus();
@@ -375,12 +391,19 @@ function ChatConversation({
     if (!justReachedLimit || !hasSentRef.current) return;
     if (document.activeElement === document.body) limitNoticeRef.current?.focus();
   }, [isAtLimit]);
-  // "Nova sessão" e "Falar com um analista" fazem o campo (re)aparecer ou tiram o botão clicado:
-  // o foco volta ao campo assim que ele existir, o que pode ser em outra renderização.
+  // Sem lista de dependências de propósito: o alvo (o campo que reaparece, o botão que volta a
+  // ficar habilitado) só existe numa renderização posterior à que pediu o foco.
   useEffect(() => {
-    if (!pendingComposerFocusRef.current || !composerRef.current) return;
-    pendingComposerFocusRef.current = false;
-    composerRef.current.focus();
+    const pending = pendingFocusRef.current;
+    if (pending === null) return;
+    const opener = actionOpenerRef.current;
+    const target = pending === "opener" && opener?.isConnected ? opener : composerRef.current;
+    if (!target || (target instanceof HTMLButtonElement && target.disabled)) return;
+    pendingFocusRef.current = null;
+    // Quem já levou o foco para outro lugar o mantém; só o foco perdido (no <body>) é devolvido.
+    const isFocusLost =
+      document.activeElement === document.body || document.activeElement === opener;
+    if (pending === "composer" || isFocusLost) target.focus();
   });
 
   // O polling traz mensagens novas do analista. Elas entram quando a conversa do servidor já tem

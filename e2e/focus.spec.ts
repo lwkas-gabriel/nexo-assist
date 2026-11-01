@@ -100,3 +100,67 @@ test.describe("funcionário no limite da sessão", () => {
     await expect(field).toBeFocused();
   });
 });
+
+test.describe("funcionário com uma oferta de analista", () => {
+  test.use({ storageState: SHARED_SESSIONS.ana.file });
+
+  const OVERDUE_TICKET = {
+    number: "INC-20311",
+    title: "Notebook lento após atualização do Windows",
+    category: "Hardware",
+    priority: "Média",
+    status: "Aguardando analista",
+    statusCode: "waiting_analyst",
+    isOpen: true,
+    openedAt: "16/10, 14:20",
+    openedOn: "16 out",
+    lastTeamUpdateAt: "22/10, 14:20",
+    timeWithoutTeamResponse: "5 dias",
+    deadline: { rule: "3 dias úteis", dueAt: "27/10, 14:20", isOverdue: true },
+    description: "Lentidão geral desde a atualização de 15/10.",
+  };
+  const OFFER_MESSAGE = {
+    id: "fixture-offer",
+    role: "assistant",
+    metadata: { author: "agent" },
+    parts: [
+      {
+        type: "tool-get_ticket",
+        toolCallId: "fixture-call",
+        state: "output-available",
+        input: {},
+        output: { ok: true, ticket: OVERDUE_TICKET },
+      },
+      { type: "text", text: "Esse chamado já passou do prazo." },
+    ],
+  };
+  const HANDOFF_URL = /\/api\/chat\/handoff$/;
+
+  test("o botão da oferta que falha recebe o foco de volta", async ({ page }) => {
+    await page.route(CHAT_URL, async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as Record<string, unknown>;
+      await route.fulfill({ response, json: { ...body, messages: [OFFER_MESSAGE] } });
+    });
+    // A falha só chega depois de o botão ficar desabilitado: é nesse intervalo que o navegador
+    // joga o foco no <body>.
+    let releaseFailure: () => void = () => undefined;
+    const failureGate = new Promise<void>((resolve) => (releaseFailure = resolve));
+    await page.route(HANDOFF_URL, async (route) => {
+      await failureGate;
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: "CONFLICT", message: "Essa oferta não está mais valendo." } },
+      });
+    });
+    await page.goto("/");
+    const askAnalyst = page.getByRole("button", { name: "Falar com um analista" });
+
+    await askAnalyst.click();
+    await expect(askAnalyst).toBeDisabled();
+    releaseFailure();
+
+    await expect(page.getByText("Essa oferta não está mais valendo.")).toBeVisible();
+    await expect(askAnalyst).toBeFocused();
+  });
+});

@@ -112,6 +112,16 @@ describe("card do rascunho (RF07, R16, R26)", () => {
     expect(screen.queryByRole("form", { name: "Editar rascunho" })).toBeNull();
   });
 
+  it("Voltar fecha a edição e devolve o foco ao Editar, de onde a pessoa partiu", async () => {
+    renderCard(pendingDraft);
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+    expect(screen.queryByRole("form", { name: "Editar rascunho" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Editar" }));
+  });
+
   it("com erro da api, o formulário fica aberto com o que foi digitado", async () => {
     renderCard(pendingDraft, { onEdit: vi.fn(() => Promise.reject(new Error("falhou"))) });
 

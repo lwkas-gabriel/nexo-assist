@@ -53,6 +53,15 @@ const KIND_LABELS: Record<DraftView["kind"], string> = {
 export function DraftCard(props: DraftCardProps) {
   const { draft, isActionable } = props;
   const [isEditing, setIsEditing] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const shouldRefocusEditRef = useRef(false);
+  // "Voltar" tira o formulário (e o botão que a pessoa apertou) da tela: o foco volta ao "Editar",
+  // de onde ela partiu. Salvar não passa por aqui: o foco vai ao campo de mensagem (ChatPage).
+  useEffect(() => {
+    if (isEditing || !shouldRefocusEditRef.current) return;
+    shouldRefocusEditRef.current = false;
+    editButtonRef.current?.focus();
+  }, [isEditing]);
   const isMac = isMacPlatform();
   const state = STATE_LABELS[draft.status];
   const canAct = isActionable && (draft.status === "pending" || draft.status === "confirm_failed");
@@ -106,7 +115,10 @@ export function DraftCard(props: DraftCardProps) {
                 () => undefined,
               )
             }
-            onCancel={() => setIsEditing(false)}
+            onCancel={() => {
+              shouldRefocusEditRef.current = true;
+              setIsEditing(false);
+            }}
           />
         )}
 
@@ -133,6 +145,7 @@ export function DraftCard(props: DraftCardProps) {
             </Button>
             {draft.status === "pending" && draft.fields && (
               <Button
+                ref={editButtonRef}
                 variant="secondary"
                 onClick={() => setIsEditing(true)}
                 disabled={props.isWorking}
