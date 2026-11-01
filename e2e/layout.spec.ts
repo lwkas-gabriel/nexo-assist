@@ -118,3 +118,32 @@ test.describe("topo da conversa do console, no celular e no tablet (10.6)", () =
     });
   }
 });
+
+test.describe("barra de atendimento do console, no celular e no tablet (10.6)", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+
+  for (const width of [390, 768, 800]) {
+    test(`com ${width} px, "Devolver ao agent" e "Assumir atendimento" ficam numa linha cada`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await forgeWaitingConversation(page);
+      await page.goto("/");
+      await page.getByRole("button", { name: /Ana Souza/ }).click();
+      await expect(page.getByRole("button", { name: "Assumir atendimento" })).toBeVisible();
+
+      // O botão tem altura fixa: com o rótulo em duas linhas, o texto passa da caixa.
+      const wrappedLabels = await page.evaluate(`(() => {
+        const wrapped = [];
+        for (const button of document.querySelectorAll("button")) {
+          const text = (button.textContent || "").trim();
+          if (["Devolver ao agent", "Assumir atendimento"].includes(text) && button.scrollHeight > button.clientHeight) wrapped.push(text);
+        }
+        return wrapped;
+      })()`);
+
+      expect(wrappedLabels).toEqual([]);
+      expect(await horizontalOverflowOf(page)).toEqual([]);
+    });
+  }
+});

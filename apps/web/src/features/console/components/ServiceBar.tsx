@@ -111,12 +111,22 @@ export function ServiceBar({
               </dl>
             )}
           </div>
-          <div className="flex gap-1.5">
-            <Button variant="secondary" onClick={actions.release} disabled={actions.isWorking}>
+          {/* Os botões não quebram o rótulo (têm altura fixa): sem espaço, descem uma linha. */}
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              variant="secondary"
+              onClick={actions.release}
+              disabled={actions.isWorking}
+              className="whitespace-nowrap"
+            >
               <Undo2 aria-hidden size={15} />
               {actions.pending === "release" ? WORKING_LABELS.release : "Devolver ao agent"}
             </Button>
-            <Button onClick={actions.assume} disabled={actions.isWorking}>
+            <Button
+              onClick={actions.assume}
+              disabled={actions.isWorking}
+              className="whitespace-nowrap"
+            >
               <Hand aria-hidden size={16} />
               {actions.pending === "assume" ? WORKING_LABELS.assume : "Assumir atendimento"}
             </Button>
