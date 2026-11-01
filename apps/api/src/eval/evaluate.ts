@@ -7,6 +7,8 @@ import {
   PROPOSE_TICKET_DRAFT_TOOL_ID,
   PROPOSE_TICKET_UPDATE_TOOL_ID,
 } from "../agent/tools/draft-tools.ts";
+import { HANDOFF_TO_ANALYST_TOOL_ID } from "../agent/tools/handoff-tool.ts";
+import { SEARCH_KNOWLEDGE_BASE_TOOL_ID } from "../agent/tools/search-knowledge-base.ts";
 import { GET_TICKET_TOOL_ID, LIST_MY_TICKETS_TOOL_ID } from "../agent/tools/ticket-tools.ts";
 import type { TurnObservation } from "./observation.ts";
 import type { TurnExpectation } from "./scenario-schema.ts";
@@ -133,11 +135,27 @@ function checkLowConfidence(
   );
 }
 
+/** Tools que já são uma ação ou uma consulta: um "?" depois delas é cortesia, não esclarecimento. */
+const ACTING_TOOLS: readonly string[] = [
+  SEARCH_KNOWLEDGE_BASE_TOOL_ID,
+  PROPOSE_TICKET_DRAFT_TOOL_ID,
+  PROPOSE_TICKET_UPDATE_TOOL_ID,
+  CONFIRM_DRAFT_TOOL_ID,
+  HANDOFF_TO_ANALYST_TOOL_ID,
+];
+
+/**
+ * Pergunta de esclarecimento: o agent usou ask_with_options, ou escreveu uma pergunta sem ter
+ * consultado a central de ajuda nem agido. Só o texto do agent conta (um aviso do sistema com "?"
+ * não é pergunta dele), e o "posso ajudar em mais algo?" depois de uma resposta também não.
+ */
 export function askedQuestion(observation: TurnObservation): boolean {
-  return (
-    agentToolNames(observation).includes(ASK_WITH_OPTIONS_TOOL_ID) ||
-    observation.replyText.includes("?")
-  );
+  const calls = agentCalls(observation);
+  if (calls.some((call) => call.name === ASK_WITH_OPTIONS_TOOL_ID && call.output !== undefined)) {
+    return true;
+  }
+  const acted = calls.some((call) => ACTING_TOOLS.includes(call.name));
+  return !acted && observation.agentText.includes("?");
 }
 
 function checkQuestion(asksExpected: boolean, observation: TurnObservation, turn: number): Check {
@@ -242,7 +260,7 @@ function checkHandoff(
   return check("handoff", turn, passed, `transferência com ${describeSelection(wanted)}`, actual);
 }
 
-/** O agent apontou o chamado aberto parecido: pela busca de duplicidade, por um complemento dele ou no texto. */
+/** O agent apontou o chamado aberto parecido: pelo sinal de duplicidade da tool ou propondo um complemento a ele. Citá-lo no texto não basta. */
 function pointsToTicket(observation: TurnObservation, ticketNumber: string): boolean {
   const calls = agentCalls(observation);
   const flaggedByTool = calls.some((call) => {

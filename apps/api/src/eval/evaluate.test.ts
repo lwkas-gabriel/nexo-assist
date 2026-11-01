@@ -6,6 +6,7 @@ import type { TurnExpectation } from "./scenario-schema.ts";
 function observation(overrides: Partial<TurnObservation> = {}): TurnObservation {
   return {
     replyText: "",
+    agentText: "",
     toolCalls: [],
     decision: {
       intentLabel: "dúvida de TI",
@@ -207,26 +208,49 @@ describe("avaliador: o que o classificador entendeu", () => {
 });
 
 describe("avaliador: pergunta de esclarecimento", () => {
-  it("asksQuestion: conta ask_with_options ou um '?' na resposta", () => {
+  it("asksQuestion: conta ask_with_options ou uma pergunta do agent sem ter agido", () => {
     const viaTool = observation({ toolCalls: [call("ask_with_options")] });
-    const viaText = observation({ replyText: "O que está acontecendo exatamente?" });
+    const viaText = observation({ agentText: "O que está acontecendo exatamente?" });
 
     expect(checkOf({ asksQuestion: true }, viaTool, "asksQuestion").passed).toBe(true);
     expect(checkOf({ asksQuestion: true }, viaText, "asksQuestion").passed).toBe(true);
   });
 
+  it("asksQuestion: ask_with_options sem resultado (recusada na validação) não conta", () => {
+    const refused = observation({
+      toolCalls: [{ name: "ask_with_options", origin: "agent", input: {}, output: undefined }],
+    });
+
+    expect(checkOf({ asksQuestion: true }, refused, "asksQuestion").passed).toBe(false);
+  });
+
   it("asksQuestion: falha quando esperava pergunta e a resposta afirma", () => {
     const result = checkOf(
       { asksQuestion: true },
-      observation({ replyText: "Abri o chamado." }),
+      observation({ agentText: "Abri o chamado." }),
       "asksQuestion",
     );
 
     expect(result.passed).toBe(false);
   });
 
+  it("asksQuestion: o '?' de cortesia depois de consultar a central de ajuda não é esclarecimento", () => {
+    const courtesy = observation({
+      toolCalls: [call("search_knowledge_base", { articles: [] })],
+      agentText: "Não achei nada sobre isso. Posso ajudar em mais alguma coisa?",
+    });
+
+    expect(checkOf({ asksQuestion: true }, courtesy, "asksQuestion").passed).toBe(false);
+  });
+
+  it("asksQuestion: um '?' no aviso do sistema (transferência pelo código) não é pergunta do agent", () => {
+    const systemNotice = observation({ replyText: "Quer esperar o analista?", agentText: "" });
+
+    expect(checkOf({ asksQuestion: true }, systemNotice, "asksQuestion").passed).toBe(false);
+  });
+
   it("asksQuestion: falha quando esperava não perguntar e perguntou", () => {
-    const turn = observation({ replyText: "Qual chamado?" });
+    const turn = observation({ agentText: "Qual chamado?" });
 
     expect(checkOf({ asksQuestion: false }, turn, "asksQuestion").passed).toBe(false);
     expect(checkOf({ asksQuestion: false }, observation(), "asksQuestion").passed).toBe(true);

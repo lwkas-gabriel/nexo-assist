@@ -67,6 +67,8 @@ export type DecisionObservation = {
 export type TurnObservation = {
   /** Texto de todas as respostas do turno (agent e avisos do sistema). */
   replyText: string;
+  /** Só o que o agent escreveu (sem os avisos do sistema, como o da transferência pelo código). */
+  agentText: string;
   toolCalls: ToolCallObservation[];
   decision: DecisionObservation | undefined;
   /** Rascunhos criados neste turno. */

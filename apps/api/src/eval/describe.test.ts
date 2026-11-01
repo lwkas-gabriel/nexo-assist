@@ -5,6 +5,7 @@ import type { TurnObservation } from "./observation.ts";
 function observation(overrides: Partial<TurnObservation> = {}): TurnObservation {
   return {
     replyText: "",
+    agentText: "",
     toolCalls: [],
     decision: undefined,
     newDrafts: [],

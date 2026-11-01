@@ -104,6 +104,10 @@ async function drain(stream: ReadableStream<UIMessageChunk>): Promise<TurnFailur
   return failure;
 }
 
+const authorMetadataSchema = z.object({ author: z.string() });
+const authorOf = (message: UIMessage) =>
+  authorMetadataSchema.safeParse(message.metadata).data?.author;
+
 const decisionMetadataSchema = z.object({ decision: decisionViewSchema });
 
 function decisionOf(message: UIMessage): DecisionView | undefined {
@@ -188,6 +192,10 @@ async function observeTurn(session: Session, before: Snapshot): Promise<TurnObse
 
   return {
     replyText: replies.map((message) => textOf(message.parts)).join("\n"),
+    agentText: replies
+      .filter((message) => authorOf(message) === "agent")
+      .map((message) => textOf(message.parts))
+      .join("\n"),
     toolCalls: [...agentCalls, ...codeToolCalls(decision, agentCalls)],
     decision: decision ? toDecisionObservation(decision) : undefined,
     newDrafts: drafts
