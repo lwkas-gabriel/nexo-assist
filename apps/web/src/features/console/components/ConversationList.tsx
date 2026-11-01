@@ -112,7 +112,9 @@ export function ConversationList(props: ConversationListProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      {/* O pt-1 dá lugar ao anel do item selecionado e ao contorno de foco do primeiro item, que o
+          overflow cortaria no topo. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-1 pb-2">
         <ListBody {...props} onClearSearch={clearSearch} />
       </div>
       <SyncNotice

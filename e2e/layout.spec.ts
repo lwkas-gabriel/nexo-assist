@@ -131,3 +131,27 @@ test.describe("barra de atendimento do console, no celular e no tablet (10.6)", 
     });
   }
 });
+
+test.describe("lista do console (10.6)", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+  /** Contorno de foco: 2 px de linha mais 2 px de afastamento, que a lista não pode cortar. */
+  const FOCUS_OUTLINE_REACH = 4;
+
+  test("o anel e o foco do primeiro item não ficam cortados no topo da lista", async ({ page }) => {
+    await forgeWaitingConversation(page);
+    await page.goto("/");
+    const item = page.getByRole("button", { name: /Quero falar com um analista/ });
+    await expect(item).toBeVisible();
+
+    const spaceAboveItem = await item.evaluate((element) => {
+      let scroller = element.parentElement;
+      while (scroller && getComputedStyle(scroller).overflowY !== "auto") {
+        scroller = scroller.parentElement;
+      }
+      if (!scroller) throw new Error("A lista não tem região de rolagem.");
+      return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    });
+
+    expect(spaceAboveItem).toBeGreaterThanOrEqual(FOCUS_OUTLINE_REACH);
+  });
+});
