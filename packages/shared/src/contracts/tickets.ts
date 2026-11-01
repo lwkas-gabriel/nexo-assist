@@ -15,6 +15,12 @@ import { ticketDraftSchema } from "../domain/ticket-draft.ts";
 
 const isoDateTime = z.iso.datetime();
 
+/**
+ * Quantas vezes a api tenta o sistema de chamados antes de desistir (RT05). Está aqui porque a tela
+ * também diz o número ("sistema de chamados instável, tentei 3×", 10.5): um valor só, nos dois.
+ */
+export const TICKET_SERVICE_MAX_ATTEMPTS = 3;
+
 /** Quem escreveu uma atualização. Só a da equipe de TI conta para o prazo (A17). */
 export const UPDATE_AUTHORS = ["employee", "staff", "agent", "system"] as const;
 export type UpdateAuthor = (typeof UPDATE_AUTHORS)[number];
