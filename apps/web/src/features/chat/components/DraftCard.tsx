@@ -138,7 +138,7 @@ export function DraftCard(props: DraftCardProps) {
               {draft.status === "confirm_failed" ? "Tentar de novo" : "Confirmar"}
               <kbd
                 aria-hidden
-                className="rounded-sm bg-paper/15 px-[5px] py-px font-ui text-[11.5px] font-normal text-paper/80"
+                className="rounded-sm px-[5px] py-px font-ui text-[11.5px] font-normal text-paper ring-1 ring-paper/40 ring-inset"
               >
                 {`${modifierKeyLabel(isMac)}↵`}
               </kbd>
