@@ -466,6 +466,100 @@ describe("invariantes valem mesmo quando um turno posterior cai (RN09)", () => {
   });
 });
 
+describe("cobertura da rodada", () => {
+  /** Responde como o mock até `onScenarioDone` avisar que a cota acabou; depois, 429. */
+  function modelThatRunsOutOfQuota() {
+    const base = createMockModel();
+    const state = { exhausted: false };
+    const reject = () =>
+      Promise.reject(
+        new APICallError({
+          message: "cota",
+          url: "https://provedor.invalid/modelo",
+          requestBodyValues: {},
+          statusCode: 429,
+        }),
+      );
+    const model = new MockLanguageModelV4({
+      doGenerate: (options) => (state.exhausted ? reject() : base.doGenerate(options)),
+      doStream: (options) => (state.exhausted ? reject() : base.doStream(options)),
+    });
+    return { model, state };
+  }
+
+  it(
+    "429 depois do primeiro cenário: não sai 100% com código 0; mostra a cobertura e o aviso PARCIAL",
+    { timeout: 60_000 },
+    async () => {
+      const { model, state } = modelThatRunsOutOfQuota();
+      const report = await runEvaluation({
+        scenarios: [scenarioById("duvida-vpn-erro-809"), scenarioById("pede-analista")],
+        llm: GEMINI_WITHOUT_NETWORK,
+        model,
+        limits: UNLIMITED,
+        ...NO_WAIT,
+        onScenarioDone: () => {
+          state.exhausted = true;
+        },
+      });
+
+      expect(statusOf(report, "duvida-vpn-erro-809").status).toBe("passed");
+      expect(statusOf(report, "pede-analista").status).toBe("not_evaluated");
+      expect(report.totals).toMatchObject({
+        passed: 1,
+        failed: 0,
+        notEvaluated: 1,
+        total: 2,
+        percentPassed: 100,
+      });
+      expect(report.warnings.join(" ")).toContain("PARCIAL: 1 de 2");
+      expect(exitCodeOf(report)).not.toBe(0);
+      const text = formatReport(report);
+      expect(text).toContain("PARCIAL: 1 de 2 avaliados");
+      expect(text).toContain("cobertura 1/2");
+      expect(text).not.toContain("nota real");
+    },
+  );
+
+  it("rodada completa no gemini não tem aviso de parcial", { timeout: 60_000 }, async () => {
+    const { model } = modelThatRunsOutOfQuota();
+    const report = await runEvaluation({
+      scenarios: [scenarioById("duvida-vpn-erro-809")],
+      llm: GEMINI_WITHOUT_NETWORK,
+      model,
+      limits: UNLIMITED,
+      ...NO_WAIT,
+    });
+
+    expect(report.warnings).toEqual([]);
+    expect(exitCodeOf(report)).toBe(0);
+  });
+
+  it(
+    "categoria só com cenários não avaliados fica sem percentual (—), nunca 100%",
+    { timeout: 60_000 },
+    async () => {
+      const report = await runEvaluation({
+        scenarios: [scenarioById("fora-de-escopo-ferias"), scenarioById("duvida-vpn-erro-809")],
+        llm: MOCK,
+        limits: MOCK_LIMITS,
+        ...NO_WAIT,
+      });
+
+      const outOfScope = report.categories.find((category) => category.category === "out_of_scope");
+      expect(outOfScope).toMatchObject({
+        passed: 0,
+        failed: 0,
+        notEvaluated: 1,
+        total: 1,
+        percentPassed: null,
+      });
+      expect(report.categories.find((c) => c.category === "knowledge")?.percentPassed).toBe(100);
+      expect(formatReport(report)).toMatch(/fora de escopo\s+0\/0\s+—\s+\(cobertura 0\/1\)/);
+    },
+  );
+});
+
 describe("limites de uso do modelo real (ADR-0010)", () => {
   it("espaça o início das mensagens pelo intervalo configurado", { timeout: 60_000 }, async () => {
     const sleeps: number[] = [];

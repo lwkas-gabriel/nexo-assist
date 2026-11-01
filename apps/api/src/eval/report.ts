@@ -78,17 +78,26 @@ function formatPercent(percentPassed: number | null): string {
 function renderSummary(report: EvaluationReport): string[] {
   const rows = report.categories.map((category) => {
     const evaluated = category.passed + category.failed;
-    const note = category.notEvaluated > 0 ? ` (${category.notEvaluated} não avaliado(s))` : "";
-    return `  ${category.label.padEnd(42)} ${category.passed}/${evaluated}  ${formatPercent(category.percentPassed)}${note}`;
+    const coverage = `cobertura ${evaluated}/${category.total}`;
+    return `  ${category.label.padEnd(42)} ${category.passed}/${evaluated}  ${formatPercent(category.percentPassed).padEnd(5)} (${coverage})`;
   });
   const { totals } = report;
   const evaluated = totals.passed + totals.failed;
   return [
-    "Resumo por categoria (passaram/avaliados):",
+    "Resumo por categoria (passaram/avaliados, com a cobertura de avaliados sobre o total):",
     ...rows,
     "",
-    `Total: ${totals.passed}/${evaluated} avaliados passaram (${formatPercent(totals.percentPassed)}); ${totals.failed} falhou(aram); ${totals.notEvaluated} não avaliado(s).`,
+    `Total: ${totals.passed}/${evaluated} avaliados passaram (${formatPercent(totals.percentPassed)}); cobertura ${evaluated}/${totals.total}; ${totals.failed} falhou(aram); ${totals.notEvaluated} não avaliado(s).`,
   ];
+}
+
+function describeMode(report: EvaluationReport): string {
+  if (report.mode === "mock") return "Modo: mock";
+  const { totals } = report;
+  const evaluated = totals.passed + totals.failed;
+  const model = `Modo: gemini · modelo ${report.model ?? "?"}`;
+  if (totals.notEvaluated === 0) return `${model} · nota real desta execução (cobertura total)`;
+  return `${model} · PARCIAL: ${evaluated} de ${totals.total} avaliados`;
 }
 
 export function formatReport(report: EvaluationReport): string {
@@ -98,10 +107,7 @@ export function formatReport(report: EvaluationReport): string {
     "!".repeat(78),
     "",
   ]);
-  const modelLine =
-    report.mode === "gemini"
-      ? `Modo: gemini · modelo ${report.model ?? "?"} · nota real desta execução`
-      : "Modo: mock";
+  const modelLine = describeMode(report);
   return [
     ...banner,
     modelLine,
@@ -114,9 +120,15 @@ export function formatReport(report: EvaluationReport): string {
   ].join("\n");
 }
 
-/** 1 se algum cenário falhou; 2 se nada pôde ser avaliado; 0 caso contrário. */
+/**
+ * 1 se algum cenário falhou. Com o modelo real, 2 se qualquer cenário ficou sem avaliar (uma
+ * rodada cortada pela cota não é sucesso). No mock, "não avaliado" é esperado (os cenários que
+ * exigem modelo real); só 2 se nada passou.
+ */
 export function exitCodeOf(report: EvaluationReport): number {
-  if (report.totals.failed > 0) return 1;
-  if (report.totals.passed === 0) return 2;
+  const { failed, passed, notEvaluated } = report.totals;
+  if (failed > 0) return 1;
+  if (report.mode === "gemini" && notEvaluated > 0) return 2;
+  if (passed === 0) return 2;
   return 0;
 }

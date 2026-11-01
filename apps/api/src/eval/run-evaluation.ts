@@ -52,6 +52,15 @@ export const MOCK_LIMITS: EvalLimits = {
 export const MOCK_MODE_WARNING =
   "MODO MOCK: o modelo é um roteiro por palavras-chave. Este resultado só prova que o harness funciona e NÃO mede a qualidade das decisões do modelo. A nota real vem de LLM_MODE=gemini.";
 
+/** Com o modelo real, uma execução cortada pela cota não pode passar por nota completa. */
+export function partialWarnings(totals: EvaluationReport["totals"]): string[] {
+  const evaluated = totals.passed + totals.failed;
+  if (totals.notEvaluated === 0) return [];
+  return [
+    `PARCIAL: ${evaluated} de ${totals.total} cenários avaliados. O percentual abaixo NÃO cobre o conjunto inteiro; rode de novo para completar.`,
+  ];
+}
+
 export type ScenarioStatus = "passed" | "failed" | "not_evaluated";
 
 export type ScenarioResult = {
@@ -73,6 +82,8 @@ export type CategorySummary = {
   passed: number;
   failed: number;
   notEvaluated: number;
+  /** Quantos cenários a categoria tem (a cobertura é avaliados sobre este total). */
+  total: number;
   /** Percentual dos avaliados que passaram; nulo se nenhum foi avaliado. */
   percentPassed: number | null;
 };
@@ -84,7 +95,14 @@ export type EvaluationReport = {
   warnings: string[];
   scenarios: ScenarioResult[];
   categories: CategorySummary[];
-  totals: { passed: number; failed: number; notEvaluated: number; percentPassed: number | null };
+  totals: {
+    passed: number;
+    failed: number;
+    notEvaluated: number;
+    /** Todos os cenários do conjunto; avaliados = passed + failed. */
+    total: number;
+    percentPassed: number | null;
+  };
 };
 
 const percent = (passed: number, evaluated: number) =>
@@ -105,6 +123,7 @@ function summarize(
       passed,
       failed,
       notEvaluated: count(inCategory, "not_evaluated"),
+      total: inCategory.length,
       percentPassed: percent(passed, passed + failed),
     };
   });
@@ -116,6 +135,7 @@ function summarize(
       passed,
       failed,
       notEvaluated: count(scenarios, "not_evaluated"),
+      total: scenarios.length,
       percentPassed: percent(passed, passed + failed),
     },
   };
@@ -282,11 +302,12 @@ export async function runEvaluation(options: EvaluationOptions): Promise<Evaluat
     options.onScenarioDone?.(result);
   }
 
+  const summary = summarize(results);
   return {
     mode: llm.LLM_MODE,
     model: llm.LLM_MODE === "gemini" ? llm.LLM_MODEL : null,
-    warnings: isMock ? [MOCK_MODE_WARNING] : [],
+    warnings: isMock ? [MOCK_MODE_WARNING] : partialWarnings(summary.totals),
     scenarios: results,
-    ...summarize(results),
+    ...summary,
   };
 }

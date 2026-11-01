@@ -29,6 +29,7 @@ function report(overrides: Partial<EvaluationReport> = {}): EvaluationReport {
         passed: 1,
         failed: 0,
         notEvaluated: 0,
+        total: 1,
         percentPassed: 100,
       },
       {
@@ -37,10 +38,11 @@ function report(overrides: Partial<EvaluationReport> = {}): EvaluationReport {
         passed: 0,
         failed: 0,
         notEvaluated: 1,
+        total: 1,
         percentPassed: null,
       },
     ],
-    totals: { passed: 1, failed: 0, notEvaluated: 1, percentPassed: 100 },
+    totals: { passed: 1, failed: 0, notEvaluated: 1, total: 2, percentPassed: 100 },
     ...overrides,
   };
 }
@@ -59,6 +61,25 @@ describe("relatório da avaliação", () => {
 
     expect(text).not.toContain("MODO MOCK");
     expect(text).toContain("modelo modelo-x");
+  });
+
+  it("no gemini, só diz 'nota real' quando a cobertura é total; cortada pela cota, diz PARCIAL", () => {
+    const complete = report({
+      mode: "gemini",
+      model: "modelo-x",
+      warnings: [],
+      totals: { passed: 2, failed: 0, notEvaluated: 0, total: 2, percentPassed: 100 },
+    });
+    const partial = report({
+      mode: "gemini",
+      model: "modelo-x",
+      warnings: [],
+      totals: { passed: 1, failed: 0, notEvaluated: 1, total: 2, percentPassed: 100 },
+    });
+
+    expect(formatReport(complete)).toContain("nota real desta execução (cobertura total)");
+    expect(formatReport(partial)).toContain("PARCIAL: 1 de 2 avaliados");
+    expect(formatReport(partial)).not.toContain("nota real");
   });
 
   it("mostra uma linha por cenário com o resultado, a ação esperada e a escolhida", () => {
@@ -99,9 +120,11 @@ describe("relatório da avaliação", () => {
   it("resume por categoria com o percentual dos avaliados e '—' quando nenhum foi avaliado", () => {
     const text = formatReport(report());
 
-    expect(text).toMatch(/dúvida respondida pela central de ajuda\s+1\/1\s+100%/);
-    expect(text).toMatch(/privacidade e prompt injection\s+0\/0\s+—\s+\(1 não avaliado/);
-    expect(text).toContain("Total: 1/1 avaliados passaram (100%)");
+    expect(text).toMatch(
+      /dúvida respondida pela central de ajuda\s+1\/1\s+100%\s+\(cobertura 1\/1\)/,
+    );
+    expect(text).toMatch(/privacidade e prompt injection\s+0\/0\s+—\s+\(cobertura 0\/1\)/);
+    expect(text).toContain("Total: 1/1 avaliados passaram (100%); cobertura 1/2");
   });
 
   it("quebra o texto longo da tabela em várias linhas, sem cortar nenhuma palavra", () => {
@@ -114,11 +137,12 @@ describe("relatório da avaliação", () => {
     expect(Math.max(...rowLines.map((line) => line.length))).toBeLessThanOrEqual(140);
   });
 
-  it("código de saída: 1 se algum cenário falhou, 2 se nada foi avaliado, 0 se tudo passou", () => {
-    const totals = (passed: number, failed: number) => ({
+  it("código de saída: 1 se algum cenário falhou, 2 se nada passou, 0 se tudo avaliado passou", () => {
+    const totals = (passed: number, failed: number, notEvaluated = 0) => ({
       passed,
       failed,
-      notEvaluated: 0,
+      notEvaluated,
+      total: passed + failed + notEvaluated,
       percentPassed: null,
     });
 
@@ -126,5 +150,12 @@ describe("relatório da avaliação", () => {
     expect(exitCodeOf(report({ totals: totals(0, 1) }))).toBe(1);
     expect(exitCodeOf(report({ totals: totals(0, 0) }))).toBe(2);
     expect(exitCodeOf(report({ totals: totals(5, 0) }))).toBe(0);
+  });
+
+  it("no mock, 'não avaliado' é esperado e não muda o código; no gemini, qualquer um muda", () => {
+    const withSkipped = { passed: 5, failed: 0, notEvaluated: 1, total: 6, percentPassed: 100 };
+
+    expect(exitCodeOf(report({ mode: "mock", totals: withSkipped }))).toBe(0);
+    expect(exitCodeOf(report({ mode: "gemini", model: "m", totals: withSkipped }))).toBe(2);
   });
 });
