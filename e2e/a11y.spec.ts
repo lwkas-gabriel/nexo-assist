@@ -46,6 +46,8 @@ test.describe("funcionário", () => {
   test.use({ storageState: SHARED_SESSIONS.ana.file });
 
   test("a conversa com o assistente não tem violações", async ({ page }) => {
+    // Conversa forjada e vazia: a real da Ana é a que o tickets.spec usa em paralelo.
+    await forgeConversation(page, {});
     await page.goto("/");
     await expect(page.getByLabel("Mensagem para o Nexo")).toBeVisible();
 
@@ -139,7 +141,8 @@ test.describe("analista", () => {
       }),
     );
     await page.goto("/");
-    await expect(page.getByRole("group", { name: "Filtro das conversas" })).toBeVisible();
+    // O texto só aparece depois do esqueleto de carregamento, que não é o estado vazio.
+    await expect(page.getByText("Nenhuma conversa ainda.")).toBeVisible();
 
     expect(await violationsOf(page)).toEqual([]);
   });
