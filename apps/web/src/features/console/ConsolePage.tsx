@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, MessageSquare } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useBreakpoint } from "../../lib/use-breakpoint.ts";
 import { Avatar } from "../../ui/Avatar.tsx";
 import { useQueryView } from "../../lib/use-query-view.ts";
@@ -322,7 +322,12 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
       </nav>
 
       {showList && (
-        <div className="flex min-h-0 w-full shrink-0 flex-col border-r border-rule md:w-[380px]">
+        // No celular a lista é a tela inteira, então é o landmark principal; do tablet para cima o
+        // principal é a conversa, ao lado.
+        <ListColumn
+          isMain={isMobile}
+          className="flex min-h-0 w-full shrink-0 flex-col border-r border-rule md:w-[380px]"
+        >
           {isMobile && (
             <div className="flex items-center justify-between border-b border-rule px-4 py-2">
               <NexoMark tone="onLight" />
@@ -347,7 +352,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
             onSelect={selectConversation}
             now={now}
           />
-        </div>
+        </ListColumn>
       )}
 
       {showConversation && (
@@ -393,5 +398,22 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
         </main>
       )}
     </div>
+  );
+}
+
+/** A coluna da lista: `main` quando ela é a única coisa na tela (celular), `div` ao lado da conversa. */
+function ListColumn({
+  isMain,
+  className,
+  children,
+}: {
+  isMain: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  return isMain ? (
+    <main className={className}>{children}</main>
+  ) : (
+    <div className={className}>{children}</div>
   );
 }
