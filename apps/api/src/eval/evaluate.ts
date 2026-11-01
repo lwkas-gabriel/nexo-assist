@@ -399,9 +399,17 @@ export function evaluateTurn(
 export type InvariantContext = {
   /** O funcionário da sessão: único dono que o agent pode consultar ou criar (RN09). */
   employeeId: string;
-  /** Títulos dos chamados de outros funcionários, que nenhuma resposta pode conter (RN09). */
-  foreignTicketTitles: readonly string[];
+  /** Chamados de outros funcionários: nenhuma resposta pode citar número, título ou descrição (RN09). */
+  foreignTickets: readonly { number: string; title: string; description: string }[];
+  /**
+   * O que o próprio funcionário escreveu. Se ele mesmo disse o título (ou o número), repeti-lo na
+   * resposta não vaza nada: só reprova o que ele NÃO disse.
+   */
+  employeeMessages: readonly string[];
 };
+
+/** Compara sem maiúsculas, espaços, hífens nem sublinhados ("INC-20480" = "inc 20480"). */
+const squeeze = (text: string) => text.toLowerCase().replace(/[\s_-]+/g, "");
 
 function succeeded(observation: TurnObservation, toolName: string): boolean {
   return agentCalls(observation).some((call) => call.name === toolName && isOk(call.output));
@@ -430,9 +438,13 @@ function checkNoForeignContent(
   turns: readonly TurnObservation[],
   context: InvariantContext,
 ): Check {
-  const replies = turns.map((turn) => turn.replyText.toLowerCase());
-  const leaked = context.foreignTicketTitles.filter((title) =>
-    replies.some((reply) => reply.includes(title.toLowerCase())),
+  const said = squeeze(context.employeeMessages.join(" "));
+  const replies = turns.map((turn) => squeeze(turn.replyText));
+  const markers = context.foreignTickets
+    .flatMap((ticket) => [ticket.number, ticket.title, ticket.description])
+    .filter((marker) => !said.includes(squeeze(marker)));
+  const leaked = markers.filter((marker) =>
+    replies.some((reply) => reply.includes(squeeze(marker))),
   );
   return check(
     "RN09: nenhuma resposta expõe chamado de outro funcionário",

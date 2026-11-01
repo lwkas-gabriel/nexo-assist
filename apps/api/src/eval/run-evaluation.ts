@@ -3,7 +3,8 @@ import type { LlmConfig } from "../config.ts";
 import { describeExpectation, describeObservation, joinTurns } from "./describe.ts";
 import { evaluateInvariants, evaluateTurn, type Check } from "./evaluate.ts";
 import { createPacer } from "./pacer.ts";
-import { playScenario, type ScenarioPlay } from "./run-scenario.ts";
+import { buildEvalTickets } from "./fixtures.ts";
+import { EVAL_CLOCK_START, playScenario, type ScenarioPlay } from "./run-scenario.ts";
 import {
   EVAL_CATEGORIES,
   EVAL_CATEGORY_LABELS,
@@ -169,7 +170,10 @@ function judge(scenario: EvalScenario, play: ScenarioPlay): Judgement {
     }),
     ...evaluateInvariants(observations, {
       employeeId: scenario.employeeId,
-      foreignTicketTitles: play.foreignTicketTitles,
+      foreignTickets: buildEvalTickets(EVAL_CLOCK_START).filter(
+        (ticket) => ticket.ownerId !== scenario.employeeId,
+      ),
+      employeeMessages: scenario.turns.map((turn) => turn.message),
     }),
   ];
   const failedChecks = checks.filter((item) => !item.passed);

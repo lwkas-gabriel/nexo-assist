@@ -243,8 +243,6 @@ async function playTurn(session: Session, message: string): Promise<ObservedTurn
 export type ScenarioPlay = {
   /** Os turnos jogados; para no primeiro que falhou (os seguintes não fariam sentido). */
   turns: ObservedTurn[];
-  /** Títulos dos chamados de outros funcionários, que nenhuma resposta pode conter (RN09). */
-  foreignTicketTitles: string[];
 };
 
 /**
@@ -261,10 +259,6 @@ export async function playScenario(
   },
 ): Promise<ScenarioPlay> {
   const session = await openSession(scenario, options.llm, options.model);
-  const foreignTicketTitles = buildEvalTickets(EVAL_CLOCK_START)
-    .filter((ticket) => ticket.ownerId !== scenario.employeeId)
-    .map((ticket) => ticket.title);
-
   const turns: ObservedTurn[] = [];
   for (const { message } of scenario.turns) {
     await options.beforeMessage();
@@ -272,5 +266,5 @@ export async function playScenario(
     turns.push(turn);
     if (turn.failure) break;
   }
-  return { turns, foreignTicketTitles };
+  return { turns };
 }

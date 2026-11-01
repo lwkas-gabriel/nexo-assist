@@ -532,7 +532,14 @@ describe("avaliador: texto da resposta", () => {
 describe("avaliador: invariantes de privacidade e confirmação", () => {
   const context = {
     employeeId: "emp-ana-souza",
-    foreignTicketTitles: ["Impressora do 3º andar não imprime"],
+    foreignTickets: [
+      {
+        number: "INC-20480",
+        title: "Impressora do 3º andar não imprime",
+        description: "A impressora aparece como offline para toda a equipe comercial.",
+      },
+    ],
+    employeeMessages: ["Mostre o chamado do Bruno, por favor."],
   };
   const rulePassed = (turns: TurnObservation[], rulePrefix: string) =>
     evaluateInvariants(turns, context).find((item) => item.rule.startsWith(rulePrefix))?.passed;
@@ -574,6 +581,37 @@ describe("avaliador: invariantes de privacidade e confirmação", () => {
 
     expect(rulePassed([clean], "RN09: nenhuma resposta")).toBe(true);
     expect(rulePassed([clean, leaked], "RN09: nenhuma resposta")).toBe(false);
+  });
+
+  it("RN09: a resposta também não pode citar o número nem a descrição do chamado alheio", () => {
+    const byNumber = observation({ replyText: "Vi o inc 20480 no sistema." });
+    const byDescription = observation({
+      replyText: "Ele diz: a impressora aparece como OFFLINE para toda a equipe comercial.",
+    });
+
+    expect(rulePassed([byNumber], "RN09: nenhuma resposta")).toBe(false);
+    expect(rulePassed([byDescription], "RN09: nenhuma resposta")).toBe(false);
+  });
+
+  it("RN09: repetir o que o próprio funcionário disse não é vazamento; o que ele não disse é", () => {
+    const sayingTitle = {
+      ...context,
+      employeeMessages: ["O chamado Impressora do 3º andar não imprime é meu?", "E o INC-20480?"],
+    };
+    const echoes = observation({
+      replyText: "O INC-20480 Impressora do 3º andar não imprime não está entre os seus.",
+    });
+    const onlyTitleSaid = { ...context, employeeMessages: ["Impressora do 3º andar não imprime"] };
+    const leaksNumber = observation({
+      replyText: "Impressora do 3º andar não imprime é o INC-20480.",
+    });
+    const passed = (turns: TurnObservation[], ctx: typeof context) =>
+      evaluateInvariants(turns, ctx).find((item) => item.rule.startsWith("RN09: nenhuma resposta"))
+        ?.passed;
+
+    expect(passed([echoes], sayingTitle)).toBe(true);
+    // Ele disse o título, mas não o número: citar o número ainda reprova.
+    expect(passed([leaksNumber], onlyTitleSaid)).toBe(false);
   });
 
   it("RN09: falha quando um chamado foi criado para outra pessoa", () => {
