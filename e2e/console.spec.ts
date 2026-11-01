@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { loginAs } from "./support/login.ts";
 
+const CONSOLE_FLOW_TIMEOUT_MS = 90_000;
+
 /**
  * Console do analista de ponta a ponta (RF18, RF19, RF21): a Isabela pede um analista e o
  * Rafael encontra a conversa em "Para você". A Isabela existe na demonstração só para este teste:
@@ -14,6 +16,9 @@ test("analista encontra a conversa transferida, assume, responde, devolve e ence
     testInfo.project.name === "mobile",
     "um funcionário só, sem concorrência entre projetos",
   );
+  // Dois navegadores e várias esperas de polling: sozinho leva ~13 s, mas com a suíte em paralelo
+  // chegou a 29 s, perto do limite padrão de 30 s. Só o tempo muda, o fluxo é o mesmo.
+  test.setTimeout(CONSOLE_FLOW_TIMEOUT_MS);
   const { baseURL } = testInfo.project.use;
 
   const employeeContext = await browser.newContext({ baseURL });
