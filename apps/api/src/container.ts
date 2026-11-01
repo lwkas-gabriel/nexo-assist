@@ -53,7 +53,7 @@ const CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
 const CHAT_MESSAGES_PER_IP_PER_DAY = 40;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
 const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
-const LOGINS_PER_IP_PER_MINUTE = 20;
+const DEFAULT_LOGINS_PER_IP_PER_MINUTE = 20;
 
 /** O que o container precisa da config: banco, modelo e acesso ao serviço de chamados. */
 export type ContainerConfig = LlmConfig & {
@@ -62,6 +62,8 @@ export type ContainerConfig = LlmConfig & {
   TICKETS_SERVICE_TOKEN: string;
   CHAT_MESSAGES_PER_MINUTE: number;
   CHAT_MESSAGES_PER_DAY: number;
+  /** Sem ela, vale `DEFAULT_LOGINS_PER_IP_PER_MINUTE`. */
+  LOGINS_PER_IP_PER_MINUTE?: number | undefined;
 };
 
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
@@ -228,7 +230,7 @@ export async function createContainer(
     chatLimits,
     statsService: createStatsService({ statsStore: createStatsStore(db), clock }),
     loginLimiter: createRateLimiter({
-      limit: LOGINS_PER_IP_PER_MINUTE,
+      limit: config.LOGINS_PER_IP_PER_MINUTE ?? DEFAULT_LOGINS_PER_IP_PER_MINUTE,
       windowMs: MINUTE_MS,
       clock,
     }),

@@ -55,6 +55,7 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 | api             | `LLM_MODEL`                | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`       |
 | api             | `CHAT_MESSAGES_PER_MINUTE` | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (3 no plano gratuito) |
 | api             | `CHAT_MESSAGES_PER_DAY`    | Teto global de mensagens ao agent por dia, dentro da cota do modelo (120 no plano gratuito)  |
+| api             | `LOGINS_PER_IP_PER_MINUTE` | Opcional. Logins por minuto por IP (padrão 20); só o E2E sobe, porque entra tudo do mesmo IP |
 | api             | `TICKETS_SERVICE_URL`      | Endereço do serviço de chamados                                                              |
 | api             | `TICKETS_SERVICE_TOKEN`    | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`             |
 | tickets-service | `PORT`                     | Porta HTTP do serviço de chamados                                                            |

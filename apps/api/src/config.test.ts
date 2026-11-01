@@ -54,6 +54,19 @@ describe("loadConfig", () => {
     ).toThrowError(/TICKETS_SERVICE_URL/);
   });
 
+  it("o limite de logins por minuto é opcional e, quando vem, precisa ser um inteiro positivo", () => {
+    const withoutLimit = loadConfig({ ...baseEnv, LLM_MODE: "mock" });
+    const withLimit = loadConfig({ ...baseEnv, LLM_MODE: "mock", LOGINS_PER_IP_PER_MINUTE: "60" });
+
+    expect(withoutLimit.LOGINS_PER_IP_PER_MINUTE).toBeUndefined();
+    expect(withLimit.LOGINS_PER_IP_PER_MINUTE).toBe(60);
+    for (const invalid of ["0", "-1", "muitos", "1.5"]) {
+      expect(() =>
+        loadConfig({ ...baseEnv, LLM_MODE: "mock", LOGINS_PER_IP_PER_MINUTE: invalid }),
+      ).toThrowError(/LOGINS_PER_IP_PER_MINUTE/);
+    }
+  });
+
   it("exige COOKIE_SECURE explícito (true ou false), sem valor padrão no código", () => {
     expect(() => loadConfig({ ...baseEnv, COOKIE_SECURE: "sim", LLM_MODE: "mock" })).toThrowError(
       /COOKIE_SECURE/,

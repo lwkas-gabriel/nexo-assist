@@ -61,6 +61,9 @@ export default defineConfig({
         // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo.
         CHAT_MESSAGES_PER_MINUTE: "1000",
         CHAT_MESSAGES_PER_DAY: "1000",
+        // Todos os testes entram do mesmo IP, nos dois projetos (desktop e celular), e o E2E já
+        // usa os 20 logins por minuto do padrão; a folga evita falha por "muitas tentativas".
+        LOGINS_PER_IP_PER_MINUTE: "1000",
       },
       url: `http://localhost:${E2E_API_PORT}/api/health`,
       reuseExistingServer: false,

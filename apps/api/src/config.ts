@@ -37,6 +37,11 @@ const envSchema = z
      */
     CHAT_MESSAGES_PER_MINUTE: z.coerce.number().int().positive(),
     CHAT_MESSAGES_PER_DAY: z.coerce.number().int().positive(),
+    /**
+     * Logins por minuto por IP (RT10). Opcional: sem ela vale o padrão do container. Só o E2E a
+     * sobe, porque seus testes entram todos do mesmo IP.
+     */
+    LOGINS_PER_IP_PER_MINUTE: z.coerce.number().int().positive().optional(),
   })
   .and(llmSchema);
 
