@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T26b concluídas; próxima: T27. Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T27 concluídas (a nota real do Gemini na T27 depende de uma chave); próxima: T28. Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -170,7 +170,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T26b Revisão de responsividade e acessibilidade nos 4 breakpoints (10.6, 10.7) — **concluída.** Parte 1: correções de foco, landmarks, títulos, layout e contraste (22 commits, AI_LOG 75). Parte 2: varredura axe em 11 estados, larguras em 10 pontos, teclado, contraste dos tokens travado em teste unitário e documentação em `docs/FRONTEND.md` 10.6 e 10.7 (AI_LOG 76). Revisão adversarial independente: 12 achados, nenhum crítico, todos tratados ou registrados (AI_LOG 76). Ponto herdado da T26, já tratado na parte 1 (commit 2502f44); resta conferir com leitor de tela real. **(Texto original do ponto herdado, a verificar, herdado da revisão da T26, AI_LOG 74):** o `LoadingState` (`role="status"` com `aria-busy="true"`) nasce já com o rótulo e provavelmente não é anunciado por leitores de tela; conferir com um leitor real e, se for o caso, montar a região vazia e preencher o rótulo depois (como o `useAnnounceAfterMount` faz no aviso de sessão expirada).
 
 **Fase 3 — Qualidade**
-- [ ] T27 Avaliação do agent: conjunto de ~15 conversas roteirizadas (dúvida, fora de escopo, duplicidade, vencido, crítico, privacidade) checando a ação escolhida (critério "qualidade das decisões")
+- [x] T27 Avaliação do agent: conjunto de ~15 conversas roteirizadas (dúvida, fora de escopo, duplicidade, vencido, crítico, privacidade) checando a ação escolhida (critério "qualidade das decisões") — **concluída como harness; a nota do Gemini real continua pendente.** `pnpm eval` roda 18 cenários (22 mensagens) que conferem a ação escolhida (tool, rascunho, transferência) e os invariantes de privacidade e confirmação (RN09, RN04, R04), lidos do que o produto grava. No mock, 12 cenários são avaliados e 6 exigem o modelo real (cobertura 12/18); o resultado do mock só prova que o harness funciona e não mede o modelo. **Pendente, depende de uma chave do Gemini:** rodar `LLM_MODE=gemini pnpm eval`, calibrar as expectativas dos 6 cenários, calibrar o limiar de confiança 0,5 (T14) e decidir sobre o sinal "categoria ambígua" (R09). Revisão adversarial independente: 15 achados, nenhum crítico, 14 tratados (AI_LOG 77).
 - [ ] T28 E2E Playwright: (1) abrir chamado com rascunho e confirmação; (2) transferência → analista assume → devolve (LLM mockado no E2E)
 
 **Fase 4**
