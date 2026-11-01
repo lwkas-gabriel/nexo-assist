@@ -53,3 +53,22 @@ export function consultedTicketOf(message: UIMessage): TicketDetailsView | undef
 export function isOverdueAndOpen(ticket: TicketSummaryView): boolean {
   return ticket.isOpen && ticket.deadline?.isOverdue === true;
 }
+
+export type SuggestedAction = "analyst" | "add_info" | "decline";
+
+/** A oferta de um chamado vencido: as três saídas do protótipo. */
+const OVERDUE_TICKET_ACTIONS: readonly SuggestedAction[] = ["analyst", "add_info", "decline"];
+/** Com o sistema de chamados fora do ar não há chamado a que ligar: só o analista (10.5). */
+const TICKETS_UNAVAILABLE_ACTIONS: readonly SuggestedAction[] = ["analyst"];
+
+/**
+ * As ações oferecidas. No limite da sessão (RN14) não há campo de mensagem, então "Adicionar
+ * informação" some.
+ */
+export function offeredActions(
+  offer: "overdue_ticket" | "tickets_unavailable",
+  canAddInfo: boolean,
+): readonly SuggestedAction[] {
+  if (offer === "tickets_unavailable") return TICKETS_UNAVAILABLE_ACTIONS;
+  return OVERDUE_TICKET_ACTIONS.filter((action) => action !== "add_info" || canAddInfo);
+}

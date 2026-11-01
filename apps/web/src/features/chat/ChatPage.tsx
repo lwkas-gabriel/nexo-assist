@@ -46,8 +46,7 @@ import {
   type MessageDelivery,
   type TicketActions,
 } from "./components/MessageBubble.tsx";
-import type { SuggestedAction } from "./components/SuggestedActions.tsx";
-import type { TicketSummaryView } from "./ticket-model.ts";
+import type { SuggestedAction, TicketSummaryView } from "./ticket-model.ts";
 
 const CONVERSATION_KEY = ["conversation"] as const;
 /** De quanto em quanto tempo a conversa com os analistas é recarregada (5: polling de 2 a 3 s). */
@@ -254,6 +253,7 @@ function ChatConversation({
     select: (messageId, ticket) =>
       ticketAction.mutate({ messageId, run: () => selectTicket(ticket.number) }),
     suggest,
+    askAnalyst: (messageId) => ticketAction.mutate({ messageId, run: () => requestAnalyst() }),
   };
 
   const pendingDraft = confirmableDraft(messages, view.drafts);

@@ -14,10 +14,13 @@ import {
   consultedTicketOf,
   isOverdueAndOpen,
   listedTicketsOf,
+  offeredActions,
+  type SuggestedAction,
   type TicketSummaryView,
 } from "../ticket-model.ts";
 import { Button } from "../../../ui/Button.tsx";
-import { SuggestedActions, type SuggestedAction } from "./SuggestedActions.tsx";
+import { hasTicketsUnavailable } from "../tool-actions.ts";
+import { SuggestedActions } from "./SuggestedActions.tsx";
 import { TicketCard } from "./TicketCard.tsx";
 import { TicketPickerList } from "./TicketPickerList.tsx";
 import { ActionChips } from "./ActionChips.tsx";
@@ -32,6 +35,8 @@ export type TicketActions = {
   canAddInfo: boolean;
   select: (messageId: string, ticket: TicketSummaryView) => void;
   suggest: (messageId: string, action: SuggestedAction, ticket: TicketSummaryView) => void;
+  /** Sistema de chamados instável (10.5): chama o analista, sem chamado ligado. */
+  askAnalyst: (messageId: string) => void;
 };
 
 export type MessageDelivery = "sent" | "unsent" | "interrupted";
@@ -135,6 +140,14 @@ export function MessageBubble(props: MessageBubbleProps) {
   return <AgentMessage {...props} text={text} />;
 }
 
+function analystOfferOf(
+  message: UIMessage,
+  consulted: TicketSummaryView | undefined,
+): "overdue_ticket" | "tickets_unavailable" | undefined {
+  if (consulted) return isOverdueAndOpen(consulted) ? "overdue_ticket" : undefined;
+  return hasTicketsUnavailable(message) ? "tickets_unavailable" : undefined;
+}
+
 function AgentMessage({
   message,
   drafts,
@@ -158,8 +171,15 @@ function AgentMessage({
   // Com o chamado já consultado no mesmo turno, a lista vira só o caminho até ele: nada a escolher.
   const listed = consulted ? undefined : listedTicketsOf(message);
   const actionError = ticketActions.errorFor(message.id);
-  const offersAnalyst = consulted !== undefined && isOverdueAndOpen(consulted);
   const canAct = isLatestAgentTurn && !ticketActions.isWorking;
+  // Só a resposta mais recente oferece analista; o chamado vencido tem prioridade (o sistema
+  // respondeu, então não está instável).
+  const offer = isLatestAgentTurn ? analystOfferOf(message, consulted) : undefined;
+  const actions = offer ? offeredActions(offer, ticketActions.canAddInfo) : [];
+  const onOfferedAction = (action: SuggestedAction) => {
+    if (offer === "tickets_unavailable") ticketActions.askAnalyst(message.id);
+    else if (consulted) ticketActions.suggest(message.id, action, consulted);
+  };
 
   return (
     <li className="flex flex-col gap-1.5">
@@ -170,7 +190,7 @@ function AgentMessage({
         decisionPanelId={decisionPanelId}
       />
       {consulted && <TicketCard ticket={consulted} />}
-      {(text || options) && (
+      {(text || options || offer) && (
         <div className="flex max-w-[600px] flex-col gap-3 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4 py-3">
           {text && (
             <p className="text-[14.5px] leading-normal whitespace-pre-wrap text-ink">{text}</p>
@@ -178,12 +198,8 @@ function AgentMessage({
           {options && (
             <QuickOptions data={options} isActive={optionsActive} onPick={onPickOption} />
           )}
-          {offersAnalyst && isLatestAgentTurn && (
-            <SuggestedActions
-              isActive={canAct}
-              canAddInfo={ticketActions.canAddInfo}
-              onAction={(action) => ticketActions.suggest(message.id, action, consulted)}
-            />
+          {offer && (
+            <SuggestedActions isActive={canAct} actions={actions} onAction={onOfferedAction} />
           )}
         </div>
       )}

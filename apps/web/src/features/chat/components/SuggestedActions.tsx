@@ -1,6 +1,6 @@
 import { cx } from "../../../ui/cx.ts";
 
-export type SuggestedAction = "analyst" | "add_info" | "decline";
+import type { SuggestedAction } from "../ticket-model.ts";
 
 const ACTION_LABELS: Record<SuggestedAction, string> = {
   analyst: "Falar com um analista",
@@ -9,22 +9,18 @@ const ACTION_LABELS: Record<SuggestedAction, string> = {
 };
 
 /**
- * Tela 3: a oferta de analista para um chamado vencido (RN07, A04), com as saídas do protótipo.
- * Cada uma é uma ação estruturada (11.5): nenhuma passa pelo modelo.
+ * Tela 3: a oferta de analista, para um chamado vencido (RN07, A04) ou com o sistema de chamados
+ * instável (10.5). Cada ação é estruturada (11.5): nenhuma passa pelo modelo.
  */
 export function SuggestedActions({
   isActive,
-  canAddInfo,
+  actions,
   onAction,
 }: {
   isActive: boolean;
-  /** No limite da sessão (RN14) não há campo de mensagem: "Adicionar informação" some. */
-  canAddInfo: boolean;
+  actions: readonly SuggestedAction[];
   onAction: (action: SuggestedAction) => void;
 }) {
-  const actions = (Object.keys(ACTION_LABELS) as SuggestedAction[]).filter(
-    (action) => action !== "add_info" || canAddInfo,
-  );
   return (
     <ul aria-label="O que fazer agora" className="flex flex-wrap gap-1.5">
       {actions.map((action) => (

@@ -352,6 +352,59 @@ describe("tela do chat (tela 2)", () => {
       );
     });
 
+    describe("sistema de chamados instável (10.5)", () => {
+      const unstable = (id: string) =>
+        agentWithTool(
+          id,
+          "list_my_tickets",
+          { ok: false, reason: "tickets_unavailable" },
+          "O sistema de chamados está instável agora.",
+        );
+
+      it("o chip diz que tentou 3×, sem o código interno, e oferece só o analista", async () => {
+        stubWithBodies([unstable("a-1")]);
+        renderChat();
+
+        const chip = (await screen.findByText("sistema de chamados instável, tentei 3×"))
+          .parentElement;
+        // O chip que não concluiu leva o ícone de aviso, não o ✓ de ação feita.
+        expect(chip?.querySelector(".lucide-triangle-alert")).not.toBeNull();
+        expect(chip?.querySelector(".lucide-check")).toBeNull();
+        expect(screen.queryByText(/tickets_unavailable/)).toBeNull();
+        expect(screen.getByRole("button", { name: "Falar com um analista" })).toBeDefined();
+        expect(screen.queryByRole("button", { name: "Não, obrigado" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Adicionar informação" })).toBeNull();
+      });
+
+      it("clicar chama o analista pelo código, sem chamado ligado", async () => {
+        const posts = stubWithBodies([unstable("a-1")]);
+        renderChat();
+
+        await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
+
+        await waitFor(() => expect(posts).toContainEqual({ path: "/api/chat/handoff", body: {} }));
+      });
+
+      it("numa resposta antiga, o chip fica como registro e a oferta some", async () => {
+        stubWithBodies([
+          unstable("a-1"),
+          agentWithTool("a-2", "search_knowledge_base", { ok: true }, "Ok."),
+        ]);
+        renderChat();
+
+        expect(await screen.findByText("sistema de chamados instável, tentei 3×")).toBeDefined();
+        expect(screen.queryByRole("button", { name: "Falar com um analista" })).toBeNull();
+      });
+
+      it("com um analista na conversa, não há oferta", async () => {
+        stubWithBodies([unstable("a-1")], conversationAt("waiting_analyst", false));
+        renderChat();
+
+        await screen.findByText("sistema de chamados instável, tentei 3×");
+        expect(screen.queryByRole("button", { name: "Falar com um analista" })).toBeNull();
+      });
+    });
+
     it("Não, obrigado responde pelo código", async () => {
       const posts = stubWithBodies([
         agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),

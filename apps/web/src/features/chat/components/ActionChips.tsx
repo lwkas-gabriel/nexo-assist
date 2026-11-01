@@ -1,6 +1,6 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { Check, ChevronRight, LoaderCircle, TriangleAlert } from "lucide-react";
-import { describeToolAction } from "../tool-actions.ts";
+import { describeToolAction, didNotComplete } from "../tool-actions.ts";
 
 type ActionChipsProps = {
   message: UIMessage;
@@ -41,6 +41,8 @@ export function ActionChips({
           {toolParts.map((part) => {
             const isRunning = part.state === "input-streaming" || part.state === "input-available";
             const failed = part.state === "output-error";
+            // A tool respondeu, mas a ação não aconteceu: o ✓ diria o contrário do chip.
+            const notCompleted = part.state === "output-available" && didNotComplete(part.output);
             return (
               <li
                 key={part.toolCallId}
@@ -50,6 +52,8 @@ export function ActionChips({
                   <LoaderCircle aria-hidden size={12} className="animate-spin" />
                 ) : failed ? (
                   <TriangleAlert aria-hidden size={12} className="text-danger-text" />
+                ) : notCompleted ? (
+                  <TriangleAlert aria-hidden size={12} className="text-warning-text" />
                 ) : (
                   <Check aria-hidden size={12} />
                 )}
