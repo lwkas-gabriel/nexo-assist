@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { forgeConversation } from "./support/chat-fixture.ts";
 import { forgeWaitingConversation } from "./support/console-fixture.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
@@ -67,5 +68,31 @@ test.describe("palavra longa numa bolha, no celular (10.6)", () => {
 
       expect(await horizontalOverflowOf(page)).toEqual([]);
     });
+  });
+});
+
+test.describe("pílula do topo no celular (10.6)", () => {
+  test.use({ storageState: SHARED_SESSIONS.ana.file, viewport: PHONE_VIEWPORT });
+
+  const ANALYST_CONVERSATION = {
+    id: "fixture-conversation",
+    mode: "analyst",
+    analyst: { name: "Rafael Lima", department: "Suporte N2" },
+  };
+  /** Uma linha de 12,5 px com o respiro da pílula; duas linhas passariam de 40 px. */
+  const ONE_LINE_PILL_MAX_HEIGHT = 32;
+
+  test("o nome do analista cabe numa linha, e o texto inteiro continua para o leitor de tela", async ({
+    page,
+  }) => {
+    await forgeConversation(page, { conversation: ANALYST_CONVERSATION });
+    await page.goto("/");
+    const status = page.getByRole("status").filter({ hasText: "Com Rafael Lima" });
+
+    await expect(status).toHaveText("Com Rafael Lima · Suporte N2");
+    const box = await status.boundingBox();
+
+    expect(box?.height ?? 0).toBeLessThanOrEqual(ONE_LINE_PILL_MAX_HEIGHT);
+    expect(await horizontalOverflowOf(page)).toEqual([]);
   });
 });

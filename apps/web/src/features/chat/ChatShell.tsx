@@ -110,7 +110,7 @@ export function ChatShell({
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-rule px-4 md:px-8">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-rule px-4 md:gap-4 md:px-8">
           <div className="flex items-center gap-2 md:hidden">
             <NexoMark tone="onLight" />
           </div>
@@ -129,10 +129,18 @@ export function ChatShell({
           {/* Região de status: o leitor de tela ouve a troca (transferida, com analista, de volta).
               No perfil a pílula some, como no protótipo (só o breadcrumb); sem a conversa carregada,
               também (não há o que afirmar). */}
-          <span role="status">
+          <span role="status" className="flex min-w-0 shrink">
             {page === "chat" && mode !== null && (
-              <Pill tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]} withDot>
-                {modeLabel}
+              <Pill
+                tone={mode === "agent" ? "success" : CONVERSATION_MODE_TONES[mode]}
+                withDot
+                className="max-w-full min-w-0"
+              >
+                {/* Num celular estreito, "Com Rafael Lima · Suporte N2" não cabe: corta com
+                    reticências, e o leitor de tela lê o texto inteiro. */}
+                <span title={modeLabel ?? undefined} className="truncate">
+                  {modeLabel}
+                </span>
               </Pill>
             )}
           </span>

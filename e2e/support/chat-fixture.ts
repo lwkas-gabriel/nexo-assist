@@ -16,12 +16,17 @@ export type ForgedMessage = {
 
 export async function forgeConversation(
   page: Page,
-  { messages, drafts = [] }: { messages: ForgedMessage[]; drafts?: unknown[] },
+  {
+    messages = [],
+    drafts = [],
+    conversation,
+  }: { messages?: ForgedMessage[]; drafts?: unknown[]; conversation?: unknown },
 ) {
   await page.route(CHAT_URL, async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as Record<string, unknown>;
-    await route.fulfill({ response, json: { ...body, messages, drafts } });
+    const forged = { ...body, messages, drafts, ...(conversation ? { conversation } : {}) };
+    await route.fulfill({ response, json: forged });
   });
 }
 
