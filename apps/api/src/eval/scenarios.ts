@@ -56,6 +56,10 @@ const SCENARIOS: readonly ScenarioData[] = [
           draft: "none",
           ticketsCreated: 0,
           handoff: "none",
+          reply: {
+            mustMatch: ["\\bRH\\b|Recursos Humanos"],
+            mustNotMatch: ["\\b\\d+\\s+dias?\\b"],
+          },
         },
       },
     ],
@@ -191,7 +195,7 @@ const SCENARIOS: readonly ScenarioData[] = [
         expect: {
           tools: { mustCallOneOf: ["get_ticket", "list_my_tickets"] },
           ticketLookup: { numbers: ["INC-20311"], isOverdue: true },
-          reply: { mustMatch: ["analista"] },
+          reply: { mustMatch: ["falar com (um )?analista|quer que eu (chame|transfira)"] },
           handoff: "none",
           ticketsCreated: 0,
         },
