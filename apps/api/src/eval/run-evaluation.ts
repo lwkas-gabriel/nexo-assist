@@ -27,12 +27,18 @@ export type EvalLimits = {
 };
 
 /**
- * Cota gratuita do gemini-3.5-flash-lite (ADR-0010): 15 requisições por minuto e 500 por dia, e
- * cada mensagem usa até 4 chamadas. O mesmo teto por minuto do produto (CHAT_MESSAGES_PER_MINUTE).
+ * Cota gratuita do gemini-3.5-flash-lite (ADR-0010): 15 requisições por minuto e 500 por dia; cada
+ * mensagem usa até 4 chamadas ao modelo, e cada chamada pode ser repetida uma vez (o agent e o
+ * classificador usam maxRetries: 1, que a avaliação não troca sem mexer no produto), então uma
+ * mensagem pode chegar a 8 requisições. O espaçamento segue o teto por minuto do produto.
  */
 const GEMINI_MESSAGES_PER_MINUTE = 3;
 const MS_PER_MINUTE = 60 * 1000;
-/** Metade das 120 mensagens por dia do ADR-0010: sobra cota para o uso do chat no mesmo dia. */
+/**
+ * Teto POR EXECUÇÃO (metade das 120 mensagens por dia do ADR-0010), não por dia: duas execuções
+ * seguidas gastam o dia, e o uso da avaliação não entra nos contadores do produto
+ * (usage_counters), que não enxergam a cota que ela consome.
+ */
 const GEMINI_MAX_MESSAGES_PER_RUN = 60;
 const GEMINI_MAX_CONSECUTIVE_PROVIDER_FAILURES = 2;
 
