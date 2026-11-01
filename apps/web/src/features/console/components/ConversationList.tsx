@@ -66,7 +66,7 @@ export function ConversationList(props: ConversationListProps) {
           </h1>
           <AvailabilityToggle />
         </div>
-        <label className="flex h-9 items-center gap-2.5 rounded-full bg-desk px-3">
+        <label className="flex h-9 items-center gap-2.5 rounded-full bg-desk px-3 focus-within:ring-2 focus-within:ring-cta">
           <Search aria-hidden size={15} className="text-ink-3" />
           <span className="sr-only">Pesquisar conversa ou chamado</span>
           <input

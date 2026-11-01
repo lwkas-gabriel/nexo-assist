@@ -141,6 +141,16 @@ describe("console do analista (tela 4)", () => {
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "Para você, 1 conversa" })).toBeDefined();
   });
+  it("o campo de busca mostra um anel de foco no rótulo (o contorno do campo é desligado)", async () => {
+    stubConsole();
+    renderConsole();
+
+    const field = await screen.findByLabelText("Pesquisar conversa ou chamado");
+
+    // O `outline-hidden` do campo vence o `:focus-visible` global: o anel é o único sinal de foco.
+    expect(field.closest("label")?.className).toContain("focus-within:ring-2");
+    expect(field.closest("label")?.className).toContain("focus-within:ring-cta");
+  });
 
   it("filtro e busca vão para a api", async () => {
     const paths = stubConsole();
