@@ -175,13 +175,14 @@ function checkDraft(
   const wanted = Object.entries(draft);
   const matches = observation.newDrafts.some(
     (created) =>
-        wanted.every(([key, value]) => (created as Record<string, unknown>)[key] === value),
+      created.status === "pending" &&
+      wanted.every(([key, value]) => (created as Record<string, unknown>)[key] === value),
   );
   return check(
     "draft",
     turn,
     matches,
-    `rascunho novo com ${describeSelection(draft)}`,
+    `rascunho novo pendente com ${describeSelection(draft)}`,
     actual,
   );
 }

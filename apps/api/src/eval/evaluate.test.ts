@@ -264,6 +264,19 @@ describe("avaliador: rascunho e chamado criado", () => {
     ).toBe(false);
   });
 
+  it("draft: só conta rascunho pendente (um já confirmado ou cancelado no turno não vale)", () => {
+    const confirmed = { ...incidentDraft, status: "confirmed" };
+
+    expect(
+      checkOf({ draft: { kind: "create" } }, observation({ newDrafts: [confirmed] }), "draft")
+        .passed,
+    ).toBe(false);
+    expect(
+      checkOf({ draft: { kind: "create" } }, observation({ newDrafts: [incidentDraft] }), "draft")
+        .passed,
+    ).toBe(true);
+  });
+
   it("draft: falha quando esperava um rascunho e nenhum foi criado", () => {
     const result = checkOf({ draft: { kind: "create" } }, observation(), "draft");
 
