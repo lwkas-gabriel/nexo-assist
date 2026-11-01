@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useAuth } from "./use-auth.ts";
+import { CURRENT_USER_KEY, expireSession, SESSION_EXPIRED_MESSAGE, useAuth } from "./use-auth.ts";
 
 const ANA = {
   id: "emp-ana-souza",
@@ -38,5 +38,19 @@ describe("sessão do usuário (useAuth)", () => {
     await act(() => result.current.logout.mutateAsync());
 
     expect(window.location.hash).toBe("");
+  });
+
+  it("10.3: expireSession esvazia o cache, limpa o hash, tira o usuário e deixa o aviso", () => {
+    const client = new QueryClient();
+    client.setQueryData(CURRENT_USER_KEY, ANA);
+    client.setQueryData(["conversation"], { messages: ["conteúdo do usuário anterior"] });
+    window.location.hash = "#/perfil";
+
+    expireSession(client);
+
+    expect(window.location.hash).toBe("");
+    expect(client.getQueryData(CURRENT_USER_KEY)).toBeNull();
+    expect(client.getQueryData(["conversation"])).toBeUndefined();
+    expect(client.getQueryData(["session-notice"])).toBe(SESSION_EXPIRED_MESSAGE);
   });
 });

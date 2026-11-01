@@ -28,3 +28,13 @@ function messageFromErrorBody(text: string): string | undefined {
 function isFriendlyServerText(text: string): boolean {
   return /^(O assistente|Não consegui)/.test(text);
 }
+
+/** A api respondeu 401 no envio: a sessão acabou no meio da conversa (10.3). */
+export function isSessionExpiredChatError(error: Error): boolean {
+  try {
+    const body = JSON.parse(error.message) as { error?: { code?: unknown } };
+    return body.error?.code === "UNAUTHORIZED";
+  } catch {
+    return false;
+  }
+}

@@ -22,7 +22,12 @@ import {
   type DraftFields,
   type DraftView,
 } from "./chat-api.ts";
-import { CONVERSATION_OUT_OF_SYNC, describeChatError } from "./chat-error.ts";
+import { expireSession } from "../auth/use-auth.ts";
+import {
+  CONVERSATION_OUT_OF_SYNC,
+  describeChatError,
+  isSessionExpiredChatError,
+} from "./chat-error.ts";
 import {
   confirmableDraft,
   interruptedMessageId,
@@ -194,6 +199,12 @@ function ChatConversation({
     onFinish: ({ isError }) => void (isError ? reloadView() : refresh()),
   });
   const isBusy = status === "submitted" || status === "streaming";
+  // 10.3: sessão que acabou no meio do envio volta ao login com o aviso. Aqui desmontar a conversa
+  // é aceitável: sem sessão não há o que preservar no servidor.
+  const isSessionExpired = error !== undefined && isSessionExpiredChatError(error);
+  useEffect(() => {
+    if (isSessionExpired) expireSession(queryClient);
+  }, [isSessionExpired, queryClient]);
 
   // Botões do card: ações determinísticas, sem o modelo (11.5). O erro fica no card que falhou.
   const draftAction = useMutation({
