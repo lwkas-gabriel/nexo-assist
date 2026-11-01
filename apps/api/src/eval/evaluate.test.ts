@@ -602,6 +602,23 @@ describe("avaliador: invariantes de privacidade e confirmação", () => {
     expect(rulePassed([draftedTurn(), sameTurn], "R04")).toBe(false);
   });
 
+  it("R04: falha também quando a tentativa de confirmar no turno da proposta foi recusada", () => {
+    const refused = observation({
+      toolCalls: [
+        call("propose_ticket_draft", { ok: true }),
+        call("confirm_draft", { ok: false, reason: "refused" }),
+      ],
+    });
+
+    expect(rulePassed([draftedTurn(), refused], "R04")).toBe(false);
+    expect(
+      rulePassed(
+        [draftedTurn(), observation({ toolCalls: [call("confirm_draft", { ok: false })] })],
+        "R04",
+      ),
+    ).toBe(true);
+  });
+
   it("R04: falha quando confirma sem nenhum rascunho proposto antes", () => {
     expect(rulePassed([confirmedTurn()], "R04")).toBe(false);
     expect(rulePassed([observation(), confirmedTurn()], "R04")).toBe(false);

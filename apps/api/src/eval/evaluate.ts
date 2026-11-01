@@ -173,10 +173,17 @@ function checkDraft(
     return check("draft", turn, observation.newDrafts.length === 0, "nenhum rascunho novo", actual);
   }
   const wanted = Object.entries(draft);
-  const matches = observation.newDrafts.some((created) =>
-    wanted.every(([key, value]) => (created as Record<string, unknown>)[key] === value),
+  const matches = observation.newDrafts.some(
+    (created) =>
+        wanted.every(([key, value]) => (created as Record<string, unknown>)[key] === value),
   );
-  return check("draft", turn, matches, `rascunho novo com ${describeSelection(draft)}`, actual);
+  return check(
+    "draft",
+    turn,
+    matches,
+    `rascunho novo com ${describeSelection(draft)}`,
+    actual,
+  );
 }
 
 function checkTicketsCreated(count: number, observation: TurnObservation, turn: number): Check {
@@ -467,9 +474,12 @@ function checkWritesNeedConfirmation(turns: readonly TurnObservation[]): Check {
 
 function checkConfirmationFollowsProposal(turns: readonly TurnObservation[]): Check {
   const premature = turns.flatMap((turn, index) => {
-    if (!succeeded(turn, CONFIRM_DRAFT_TOOL_ID)) return [];
+    // Tentar confirmar na resposta em que propôs já é o erro, mesmo que o servidor tenha recusado.
+    const triedWithProposal =
+      proposedDraft(turn) && agentToolNames(turn).includes(CONFIRM_DRAFT_TOOL_ID);
     const proposedBefore = turns.slice(0, index).some((earlier) => earlier.newDrafts.length > 0);
-    return proposedBefore && !proposedDraft(turn) ? [] : [index + 1];
+    const confirmedWithoutDraft = succeeded(turn, CONFIRM_DRAFT_TOOL_ID) && !proposedBefore;
+    return triedWithProposal || confirmedWithoutDraft ? [index + 1] : [];
   });
   return check(
     "R04: confirma só rascunho proposto em turno anterior",
