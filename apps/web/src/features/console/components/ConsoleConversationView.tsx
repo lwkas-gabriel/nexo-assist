@@ -224,7 +224,7 @@ function ConsoleMessage({
     return (
       <li className="flex flex-col items-start">
         <div className="flex max-w-[78%] items-end gap-2.5 rounded-[4px_12px_12px_12px] bg-paper px-3 pt-2 pb-1.5 shadow-bubble">
-          <p className="text-[14.5px] whitespace-pre-wrap text-ink">{text}</p>
+          <p className="text-[14.5px] wrap-anywhere whitespace-pre-wrap text-ink">{text}</p>
           {time && <span className="shrink-0 text-[11px] text-ink-3">{time}</span>}
         </div>
       </li>
@@ -264,7 +264,7 @@ function ConsoleMessage({
             author === "agent" ? "bg-bubble-agent" : "bg-bubble-analyst",
           )}
         >
-          <p className="text-[14.5px] whitespace-pre-wrap text-ink">{text}</p>
+          <p className="text-[14.5px] wrap-anywhere whitespace-pre-wrap text-ink">{text}</p>
           <span className="flex items-center justify-end gap-1 text-[11px] text-ink-3">
             {time}
             {seen !== undefined && <SeenTicks seen={seen} />}

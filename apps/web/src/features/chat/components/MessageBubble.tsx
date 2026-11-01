@@ -107,7 +107,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (author === "employee") {
     return (
       <li className="flex flex-col items-end gap-1">
-        <p className="max-w-[520px] rounded-[12px_12px_4px_12px] bg-ink px-4 py-[11px] text-[14.5px] leading-[1.45] whitespace-pre-wrap text-paper">
+        <p className="max-w-[520px] rounded-[12px_12px_4px_12px] bg-ink px-4 py-[11px] text-[14.5px] leading-[1.45] wrap-anywhere whitespace-pre-wrap text-paper">
           <span className="sr-only">Você: </span>
           {text}
         </p>
@@ -137,7 +137,7 @@ export function MessageBubble(props: MessageBubbleProps) {
           <span className="font-semibold text-ink">{analyst?.name ?? "Analista de TI"}</span>
           {analyst && ` · ${analyst.department}`}
         </span>
-        <p className="max-w-[600px] rounded-[4px_12px_12px_12px] bg-bubble-analyst px-4 py-3 text-[14.5px] leading-normal whitespace-pre-wrap text-ink">
+        <p className="max-w-[600px] rounded-[4px_12px_12px_12px] bg-bubble-analyst px-4 py-3 text-[14.5px] leading-normal wrap-anywhere whitespace-pre-wrap text-ink">
           {text}
         </p>
       </li>
@@ -201,7 +201,9 @@ function AgentMessage({
       {(text || options || offer) && (
         <div className="flex max-w-[600px] flex-col gap-3 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4 py-3">
           {text && (
-            <p className="text-[14.5px] leading-normal whitespace-pre-wrap text-ink">{text}</p>
+            <p className="text-[14.5px] leading-normal wrap-anywhere whitespace-pre-wrap text-ink">
+              {text}
+            </p>
           )}
           {options && (
             <QuickOptions data={options} isActive={optionsActive} onPick={onPickOption} />

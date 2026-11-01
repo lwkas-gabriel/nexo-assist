@@ -69,13 +69,24 @@ const TICKETS = {
   others: [],
 };
 
-/** Lista, conversa e chamados do console mostram só a conversa forjada, aguardando analista. */
-export async function forgeWaitingConversation(page: Page) {
+/**
+ * Lista, conversa e chamados do console mostram só a conversa forjada, aguardando analista, com as
+ * mensagens a mais que o teste pedir (texto do funcionário).
+ */
+export async function forgeWaitingConversation(page: Page, extraEmployeeTexts: string[] = []) {
+  const extraMessages = extraEmployeeTexts.map((text, index) => ({
+    id: `fixture-extra-${index}`,
+    role: "user",
+    metadata: { author: "employee" },
+    parts: [{ type: "text", text }],
+  }));
   await page.route(/\/api\/console\/conversations\?/, (route) => route.fulfill({ json: LIST }));
   await page.route(/\/api\/console\/conversations\/[^/]+\/tickets$/, (route) =>
     route.fulfill({ json: TICKETS }),
   );
   await page.route(/\/api\/console\/conversations\/[^/?]+$/, (route) =>
-    route.fulfill({ json: CONVERSATION }),
+    route.fulfill({
+      json: { ...CONVERSATION, messages: [...CONVERSATION.messages, ...extraMessages] },
+    }),
   );
 }
