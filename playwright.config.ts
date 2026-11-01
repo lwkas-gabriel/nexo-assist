@@ -31,7 +31,12 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
-    { name: "mobile", dependencies: ["setup"], use: { ...devices["Pixel 7"] } },
+    {
+      name: "mobile",
+      dependencies: ["setup"],
+      // O Pixel 7 tem 412 px de largura; o 10.6 pede 390 × 844 (o celular mais estreito do dia a dia).
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+    },
   ],
   webServer: [
     {
