@@ -3,8 +3,6 @@ import { askedQuestion, describeOverdue } from "./evaluate.ts";
 import type { TurnObservation } from "./observation.ts";
 import type { TurnExpectation } from "./scenario-schema.ts";
 
-/** Frases curtas para a tabela do relatório: a ação esperada e a escolhida, lado a lado. */
-
 const list = (items: readonly string[]) => items.join(", ");
 
 /** Os campos definidos de uma seleção, como "incident, high". */
@@ -34,6 +32,7 @@ function describeHandoff(handoff: NonNullable<TurnExpectation["handoff"]>): stri
   return details ? `transfere (${details})` : "transfere";
 }
 
+/** Frases curtas para a tabela do relatório: a ação esperada, para pôr ao lado da escolhida. */
 export function describeExpectation(expectation: TurnExpectation): string {
   const parts: string[] = [];
   if (expectation.tools) parts.push(...describeTools(expectation.tools));

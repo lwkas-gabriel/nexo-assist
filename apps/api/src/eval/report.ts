@@ -1,8 +1,6 @@
 import type { Check } from "./evaluate.ts";
 import type { EvaluationReport, ScenarioResult, ScenarioStatus } from "./run-evaluation.ts";
 
-/** Texto do relatório para o terminal (tabela por cenário e resumo por categoria). */
-
 const STATUS_LABELS: Record<ScenarioStatus, string> = {
   passed: "ok",
   failed: "FALHOU",
@@ -100,6 +98,7 @@ function describeMode(report: EvaluationReport): string {
   return `${model} · PARCIAL: ${evaluated} de ${totals.total} avaliados`;
 }
 
+/** Texto do relatório para o terminal: tabela por cenário e resumo por categoria. */
 export function formatReport(report: EvaluationReport): string {
   const banner = report.warnings.flatMap((warning) => [
     "!".repeat(78),
