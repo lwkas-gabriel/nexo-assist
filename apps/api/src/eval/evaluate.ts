@@ -272,8 +272,7 @@ function pointsToTicket(observation: TurnObservation, ticketNumber: string): boo
     const input = numberInputSchema.safeParse(call.input).data;
     return input !== undefined && parseTicketNumber(input.number) === ticketNumber;
   });
-  const mentioned = observation.replyText.toUpperCase().includes(ticketNumber);
-  return flaggedByTool || updating || mentioned;
+  return flaggedByTool || updating;
 }
 
 function checkDuplicate(ticketNumber: string, observation: TurnObservation, turn: number): Check {

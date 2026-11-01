@@ -434,10 +434,14 @@ describe("avaliador: duplicidade", () => {
     ).toBe(true);
   });
 
-  it("RN05: aponta o chamado quando a resposta o cita", () => {
-    const turn = observation({ replyText: "Você já tem o inc-20298 aberto." });
+  it("RN05: só citar o chamado no texto não basta: precisa do sinal da tool ou do complemento", () => {
+    const turn = observation({
+      replyText: "Você já tem o inc-20298 aberto.",
+      agentText: "Você já tem o inc-20298 aberto.",
+      toolCalls: [call("list_my_tickets", { ok: true, tickets: [] })],
+    });
 
-    expect(checkOf({ duplicateOf: "INC-20298" }, turn, "duplicateOf").passed).toBe(true);
+    expect(checkOf({ duplicateOf: "INC-20298" }, turn, "duplicateOf").passed).toBe(false);
   });
 
   it("RN05: falha quando o agent não apontou o chamado parecido", () => {
