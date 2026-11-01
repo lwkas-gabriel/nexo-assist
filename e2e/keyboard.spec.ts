@@ -28,22 +28,28 @@ const ANSWER_STREAM = [
 type FocusIndicator = "outline" | "box-shadow" | "field-wrapper" | "none";
 
 /**
- * Como o elemento focado se destaca. Os campos de texto escondem o contorno e trocam a borda ou o
- * anel do conjunto (campo + ícone ou botão); o resto usa o contorno global de `:focus-visible`.
+ * Como o elemento focado se destaca, comparando o estilo com e sem o foco: um anel que já existe
+ * parado (o item selecionado da lista) não prova que o foco aparece. Os campos de texto escondem
+ * o contorno e trocam a borda ou o anel do conjunto (campo + ícone ou botão); o resto usa o
+ * contorno global de `:focus-visible`.
  */
 async function focusIndicatorOfActiveElement(page: Page): Promise<FocusIndicator> {
   return page.evaluate(`(() => {
     const element = document.activeElement;
-    const style = getComputedStyle(element);
-    if (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) return "outline";
-    if (style.boxShadow !== "none") return "box-shadow";
     const wrapper = element.parentElement;
-    const look = () => getComputedStyle(wrapper).borderColor + getComputedStyle(wrapper).boxShadow;
-    const focusedLook = look();
+    const outlineOf = () => {
+      const style = getComputedStyle(element);
+      return style.outlineStyle === "none" ? "none" : style.outlineStyle + style.outlineWidth + style.outlineColor;
+    };
+    const shadowOf = () => getComputedStyle(element).boxShadow;
+    const wrapperLook = () => getComputedStyle(wrapper).borderColor + getComputedStyle(wrapper).boxShadow;
+    const focused = { outline: outlineOf(), shadow: shadowOf(), wrapper: wrapperLook() };
     element.blur();
-    const idleLook = look();
+    const idle = { outline: outlineOf(), shadow: shadowOf(), wrapper: wrapperLook() };
     element.focus();
-    return focusedLook !== idleLook ? "field-wrapper" : "none";
+    if (focused.outline !== "none" && focused.outline !== idle.outline) return "outline";
+    if (focused.shadow !== idle.shadow) return "box-shadow";
+    return focused.wrapper !== idle.wrapper ? "field-wrapper" : "none";
   })()`);
 }
 
