@@ -35,3 +35,19 @@ test.describe("funcionário", () => {
     expect(await colorContrastViolationsIn(page, "section[aria-label='Rascunho D-7']")).toEqual([]);
   });
 });
+
+test.describe("login", () => {
+  // O painel de apresentação só aparece a partir de 1024 px (10.6).
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("o painel de apresentação tem contraste suficiente, inclusive a legenda do exemplo", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "Sobre o Nexo Assist" })).toBeVisible();
+
+    expect(
+      await colorContrastViolationsIn(page, "section[aria-label='Sobre o Nexo Assist']"),
+    ).toEqual([]);
+  });
+});
