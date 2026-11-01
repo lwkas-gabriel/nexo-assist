@@ -1,6 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { forgeConversation } from "./support/chat-fixture.ts";
 import { forgeWaitingConversation } from "./support/console-fixture.ts";
+import { horizontalOverflowOf } from "./support/overflow.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
 /**
@@ -11,23 +12,6 @@ const PHONE_VIEWPORT = { width: 390, height: 844 };
 /** Uma palavra só, sem hífen nem barra onde o navegador possa quebrar: um token, um hash, um erro. */
 const UNBREAKABLE_TEXT = `https://nexo.com.br/diagnostico?sessao=${"a1B2c3D4e5F6g7H8i9J0".repeat(8)}`;
 const CHAT_URL = /\/api\/chat$/;
-
-/** Quanto sobra além da largura visível, em qualquer região de rolagem da tela (rolagem lateral). */
-async function horizontalOverflowOf(page: Page): Promise<string[]> {
-  return page.evaluate(`(() => {
-    const overflowing = [];
-    for (const element of document.querySelectorAll("body *")) {
-      const isHidden = String(element.className).includes("sr-only");
-      const style = getComputedStyle(element);
-      // O truncate (reticências) corta de propósito; só a rolagem lateral é defeito.
-      const isScrollable = style.overflowX !== "visible" && style.textOverflow !== "ellipsis";
-      if (!isHidden && isScrollable && element.scrollWidth > element.clientWidth + 1) {
-        overflowing.push(element.tagName + " " + element.scrollWidth + ">" + element.clientWidth);
-      }
-    }
-    return overflowing;
-  })()`);
-}
 
 function textMessage(id: string, role: "user" | "assistant", author: string, text: string) {
   return { id, role, metadata: { author }, parts: [{ type: "text", text }] };

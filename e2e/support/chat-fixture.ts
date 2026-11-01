@@ -74,3 +74,53 @@ export const DRAFT_PROPOSAL_MESSAGE: ForgedMessage = {
     { type: "text", text: "Montei o rascunho. Confira antes de confirmar." },
   ],
 };
+
+const OVERDUE_TICKET = {
+  number: "INC-20311",
+  title: "Notebook lento após atualização do Windows",
+  category: "Hardware",
+  priority: "Média",
+  status: "Aguardando analista",
+  statusCode: "waiting_analyst",
+  isOpen: true,
+  openedAt: "16/10, 14:20",
+  openedOn: "16 out",
+  lastTeamUpdateAt: "22/10, 14:20",
+  timeWithoutTeamResponse: "5 dias",
+  deadline: { rule: "3 dias úteis", dueAt: "27/10, 14:20", isOverdue: true },
+  description: "Lentidão geral desde a atualização de 15/10.",
+};
+export const TICKET_MESSAGE: ForgedMessage = {
+  id: "fixture-ticket",
+  role: "assistant",
+  metadata: { author: "agent" },
+  parts: [
+    {
+      type: "tool-get_ticket",
+      toolCallId: "fixture-ticket-call",
+      state: "output-available",
+      input: {},
+      output: { ok: true, ticket: OVERDUE_TICKET },
+    },
+    { type: "text", text: "Esse chamado já passou do prazo." },
+  ],
+};
+
+/** Registro de decisão (RF05) para a mensagem do agent ganhar o botão "detalhes da decisão". */
+const DECISION = {
+  intent: "consultar chamado",
+  understood: "A pessoa quer saber do chamado INC-20311.",
+  extracted: { ticketNumber: "INC-20311" },
+  classifierConfidence: 0.9,
+  finalConfidence: 0.75,
+  isLowConfidence: false,
+  reason: "Pergunta pelo andamento de um chamado.",
+  confidenceSource: "classifier",
+  steps: [{ tool: "get_ticket", ok: true, outcome: "concluiu", input: "chamado INC-20311" }],
+  rules: ["RN07: chamado vencido → oferecer analista"],
+  signals: [],
+};
+export const DECIDED_TICKET_MESSAGE: ForgedMessage = {
+  ...TICKET_MESSAGE,
+  metadata: { author: "agent", decision: DECISION } as ForgedMessage["metadata"],
+};
