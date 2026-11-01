@@ -21,14 +21,31 @@ const CHAT_URL = /\/api\/chat$/;
 const DRAWER_VIEWPORT = { width: 1100, height: 800 };
 const NO_SESSION = { cookies: [], origins: [] };
 
-/** Cada violação como texto: regra, impacto, o que o axe diz e o seletor, para o erro do teste ser legível. */
+/**
+ * O que o axe não consegue decidir (`incomplete`) e a conta de contraste manual cobre: texto de
+ * leitura (`ink`, `ink-2`, `ink-3`) sobre `paper` com um fundo escuro translúcido de gaveta ou folha
+ * passando por perto, o que o axe chama de "sobreposição parcial". Esses pares estão em
+ * `apps/web/src/ui/contrast.test.ts`. Qualquer outra regra, ou outro texto, volta como falha.
+ */
+const MANUALLY_CHECKED_TEXT = /\btext-ink(-[23])?\b/;
+
+/**
+ * Cada problema como texto, para o erro do teste ser legível: as violações (regra, impacto,
+ * seletor) e os `incomplete` que a conferência manual acima não explica.
+ */
 async function violationsOf(page: Page): Promise<string[]> {
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
-  return results.violations.flatMap((violation) =>
+  const violations = results.violations.flatMap((violation) =>
     violation.nodes.map(
       (node) => `${violation.id} (${violation.impact}): ${node.target.join(" ")} | ${node.html}`,
     ),
   );
+  const unexplained = results.incomplete.flatMap((item) =>
+    item.nodes
+      .filter((node) => item.id !== "color-contrast" || !MANUALLY_CHECKED_TEXT.test(node.html))
+      .map((node) => `${item.id} (o axe não decidiu): ${node.target.join(" ")} | ${node.html}`),
+  );
+  return [...violations, ...unexplained];
 }
 
 test.describe("login", () => {
