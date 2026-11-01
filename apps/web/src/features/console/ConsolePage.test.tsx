@@ -462,6 +462,104 @@ describe("console do analista (tela 4)", () => {
       );
     });
 
+    describe("foco e nome acessível durante a ação (10.7)", () => {
+      /** Uma api cuja ação fica pendente até `release()` e então falha com 409. */
+      function stubHeldFailure(initial: ConsoleConversation, failing: string) {
+        let release = () => undefined as void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+          if (init?.method === "POST") {
+            await gate;
+            const error = { error: { code: "CONFLICT", message: "A conversa mudou de dono." } };
+            return new Response(JSON.stringify(error), {
+              status: input.endsWith(failing) ? 409 : 200,
+            });
+          }
+          const body = input.startsWith("/api/console/conversations?")
+            ? LIST
+            : input.endsWith("/tickets")
+              ? TICKETS
+              : initial;
+          return new Response(JSON.stringify(body), { status: 200 });
+        });
+        return {
+          /** Faz o que o navegador faz com o botão que fica desabilitado: tira dele o foco. */
+          dropFocusOf: (button: HTMLElement) => {
+            if (document.activeElement !== button) return;
+            // O jsdom não solta o foco de um botão desabilitado, e `blur()` nele não faz nada.
+            button.removeAttribute("disabled");
+            button.blur();
+            button.setAttribute("disabled", "");
+          },
+          fail: () =>
+            act(async () => {
+              release();
+              await gate;
+            }),
+        };
+      }
+
+      it("o nome do botão do topo acompanha o estado: Devolvendo… e Encerrando…", async () => {
+        stubHeldFailure(mine, "/nada");
+        await open();
+
+        await userEvent.click(await screen.findByRole("button", { name: "Devolver ao agent" }));
+
+        expect(await screen.findByRole("button", { name: "Devolvendo…" })).toHaveProperty(
+          "disabled",
+          true,
+        );
+        expect(screen.getByRole("button", { name: "Encerrar atendimento" })).toHaveProperty(
+          "disabled",
+          true,
+        );
+      });
+
+      it("Assumir que falha devolve o foco ao botão", async () => {
+        const { dropFocusOf, fail } = stubHeldFailure(CONVERSATION, "/assume");
+        await open();
+        const assume = await screen.findByRole("button", { name: "Assumir atendimento" });
+
+        await userEvent.click(assume);
+        const working = await screen.findByRole("button", { name: "Assumindo…" });
+        dropFocusOf(working);
+        expect(document.activeElement).toBe(document.body);
+        await fail();
+
+        expect(await screen.findByText("A conversa mudou de dono.")).toBeDefined();
+        await waitFor(() => expect(document.activeElement).toBe(working));
+      });
+
+      it("Devolver pelo topo, se falha, devolve o foco ao botão", async () => {
+        const { dropFocusOf, fail } = stubHeldFailure(mine, "/release");
+        await open();
+        const release = await screen.findByRole("button", { name: "Devolver ao agent" });
+
+        await userEvent.click(release);
+        dropFocusOf(await screen.findByRole("button", { name: "Devolvendo…" }));
+        await fail();
+
+        expect(await screen.findByText("A conversa mudou de dono.")).toBeDefined();
+        await waitFor(() => expect(document.activeElement).toBe(release));
+      });
+
+      it("Enviar que falha devolve o foco ao botão, com o texto ainda no campo", async () => {
+        const { dropFocusOf, fail } = stubHeldFailure(mine, "/messages");
+        await open();
+        const field = await screen.findByLabelText("Resposta para Ana");
+        await userEvent.type(field, "Já estou vendo");
+        const send = screen.getByRole("button", { name: "Enviar" });
+
+        await userEvent.click(send);
+        dropFocusOf(await screen.findByRole("button", { name: "Enviando…" }));
+        await fail();
+
+        expect(await screen.findByText("A conversa mudou de dono.")).toBeDefined();
+        expect(field).toHaveProperty("value", "Já estou vendo");
+        await waitFor(() => expect(document.activeElement).toBe(send));
+      });
+    });
+
     it("com outro analista, o campo fica trancado e não há ações", async () => {
       stubActions({
         ...mine,

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { forgeWaitingConversation } from "./support/console-fixture.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
 /**
@@ -162,5 +163,34 @@ test.describe("funcionário com uma oferta de analista", () => {
 
     await expect(page.getByText("Essa oferta não está mais valendo.")).toBeVisible();
     await expect(askAnalyst).toBeFocused();
+  });
+});
+
+test.describe("analista com uma conversa aguardando", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+
+  test("Assumir que falha devolve o foco ao botão", async ({ page }) => {
+    await forgeWaitingConversation(page);
+    // A falha só chega depois de o botão ficar desabilitado: é nesse intervalo que o navegador
+    // joga o foco no <body>.
+    let releaseFailure: () => void = () => undefined;
+    const failureGate = new Promise<void>((resolve) => (releaseFailure = resolve));
+    await page.route(/\/api\/console\/conversations\/[^/]+\/assume$/, async (route) => {
+      await failureGate;
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: "CONFLICT", message: "Outro analista já assumiu esta conversa." } },
+      });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: /Ana Souza/ }).click();
+    const assume = page.getByRole("button", { name: "Assumir atendimento" });
+
+    await assume.click();
+    await expect(page.getByRole("button", { name: "Assumindo…" })).toBeDisabled();
+    releaseFailure();
+
+    await expect(page.getByRole("alert")).toHaveText("Outro analista já assumiu esta conversa.");
+    await expect(page.getByRole("button", { name: "Assumir atendimento" })).toBeFocused();
   });
 });

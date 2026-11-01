@@ -36,10 +36,10 @@ export function ServiceHeaderActions({ actions }: { actions: ServiceActions }) {
         variant="secondary"
         onClick={actions.release}
         disabled={actions.isWorking}
-        aria-label="Devolver ao agent"
+        aria-label={actions.pending === "release" ? WORKING_LABELS.release : "Devolver ao agent"}
       >
         <Undo2 aria-hidden size={15} />
-        {/* Abaixo de 1024 px, só o ícone: o nome vem do aria-label. */}
+        {/* Abaixo de 1024 px, só o ícone: o nome vem do aria-label, que acompanha o estado. */}
         <span aria-hidden className="hidden lg:inline">
           {actions.pending === "release" ? WORKING_LABELS.release : "Devolver ao agent"}
         </span>
@@ -48,7 +48,7 @@ export function ServiceHeaderActions({ actions }: { actions: ServiceActions }) {
         variant="danger-soft"
         onClick={actions.close}
         disabled={actions.isWorking}
-        aria-label="Encerrar atendimento"
+        aria-label={actions.pending === "close" ? WORKING_LABELS.close : "Encerrar atendimento"}
       >
         <CircleX aria-hidden size={15} />
         <span aria-hidden className="hidden lg:inline">

@@ -120,6 +120,10 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   // assumir, R31). O erro fica na barra de baixo da conversa.
   const queryClient = useQueryClient();
   // 10.7: depois da ação, o botão clicado some; o foco vai para onde o trabalho continua.
+  // Se a ação falha, nada some: o botão clicado volta a ficar habilitado, mas o navegador já tinha
+  // jogado o foco no <body> quando ele foi desabilitado. O foco volta a ele (ou ao campo).
+  const actionOpenerRef = useRef<HTMLElement | null>(null);
+  const shouldReturnToOpenerRef = useRef(false);
   const service = useMutation({
     mutationFn: ({
       run,
@@ -128,6 +132,13 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
       run: () => Promise<unknown>;
       focusAfter: string;
     }) => run(),
+    onMutate: () => {
+      actionOpenerRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    },
+    onError: () => {
+      shouldReturnToOpenerRef.current = true;
+    },
     onSuccess: (_result, { focusAfter }) => {
       pendingFocusRef.current = () => document.getElementById(focusAfter);
       return queryClient.invalidateQueries({ queryKey: ["console"] });
@@ -181,6 +192,20 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     if (!element) return;
     pendingFocusRef.current = null;
     element.focus();
+  });
+  // Sem lista de dependências, como o de cima: o botão só volta a ficar habilitado na renderização
+  // seguinte à falha.
+  useEffect(() => {
+    if (!shouldReturnToOpenerRef.current) return;
+    const opener = actionOpenerRef.current;
+    const isGone = !opener?.isConnected;
+    if (!isGone && opener instanceof HTMLButtonElement && opener.disabled) return;
+    shouldReturnToOpenerRef.current = false;
+    if (isGone) return;
+    // Quem já levou o foco para outro lugar o mantém; só o foco perdido (no <body>) é devolvido.
+    if (document.activeElement === document.body || document.activeElement === opener) {
+      opener.focus();
+    }
   });
 
   const selectConversation = (id: string) => {
