@@ -67,6 +67,20 @@ describe("transferência pelo chat (RF16, RF17)", () => {
     });
   });
 
+  it("pedir o analista de novo (duas abas, ou o recarregamento falhou) responde o que já está gravado, sem outra linha", async () => {
+    const { request, conversation } = await setup();
+    const first = await request("POST", "/handoff", {});
+    const linesAfterFirst = (await conversation()).messages.length;
+
+    const second = await request("POST", "/handoff", {});
+
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual(await first.json());
+    const view = await conversation();
+    expect(view.conversation?.mode).toBe("waiting_analyst");
+    expect(view.messages).toHaveLength(linesAfterFirst);
+  });
+
   it("A04: confirmar um chamado crítico pelo botão transfere direto para o N2", async () => {
     const { say, request, conversation } = await setup();
     await say("Quero abrir um chamado: o sistema de vendas caiu para toda a equipe");

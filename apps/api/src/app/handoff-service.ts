@@ -151,6 +151,12 @@ export function createHandoffService({
     handoff,
     transfer,
 
+    /** A transferência mais recente da conversa, como a tela a mostra (ou nada, se não houve). */
+    async latestView(conversationId: string): Promise<HandoffView | undefined> {
+      const row = await handoffStore.latestForConversation(conversationId);
+      return row ? toHandoffView(row) : undefined;
+    },
+
     /**
      * A04: caso crítico transfere direto, avisando. Chamado crítico recém-criado leva a conversa
      * para o N2 sem depender de o agent lembrar disso. O chamado já existe: se a transferência

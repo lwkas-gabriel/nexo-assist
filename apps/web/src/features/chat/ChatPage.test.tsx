@@ -398,6 +398,21 @@ describe("tela do chat (tela 2)", () => {
         await waitFor(() => expect(posts).toContainEqual({ path: "/api/chat/handoff", body: {} }));
       });
 
+      it("a tela ainda velha pede o analista de novo: a api responde com sucesso, sem alerta nem texto interno", async () => {
+        const posts = stubWithBodies([unstable("a-1")]);
+        renderChat();
+        const ask = await screen.findByRole("button", { name: "Falar com um analista" });
+
+        await userEvent.click(ask);
+        await waitFor(() => expect(posts).toHaveLength(1));
+        // O recarregamento ainda trouxe a conversa antiga (oferta ainda na tela): o segundo clique.
+        await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
+
+        await waitFor(() => expect(posts).toHaveLength(2));
+        expect(screen.queryByRole("alert")).toBeNull();
+        expect(screen.queryByText(/waiting_analyst|handoff/)).toBeNull();
+      });
+
       it("numa resposta antiga, o chip fica como registro e a oferta some", async () => {
         stubWithBodies([
           unstable("a-1"),

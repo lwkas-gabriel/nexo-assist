@@ -276,6 +276,13 @@ export function createChatService({
       }
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
+        // Já com os analistas (o recarregamento depois do primeiro clique falhou, ou há duas abas):
+        // o pedido já foi atendido. Responde com o que está gravado, sem outra linha na conversa.
+        const existing = await conversationStore.findById(conversation.id);
+        if (existing && !agentMayReply(existing.mode)) {
+          const alreadyRequested = await handoffService.latestView(conversation.id);
+          if (alreadyRequested) return alreadyRequested;
+        }
         // Com o chamado (oferta de um chamado vencido, tela 3), o resumo só afirma o que o código
         // conferiu: o chamado é dele (RN09) e está vencido. O handoff confere o motivo de novo.
         const offered = ticketNumber

@@ -24,7 +24,11 @@ const TRANSITIONS: Record<ConversationEvent, { from: ConversationMode[]; to: Con
 export function nextMode(mode: ConversationMode, event: ConversationEvent): ConversationMode {
   const transition = TRANSITIONS[event];
   if (!transition.from.includes(mode)) {
-    throw new AppError("CONFLICT", `A conversa não pode ir de "${mode}" com "${event}".`);
+    // Sem os nomes internos dos estados: a mensagem chega à tela.
+    throw new AppError(
+      "CONFLICT",
+      "Esta ação não vale mais, porque a conversa mudou de situação. Atualize a tela e tente de novo.",
+    );
   }
   return transition.to;
 }

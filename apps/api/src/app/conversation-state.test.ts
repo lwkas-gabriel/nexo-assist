@@ -22,6 +22,18 @@ describe("máquina de estados da conversa (11.3)", () => {
     );
   });
 
+  it("a mensagem da transição inválida chega à tela: sem os nomes internos de estado e evento", () => {
+    let message = "";
+    try {
+      nextMode("waiting_analyst", "handoff");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    expect(message).not.toMatch(/waiting_analyst|handoff|agent|analyst|closed/);
+    expect(message).toMatch(/conversa mudou/);
+  });
+
   it("RN08: o agent só responde com a conversa no modo agent", () => {
     expect(agentMayReply("agent")).toBe(true);
     expect(agentMayReply("waiting_analyst")).toBe(false);
