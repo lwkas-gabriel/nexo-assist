@@ -92,7 +92,9 @@ export function ServiceBar({
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning-text">
             <Hand aria-hidden size={17} />
           </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {/* O basis dá ao texto uma largura mínima para a linha quebrar: sem ele, os botões ficam
+              ao lado e espremem o motivo e o problema numa coluna estreita (cerca de 1000 px). */}
+          <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
             <p className="text-[14.5px] font-semibold text-ink">{firstName} espera um atendente</p>
             <p className="text-[12.5px] text-ink-3">
               Agent pausado
