@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
 import type { CurrentUser } from "../auth/auth-api.ts";
 import type { ConversationView } from "./chat-api.ts";
+import { ANNOUNCE_AFTER_MOUNT_MS } from "../../lib/use-announce-after-mount.ts";
 import { ChatPage } from "./ChatPage.tsx";
 import { sampleDecision } from "./decision.fixture.ts";
 import { agentWithTool, onTimeTicket, overdueTicket } from "./ticket.fixture.ts";
@@ -1007,6 +1008,111 @@ describe("tela do chat (tela 2)", () => {
       await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
 
       expect(document.activeElement).toBe(field);
+    });
+  });
+
+  describe("limite da sessão e foco (RN14, 10.7)", () => {
+    const encoder = new TextEncoder();
+    const sse = (chunks: readonly unknown[]) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const chunk of chunks) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+            }
+            controller.close();
+          },
+        }),
+        {
+          headers: {
+            "content-type": "text/event-stream",
+            "x-vercel-ai-ui-message-stream": "v1",
+          },
+        },
+      );
+    const ANSWER_CHUNKS = [
+      { type: "start" },
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "Feito." },
+      { type: "text-end", id: "t1" },
+      { type: "finish" },
+    ];
+
+    /** Uma api em que o envio dá certo e a mensagem seguinte já esgota (ou não) o limite. */
+    function stubSendReachingLimit(isLimitReachedBySend: boolean) {
+      let current = conversationAt("agent", false);
+      vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+        if (init?.method === "POST" && input === "/api/chat/messages") {
+          if (isLimitReachedBySend) current = conversationAt("agent", true);
+          return Promise.resolve(sse(ANSWER_CHUNKS));
+        }
+        if (init?.method === "POST" && input === "/api/chat/sessions") {
+          current = conversationAt("agent", false);
+        }
+        return Promise.resolve(new Response(JSON.stringify(current), { status: 200 }));
+      });
+    }
+
+    it("a mensagem que esgota o limite leva o foco ao texto do aviso, não ao <body>", async () => {
+      stubSendReachingLimit(true);
+      renderChat();
+      await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "VPN caiu{Enter}");
+
+      const notice = await screen.findByText(/Limite desta sessão atingido\./);
+      await waitFor(() => expect(document.activeElement).toBe(notice.closest("p")));
+    });
+
+    it("abrir a conversa já no limite não move o foco", async () => {
+      stubApi(conversationAt("agent", true));
+      renderChat();
+
+      await screen.findByText(/Limite desta sessão atingido\./);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it("a região viva do aviso nasce vazia e o texto entra depois", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        stubApi(conversationAt("agent", true));
+        renderChat();
+        const notice = await screen.findByText(/Limite desta sessão atingido\./);
+        const region = within(notice.closest("div")?.parentElement as HTMLElement).getByRole(
+          "status",
+        );
+        expect(region.textContent).toBe("");
+
+        await act(() => vi.advanceTimersByTimeAsync(ANNOUNCE_AFTER_MOUNT_MS + 10));
+        expect(region.textContent).toBe("Limite desta sessão atingido.");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("Nova sessão devolve o foco ao campo que reaparece", async () => {
+      let current = conversationAt("agent", true);
+      vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+        if (init?.method === "POST" && input === "/api/chat/sessions") {
+          current = conversationAt("agent", false);
+        }
+        return Promise.resolve(new Response(JSON.stringify(current), { status: 200 }));
+      });
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Nova sessão" }));
+
+      const field = await screen.findByLabelText("Mensagem para o Nexo");
+      await waitFor(() => expect(document.activeElement).toBe(field));
+    });
+
+    it("Falar com um analista, no limite, devolve o foco ao campo que reaparece", async () => {
+      stubApi(conversationAt("agent", true), conversationAt("waiting_analyst", true));
+      renderChat();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Falar com um analista" }));
+
+      const field = await screen.findByLabelText("Mensagem para o analista");
+      await waitFor(() => expect(document.activeElement).toBe(field));
     });
   });
 

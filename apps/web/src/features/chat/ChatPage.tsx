@@ -192,6 +192,10 @@ function ChatConversation({
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
+  const limitNoticeRef = useRef<HTMLParagraphElement>(null);
+  const hasSentRef = useRef(false);
+  const wasAtLimitRef = useRef<boolean | null>(null);
+  const pendingComposerFocusRef = useRef(false);
   const mode = view.conversation?.mode ?? "agent";
   // Só com os analistas (ou com um turno em curso que esta tela não iniciou) a conversa é
   // recarregada sozinha; com o agent, quem recarrega é a própria tela, ao fim de cada resposta.
@@ -247,6 +251,7 @@ function ChatConversation({
     mutationFn: (run: () => Promise<unknown>) => run(),
     onSuccess: async () => {
       clearError();
+      pendingComposerFocusRef.current = true;
       await refresh();
     },
   });
@@ -338,15 +343,18 @@ function ChatConversation({
   // O foco volta ao campo de mensagem depois de toda ação que envia: o botão clicado fica
   // desabilitado (ou some, como o do alerta) e o navegador jogaria o foco no <body>.
   const send = (text: string) => {
+    hasSentRef.current = true;
     void sendMessage({ text });
     composerRef.current?.focus();
   };
   // R38: a api confere a opção e dispensa o classificador.
   const pickOption = (option: string) => {
+    hasSentRef.current = true;
     void sendMessage({ text: option }, { body: { quickOption: true } });
     composerRef.current?.focus();
   };
   const retry = (message: UIMessage) => {
+    hasSentRef.current = true;
     void sendMessage({ text: textOf(message), messageId: message.id });
     composerRef.current?.focus();
   };
@@ -355,6 +363,25 @@ function ChatConversation({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
+
+  // A mensagem que esgota o limite tira o campo da tela e o foco cairia no <body>: ele vai ao
+  // texto do aviso. Só nessa transição, e só depois de um envio da pessoa (nunca na carga nem por
+  // causa do polling), e só se o foco não estiver em outro lugar.
+  useEffect(() => {
+    // Na primeira passada não há "antes": abrir a conversa já no limite não move o foco.
+    const wasAtLimit = wasAtLimitRef.current ?? isAtLimit;
+    const justReachedLimit = isAtLimit && !wasAtLimit;
+    wasAtLimitRef.current = isAtLimit;
+    if (!justReachedLimit || !hasSentRef.current) return;
+    if (document.activeElement === document.body) limitNoticeRef.current?.focus();
+  }, [isAtLimit]);
+  // "Nova sessão" e "Falar com um analista" fazem o campo (re)aparecer ou tiram o botão clicado:
+  // o foco volta ao campo assim que ele existir, o que pode ser em outra renderização.
+  useEffect(() => {
+    if (!pendingComposerFocusRef.current || !composerRef.current) return;
+    pendingComposerFocusRef.current = false;
+    composerRef.current.focus();
+  });
 
   // O polling traz mensagens novas do analista. Elas entram quando a conversa do servidor já tem
   // tudo o que está na tela; senão, ela é de antes do último envio e apagaria bolhas (ex.: o turno
@@ -482,6 +509,7 @@ function ChatConversation({
         <div className={cx("shrink-0 pt-2.5 pb-[18px]", sidePadding)}>
           {isAtLimit ? (
             <SessionLimitNotice
+              ref={limitNoticeRef}
               isWorking={sessionAction.isPending}
               error={sessionAction.error ? sessionAction.error.message : null}
               onNewSession={() => sessionAction.mutate(startNewSession)}

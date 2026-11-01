@@ -1,6 +1,7 @@
 import { CHAT_MESSAGE_MAX_CHARS } from "@nexo/shared/contracts";
 import { ArrowUp } from "lucide-react";
 import { useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
+import { useAnnounceAfterMount } from "../../../lib/use-announce-after-mount.ts";
 import { Button } from "../../../ui/Button.tsx";
 /** R34: as quatro primeiras respostas rápidas têm atalho de teclado. */
 const SHORTCUT_OPTIONS = 4;
@@ -100,26 +101,36 @@ export function Composer({
   );
 }
 
+/** O que o leitor de tela ouve quando o aviso do limite aparece (a região viva nasce vazia). */
+const SESSION_LIMIT_ANNOUNCEMENT = "Limite desta sessão atingido.";
+
 /**
  * RN14: no limite da sessão, o campo dá lugar às duas saídas: começar uma sessão nova ou falar
  * com um analista (que não depende do agent).
  */
 export function SessionLimitNotice({
+  ref,
   isWorking,
   error,
   onNewSession,
   onTalkToAnalyst,
 }: {
+  /** O texto do aviso: o foco vai para ele quando o envio da mensagem 30 tira o campo da tela. */
+  ref?: Ref<HTMLParagraphElement>;
   isWorking: boolean;
   /** Falha de um dos dois botões; sem ela, o funcionário clicaria sem ver resultado. */
   error: string | null;
   onNewSession: () => void;
   onTalkToAnalyst: () => void;
 }) {
+  const announcement = useAnnounceAfterMount(SESSION_LIMIT_ANNOUNCEMENT);
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-paper px-4 py-3">
-      <div role="status" className="flex flex-col gap-3 md:flex-row md:items-center">
-        <p className="flex-1 text-[13.5px] text-ink-2">
+      <span role="status" className="sr-only">
+        {announcement}
+      </span>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <p ref={ref} tabIndex={-1} className="flex-1 text-[13.5px] text-ink-2">
           <span className="font-semibold text-ink">Limite desta sessão atingido.</span> Comece uma
           sessão nova para continuar com o assistente, ou fale com um analista.
         </p>
