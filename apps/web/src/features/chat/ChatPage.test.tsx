@@ -965,6 +965,51 @@ describe("tela do chat (tela 2)", () => {
     });
   });
 
+  describe("foco depois de enviar (10.7)", () => {
+    // O botão "Enviar" fica desabilitado quando o texto é limpo e, num navegador real, o foco cai
+    // no <body>. O jsdom não reproduz isso; o E2E (e2e/focus.spec.ts) cobre. Aqui, o contrato: o
+    // foco vai ao campo, como na resposta rápida.
+    it("clicar em Enviar leva o foco de volta ao campo de mensagem", async () => {
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      const field = await screen.findByLabelText("Mensagem para o Nexo");
+      await userEvent.type(field, "VPN caiu");
+
+      await userEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+      expect(document.activeElement).toBe(field);
+    });
+
+    it("Tentar novamente do alerta de falha leva o foco ao campo de mensagem", async () => {
+      stubApi(conversationAt("agent", false));
+      renderChat();
+      const field = await screen.findByLabelText("Mensagem para o Nexo");
+      await userEvent.type(field, "VPN caiu{Enter}");
+      await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+
+      expect(document.activeElement).toBe(field);
+    });
+
+    it("Tentar novamente da bolha interrompida leva o foco ao campo de mensagem", async () => {
+      stubApi({
+        ...conversationAt("agent", false),
+        messages: [
+          {
+            id: "e-1",
+            role: "user",
+            metadata: { author: "employee" },
+            parts: [{ type: "text", text: "Minha VPN caiu" }],
+          },
+        ],
+      });
+      renderChat();
+      const field = await screen.findByLabelText("Mensagem para o Nexo");
+      await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+
+      expect(document.activeElement).toBe(field);
+    });
+  });
+
   describe("estados de carregamento e erro (10.5, RF23)", () => {
     it("carregando: skeleton anunciado, e a pílula não afirma que o assistente está online", async () => {
       vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));

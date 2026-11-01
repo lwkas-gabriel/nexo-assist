@@ -335,14 +335,21 @@ function ChatConversation({
   // RN14: o limite vale para o agent; com um analista, o funcionário continua escrevendo.
   const isAtLimit = mode === "agent" && view.session?.isAtLimit === true;
 
-  const send = (text: string) => void sendMessage({ text });
-  // R38: a api confere a opção e dispensa o classificador; o foco volta ao campo de mensagem.
+  // O foco volta ao campo de mensagem depois de toda ação que envia: o botão clicado fica
+  // desabilitado (ou some, como o do alerta) e o navegador jogaria o foco no <body>.
+  const send = (text: string) => {
+    void sendMessage({ text });
+    composerRef.current?.focus();
+  };
+  // R38: a api confere a opção e dispensa o classificador.
   const pickOption = (option: string) => {
     void sendMessage({ text: option }, { body: { quickOption: true } });
     composerRef.current?.focus();
   };
-  const retry = (message: UIMessage) =>
+  const retry = (message: UIMessage) => {
     void sendMessage({ text: textOf(message), messageId: message.id });
+    composerRef.current?.focus();
+  };
   const talkToAnalyst = () => sessionAction.mutate(requestAnalyst);
 
   useEffect(() => {
