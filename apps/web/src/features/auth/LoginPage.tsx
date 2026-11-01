@@ -1,6 +1,7 @@
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "../../ui/Button.tsx";
+import { useAnnounceAfterMount } from "../../lib/use-announce-after-mount.ts";
 import { Toast } from "../../ui/Feedback.tsx";
 import { Checkbox } from "../../ui/Checkbox.tsx";
 import { IconButton } from "../../ui/IconButton.tsx";
@@ -20,6 +21,8 @@ const FORGOT_HINT_ID = "forgot-password-hint";
  */
 export function LoginPage() {
   const { login, sessionNotice } = useAuth();
+  // A tela já abre com o aviso: a região monta vazia e o texto entra depois, para ser anunciado.
+  const announcedNotice = useAnnounceAfterMount(sessionNotice);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -74,7 +77,7 @@ export function LoginPage() {
             </div>
 
             {/* Por que a pessoa voltou ao login (ex.: sessão expirada). */}
-            <Toast message={sessionNotice} tone="warning" />
+            <Toast message={announcedNotice} tone="warning" />
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-7">
               <div className="flex flex-col gap-[18px]">
