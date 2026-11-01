@@ -5,7 +5,14 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
-import { ErrorState, LoadingState, RetryButton, Skeleton, SyncNotice } from "../../ui/Feedback.tsx";
+import {
+  ErrorState,
+  LoadingState,
+  RETRY_LABEL,
+  RetryButton,
+  Skeleton,
+  SyncNotice,
+} from "../../ui/Feedback.tsx";
 import { cx } from "../../ui/cx.ts";
 import { SidePanel } from "../../ui/SidePanel.tsx";
 import type { CurrentUser } from "../auth/auth-api.ts";
@@ -446,7 +453,7 @@ function ChatConversation({
                   )}
                   {failedMessage && !isAtLimit && (
                     <Button variant="secondary" onClick={() => retry(failedMessage)}>
-                      Tentar novamente
+                      {RETRY_LABEL}
                     </Button>
                   )}
                 </div>

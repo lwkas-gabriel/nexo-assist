@@ -21,6 +21,7 @@ import {
   type TicketSummaryView,
 } from "../ticket-model.ts";
 import { Button } from "../../../ui/Button.tsx";
+import { RETRY_LABEL } from "../../../ui/Feedback.tsx";
 import { hasTicketsUnavailable } from "../tool-actions.ts";
 import { SuggestedActions } from "./SuggestedActions.tsx";
 import { TicketCard } from "./TicketCard.tsx";
@@ -120,7 +121,7 @@ export function MessageBubble(props: MessageBubbleProps) {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span className="text-[12.5px] text-danger-text">Resposta interrompida</span>
             <Button variant="secondary" onClick={() => props.onRetry(message)}>
-              Tentar novamente
+              {RETRY_LABEL}
             </Button>
           </div>
         )}
