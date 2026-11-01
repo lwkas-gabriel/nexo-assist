@@ -113,7 +113,7 @@ export function createFakeTicketGateway(
     createTicket: (ownerId, draft, key) =>
       idempotent(key, () => {
         const prefix = draft.type === "incident" ? "INC" : "REQ";
-        const now = new Date().toISOString();
+        const now = clock.now().toISOString();
         const ticket: TicketDto = {
           ...draft,
           number: `${prefix}-${20500 + tickets.length}`,
@@ -131,7 +131,7 @@ export function createFakeTicketGateway(
     addUpdate: (ownerId, number, update, key) =>
       idempotent(key, () => {
         const ticket = findOwned(ownerId, number);
-        ticket.updates.push({ ...update, createdAt: new Date().toISOString() });
+        ticket.updates.push({ ...update, createdAt: clock.now().toISOString() });
         return ticket;
       }),
     reopenTicket: (ownerId, number, key) =>
@@ -152,7 +152,7 @@ export function createFakeTicketGateway(
         ticket.updates.push({
           author: "system",
           message: `Transferido para um analista. Resumo: ${summary}`,
-          createdAt: new Date().toISOString(),
+          createdAt: clock.now().toISOString(),
         });
         return ticket;
       }),
