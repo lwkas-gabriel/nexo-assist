@@ -61,7 +61,11 @@ test.describe("pílula do topo no celular (10.6)", () => {
   const ANALYST_CONVERSATION = {
     id: "fixture-conversation",
     mode: "analyst",
-    analyst: { name: "Rafael Lima", department: "Suporte N2" },
+    // Longo de propósito: com nome curto a pílula cabe em 390 px e o `truncate` nunca é exercitado.
+    analyst: {
+      name: "Rafael Antônio de Albuquerque Lima Filho",
+      department: "Suporte N2 de Infraestrutura",
+    },
   };
   /** Uma linha de 12,5 px com o respiro da pílula; duas linhas passariam de 40 px. */
   const ONE_LINE_PILL_MAX_HEIGHT = 32;
@@ -71,12 +75,18 @@ test.describe("pílula do topo no celular (10.6)", () => {
   }) => {
     await forgeConversation(page, { conversation: ANALYST_CONVERSATION });
     await page.goto("/");
-    const status = page.getByRole("status").filter({ hasText: "Com Rafael Lima" });
+    const status = page.getByRole("status").filter({ hasText: "Com Rafael Antônio" });
 
-    await expect(status).toHaveText("Com Rafael Lima · Suporte N2");
+    await expect(status).toHaveText(
+      "Com Rafael Antônio de Albuquerque Lima Filho · Suporte N2 de Infraestrutura",
+    );
     const box = await status.boundingBox();
 
     expect(box?.height ?? 0).toBeLessThanOrEqual(ONE_LINE_PILL_MAX_HEIGHT);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
+    expect(await page.evaluate("document.documentElement.scrollWidth")).toBeLessThanOrEqual(
+      PHONE_VIEWPORT.width,
+    );
     expect(await horizontalOverflowOf(page)).toEqual([]);
   });
 });
