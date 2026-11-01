@@ -13,6 +13,7 @@ import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
  * o envio é respondido na rede (`page.route`): ninguém grava nada nas contas compartilhadas.
  */
 const MESSAGES_URL = /\/api\/chat\/messages$/;
+const CHAT_URL = /\/api\/chat$/;
 /** Resposta do agent em streaming, já terminada: o envio dá certo sem tocar no servidor. */
 const ANSWER_STREAM = [
   { type: "start" },
@@ -56,6 +57,13 @@ async function expectTabOrder(page: Page, names: (string | RegExp)[], key = "Tab
     await expect(page.locator(":focus")).toHaveAccessibleName(name);
     expect(await focusIndicatorOfActiveElement(page)).not.toBe("none");
   }
+}
+
+/** A leitura da conversa que o chat refaz quando o turno do agent termina. */
+function waitForTurnReload(page: Page) {
+  return page.waitForResponse(
+    (response) => CHAT_URL.test(response.url()) && response.request().method() === "GET",
+  );
 }
 
 async function startFromTopOfPage(page: Page) {
@@ -103,9 +111,12 @@ test.describe("funcionário", () => {
     await field.click();
 
     await field.fill("Qual o horário do service desk?");
+    const turnReload = waitForTurnReload(page);
     await page.keyboard.press("Enter");
 
-    await expect(page.getByText("Feito.")).toBeVisible();
+    // Só depois do recarregamento do fim do turno: o texto da resposta forjada some quando a
+    // conversa verdadeira, sem ela, volta do servidor.
+    await turnReload;
     await expect(field).toBeFocused();
     await expect(field).toHaveValue("");
   });
@@ -122,12 +133,15 @@ test.describe("funcionário", () => {
     const field = page.getByLabel("Mensagem para o Nexo");
     await field.fill("Qual o horário do service desk?");
 
-    // O botão sai da ordem do Tab enquanto o campo está vazio e entra quando há texto.
+    // O botão sai da ordem do Tab enquanto o campo está vazio e entra quando há texto: o Tab só
+    // vale depois de ele habilitar, senão o foco pula para fora do formulário.
+    await expect(page.getByRole("button", { name: "Enviar" })).toBeEnabled();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Enviar" })).toBeFocused();
+    const turnReload = waitForTurnReload(page);
     await page.keyboard.press("Enter");
 
-    await expect(page.getByText("Feito.")).toBeVisible();
+    await turnReload;
     await expect(field).toBeFocused();
   });
 });
