@@ -80,7 +80,9 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
       aria-labelledby="console-conversation-title"
       className="flex min-h-0 min-w-0 flex-1 flex-col bg-console"
     >
-      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-rule bg-paper pr-4 pl-3 md:pl-5">
+      {/* Com pouco espaço (celular, tablet), a pílula e os botões descem para uma segunda linha em
+          vez de espremer o nome do funcionário até as reticências. */}
+      <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule bg-paper py-2 pr-4 pl-3 md:pl-5">
         {props.onBack && (
           <IconButton
             label="Voltar para as conversas"
@@ -89,7 +91,7 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
           />
         )}
         <Avatar name={employee.name} size="lg" tone={avatarToneFor(employee.name)} />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-28 flex-1 flex-col gap-0.5">
           <h2
             id="console-conversation-title"
             ref={titleRef}
@@ -100,23 +102,25 @@ export function ConsoleConversationView(props: ConsoleConversationViewProps) {
           </h2>
           <p className="truncate text-[12.5px] text-ink-3">{meta}</p>
         </div>
-        {/* Atendimento assumido por quem está logado: no lugar da pílula, as ações (tela 5). */}
-        {state.kind === "analyst" && state.byMe ? (
-          <ServiceHeaderActions actions={props.actions} />
-        ) : (
-          <span role="status" className="shrink-0">
-            <Pill tone={tag.tone} withDot>
-              {tag.label}
-            </Pill>
-          </span>
-        )}
-        {props.onOpenTickets && (
-          <IconButton
-            label={`Chamados de ${employee.name}`}
-            icon={<Ticket size={18} />}
-            onClick={props.onOpenTickets}
-          />
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {/* Atendimento assumido por quem está logado: no lugar da pílula, as ações (tela 5). */}
+          {state.kind === "analyst" && state.byMe ? (
+            <ServiceHeaderActions actions={props.actions} />
+          ) : (
+            <span role="status" className="shrink-0">
+              <Pill tone={tag.tone} withDot>
+                {tag.label}
+              </Pill>
+            </span>
+          )}
+          {props.onOpenTickets && (
+            <IconButton
+              label={`Chamados de ${employee.name}`}
+              icon={<Ticket size={18} />}
+              onClick={props.onOpenTickets}
+            />
+          )}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-4 md:px-10">

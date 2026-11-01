@@ -96,3 +96,25 @@ test.describe("pílula do topo no celular (10.6)", () => {
     expect(await horizontalOverflowOf(page)).toEqual([]);
   });
 });
+
+test.describe("topo da conversa do console, no celular e no tablet (10.6)", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+
+  for (const width of [390, 768, 800]) {
+    test(`com ${width} px, o nome do funcionário aparece inteiro`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await forgeWaitingConversation(page);
+      await page.goto("/");
+      await page.getByRole("button", { name: /Ana Souza/ }).click();
+      const title = page.getByRole("heading", { level: 2, name: "Ana Souza" });
+      await expect(title).toBeVisible();
+
+      // `truncate` corta com reticências quando o texto não cabe: aí o texto passa da caixa.
+      const isTruncated = await page.evaluate(
+        `(() => { const el = document.getElementById("console-conversation-title"); return el.scrollWidth > el.clientWidth; })()`,
+      );
+      expect(isTruncated).toBe(false);
+      expect(await horizontalOverflowOf(page)).toEqual([]);
+    });
+  }
+});
