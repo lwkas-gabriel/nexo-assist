@@ -11,6 +11,10 @@ import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
  * roda com FAILURE_RATE=0 e não reinicia o servidor no meio de um turno.
  */
 const NETWORK_ERROR_TEXT = /Não foi possível falar com o servidor/;
+const LIST_URL = /\/api\/console\/conversations\?/;
+/** Quanto o relógio da página avança antes de parar, e quanto anda depois do clique (bem menos que os 3 s do polling). */
+const PAUSE_AHEAD_MS = 1000;
+const CLOCK_STEP_MS = 50;
 const SESSION_EXPIRED_TEXT = "Sua sessão expirou. Entre de novo para continuar.";
 
 test("api fora do ar na abertura: erro com Tentar novamente, e voltando mostra o login", async ({
@@ -90,20 +94,24 @@ test.describe("analista", () => {
     await expect(page.getByText(/Nenhuma conversa encontrada para/)).toBeHidden();
   });
 
-  test("console: erro de rede na lista mostra o alerta, e Tentar novamente o tira", async ({
+  test("console: erro de rede na lista mostra o alerta, e só o botão Tentar novamente o tira", async ({
     page,
   }) => {
+    // O console refaz a lista sozinho a cada 3 s, e isso também a recuperaria. Com o relógio da
+    // página parado, só o clique no botão pode fazer a lista voltar.
+    await page.clock.install();
     await page.goto("/");
     await expect(page.getByLabel("Pesquisar conversa ou chamado")).toBeVisible();
-    await page.route(/\/api\/console\/conversations\?/, (route) =>
-      route.abort("internetdisconnected"),
-    );
+    await page.route(LIST_URL, (route) => route.abort("internetdisconnected"));
     await page.reload();
-
     await expect(page.getByRole("alert")).toContainText(NETWORK_ERROR_TEXT);
 
-    await page.unroute(/\/api\/console\/conversations\?/);
+    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + PAUSE_AHEAD_MS));
+    await page.unroute(LIST_URL);
+    const reloaded = page.waitForResponse(LIST_URL);
     await page.getByRole("button", { name: "Tentar novamente" }).click();
+    await reloaded;
+    await page.clock.runFor(CLOCK_STEP_MS);
 
     await expect(page.getByRole("alert")).toBeHidden();
     await expect(page.getByRole("button", { name: /^Todas/ })).toBeVisible();
