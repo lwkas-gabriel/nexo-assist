@@ -22,8 +22,8 @@ export type EvalLimits = {
   minMsBetweenMessages: number;
   /** Teto de mensagens (cada uma usa até 4 chamadas ao modelo) numa execução. */
   maxMessages: number;
-  /** Depois de tantas indisponibilidades seguidas do modelo (cota), o resto nem tenta. */
-  maxConsecutiveQuotaFailures: number;
+  /** Depois de tantas execuções seguidas sem resposta do provedor (cota ou indisponibilidade), o resto nem tenta. */
+  maxConsecutiveProviderFailures: number;
 };
 
 /**
@@ -34,19 +34,19 @@ const GEMINI_MESSAGES_PER_MINUTE = 3;
 const MS_PER_MINUTE = 60 * 1000;
 /** Metade das 120 mensagens por dia do ADR-0010: sobra cota para o uso do chat no mesmo dia. */
 const GEMINI_MAX_MESSAGES_PER_RUN = 60;
-const GEMINI_MAX_CONSECUTIVE_QUOTA_FAILURES = 2;
+const GEMINI_MAX_CONSECUTIVE_PROVIDER_FAILURES = 2;
 
 export const GEMINI_LIMITS: EvalLimits = {
   minMsBetweenMessages: MS_PER_MINUTE / GEMINI_MESSAGES_PER_MINUTE,
   maxMessages: GEMINI_MAX_MESSAGES_PER_RUN,
-  maxConsecutiveQuotaFailures: GEMINI_MAX_CONSECUTIVE_QUOTA_FAILURES,
+  maxConsecutiveProviderFailures: GEMINI_MAX_CONSECUTIVE_PROVIDER_FAILURES,
 };
 
 /** O modelo falso não gasta cota: sem espera e sem teto. */
 export const MOCK_LIMITS: EvalLimits = {
   minMsBetweenMessages: 0,
   maxMessages: Number.POSITIVE_INFINITY,
-  maxConsecutiveQuotaFailures: Number.POSITIVE_INFINITY,
+  maxConsecutiveProviderFailures: Number.POSITIVE_INFINITY,
 };
 
 export const MOCK_MODE_WARNING =
@@ -138,33 +138,42 @@ function notEvaluated(scenario: EvalScenario, reason: string): ScenarioResult {
   };
 }
 
-type Judgement = { status: ScenarioStatus; reason?: string; failedChecks: Check[] };
+type Judgement = {
+  status: ScenarioStatus;
+  reason?: string;
+  failedChecks: Check[];
+  /** Não avaliado por cota ou indisponibilidade do provedor (conta para interromper a execução). */
+  isProviderTrouble: boolean;
+};
 
-/** Compara os turnos jogados com as expectativas do cenário. */
+const PROVIDER_TROUBLE_REASONS = {
+  quota: "cota do modelo esgotada (429)",
+  unavailable: "provedor do modelo indisponível (erro 5xx, tempo esgotado ou sobrecarga)",
+} as const;
+
+/** O primeiro turno que não rendeu uma decisão completa, com o porquê. */
+function firstBrokenTurn(play: ScenarioPlay) {
+  for (const [index, turn] of play.turns.entries()) {
+    if (turn.failure) return { index, failure: turn.failure, stage: "agent" as const };
+    if (turn.classifierFailure) {
+      return { index, failure: turn.classifierFailure, stage: "classificador" as const };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Compara os turnos jogados com as expectativas do cenário. Os invariantes (RN09, RN04, R04) valem
+ * sobre tudo que já aconteceu, mesmo que um turno posterior tenha caído por cota: uma violação já
+ * ocorrida não deixa de existir. Só o que falta jogar fica "não avaliado".
+ */
 function judge(scenario: EvalScenario, play: ScenarioPlay): Judgement {
-  const failedTurn = play.turns.find((turn) => turn.failure);
-  if (failedTurn?.failure?.kind === "quota") {
-    return { status: "not_evaluated", reason: "cota do modelo esgotada (429)", failedChecks: [] };
-  }
-  if (failedTurn?.failure) {
-    return {
-      status: "failed",
-      reason: `o turno terminou em erro: ${failedTurn.failure.detail}`,
-      failedChecks: [],
-    };
-  }
-  // Sem o classificador, a intenção e a confiança do turno são só o valor neutro: não há decisão a medir.
-  if (play.turns.some((turn) => turn.observation.decision?.isClassifierAvailable === false)) {
-    return {
-      status: "not_evaluated",
-      reason: "o classificador não respondeu (cota ou falha do provedor)",
-      failedChecks: [],
-    };
-  }
+  const broken = firstBrokenTurn(play);
+  const decidedTurns = broken ? play.turns.slice(0, broken.index) : play.turns;
   const observations = play.turns.map((turn) => turn.observation);
   const checks = [
-    ...scenario.turns.flatMap((scenarioTurn, index) => {
-      const played = play.turns[index];
+    ...scenario.turns.slice(0, decidedTurns.length).flatMap((scenarioTurn, index) => {
+      const played = decidedTurns[index];
       if (!played) return [missingTurnCheck(index + 1)];
       return evaluateTurn(scenarioTurn.expect, played.observation, index + 1);
     }),
@@ -177,7 +186,24 @@ function judge(scenario: EvalScenario, play: ScenarioPlay): Judgement {
     }),
   ];
   const failedChecks = checks.filter((item) => !item.passed);
-  return { status: failedChecks.length === 0 ? "passed" : "failed", failedChecks };
+  if (failedChecks.length > 0) return { status: "failed", failedChecks, isProviderTrouble: false };
+  if (!broken) return { status: "passed", failedChecks, isProviderTrouble: false };
+  if (broken.failure.kind === "other") {
+    return {
+      status: "failed",
+      reason: `o turno ${broken.index + 1} terminou em erro (${broken.stage}): ${broken.failure.detail}`,
+      failedChecks,
+      isProviderTrouble: false,
+    };
+  }
+  const why = PROVIDER_TROUBLE_REASONS[broken.failure.kind];
+  const where = broken.stage === "classificador" ? "o classificador não respondeu: " : "";
+  return {
+    status: "not_evaluated",
+    reason: `${where}${why}`,
+    failedChecks,
+    isProviderTrouble: true,
+  };
 }
 
 /** Defeito do harness, nunca do modelo: um turno do cenário que não chegou a ser jogado. */
@@ -212,15 +238,15 @@ export async function runEvaluation(options: EvaluationOptions): Promise<Evaluat
     sleep: options.sleep,
   });
   let sentMessages = 0;
-  let consecutiveQuotaFailures = 0;
+  let consecutiveProviderFailures = 0;
   const results: ScenarioResult[] = [];
 
   async function evaluate(scenario: EvalScenario): Promise<ScenarioResult> {
     if (isMock && scenario.requiresRealModel) {
       return notEvaluated(scenario, "exige modelo real: o modelo falso não exercita este cenário");
     }
-    if (consecutiveQuotaFailures >= limits.maxConsecutiveQuotaFailures) {
-      return notEvaluated(scenario, "execução interrompida: a cota do modelo acabou");
+    if (consecutiveProviderFailures >= limits.maxConsecutiveProviderFailures) {
+      return notEvaluated(scenario, "execução interrompida: a cota ou o provedor do modelo falhou");
     }
     if (sentMessages + scenario.turns.length > limits.maxMessages) {
       return notEvaluated(
@@ -237,8 +263,7 @@ export async function runEvaluation(options: EvaluationOptions): Promise<Evaluat
       },
     });
     const judgement = judge(scenario, play);
-    consecutiveQuotaFailures =
-      judgement.status === "not_evaluated" ? consecutiveQuotaFailures + 1 : 0;
+    consecutiveProviderFailures = judgement.isProviderTrouble ? consecutiveProviderFailures + 1 : 0;
     return {
       id: scenario.id,
       category: scenario.category,

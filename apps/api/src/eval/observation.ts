@@ -81,14 +81,20 @@ export type TurnObservation = {
   handoff: HandoffObservation | undefined;
 };
 
-/** Por que um turno não rendeu uma decisão para avaliar. */
+/**
+ * Por que uma etapa do turno (agent ou classificador) não rendeu uma decisão: cota e indisponibilidade
+ * do provedor não dizem nada sobre as decisões do modelo; "other" é falha do turno.
+ */
 export type TurnFailure = {
-  kind: "quota" | "other";
+  kind: "quota" | "unavailable" | "other";
   detail: string;
 };
 
 export type ObservedTurn = {
   message: string;
   observation: TurnObservation;
+  /** O agent não respondeu (erro no stream ou na chamada). */
   failure: TurnFailure | undefined;
+  /** O classificador (etapa 1) falhou e o turno seguiu com a confiança neutra. */
+  classifierFailure: TurnFailure | undefined;
 };

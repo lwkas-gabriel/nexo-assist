@@ -4,6 +4,7 @@ import { decisionViewSchema, type DecisionView } from "@nexo/shared/contracts";
 import { DEMO_USERS } from "@nexo/shared/demo";
 import { getToolName, isToolUIPart, type UIMessage, type UIMessageChunk } from "ai";
 import { z } from "zod";
+import { classifyProviderError, captureProviderFailures } from "./provider-errors.ts";
 import { QUOTA_EXCEEDED_MESSAGE } from "../agent/agent-errors.ts";
 import { textOf } from "../app/chat-text.ts";
 import type { ContainerConfig } from "../container.ts";
@@ -90,18 +91,20 @@ async function takeSnapshot(session: Session): Promise<Snapshot> {
   };
 }
 
-function toFailure(errorText: string): TurnFailure {
+/** Sem o erro original (só o texto que o funcionário veria), só a cota é reconhecível. */
+function toFailure(errorText: string, original: unknown): TurnFailure {
+  if (original !== undefined) return { kind: classifyProviderError(original), detail: errorText };
   return { kind: errorText === QUOTA_EXCEEDED_MESSAGE ? "quota" : "other", detail: errorText };
 }
 
 /** Lê a resposta até o fim; o produto devolve falhas do modelo como pedaços de erro do stream. */
-async function drain(stream: ReadableStream<UIMessageChunk>): Promise<TurnFailure | undefined> {
-  let failure: TurnFailure | undefined;
+async function drain(stream: ReadableStream<UIMessageChunk>): Promise<string | undefined> {
+  let errorText: string | undefined;
   const reader = stream.getReader();
   for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-    if (chunk.value.type === "error") failure ??= toFailure(chunk.value.errorText);
+    if (chunk.value.type === "error") errorText ??= chunk.value.errorText;
   }
-  return failure;
+  return errorText;
 }
 
 const authorMetadataSchema = z.object({ author: z.string() });
@@ -236,16 +239,26 @@ async function playTurn(session: Session, message: string): Promise<ObservedTurn
   const before = await takeSnapshot(session);
   session.clock.advance(EMPLOYEE_PAUSE_MS);
   let failure: TurnFailure | undefined;
-  try {
-    const stream = await session.container.chatService.sendMessage(session.employee, message, {
-      ip: EVAL_CLIENT_IP,
-    });
-    failure = await drain(stream);
-  } catch (error) {
-    // Erro tipado do produto (ex.: limite da sessão): a mensagem já é a que o funcionário veria.
-    failure = { kind: "other", detail: error instanceof Error ? error.message : String(error) };
+  const { failures } = await captureProviderFailures(async () => {
+    try {
+      const stream = await session.container.chatService.sendMessage(session.employee, message, {
+        ip: EVAL_CLIENT_IP,
+      });
+      const errorText = await drain(stream);
+      if (errorText !== undefined) failure = toFailure(errorText, undefined);
+    } catch (error) {
+      // Erro tipado do produto (ex.: limite da sessão): a mensagem já é a que o funcionário veria.
+      failure = { kind: "other", detail: error instanceof Error ? error.message : String(error) };
+    }
+  });
+  if (failure && failures.agent !== undefined) {
+    failure = { ...failure, kind: classifyProviderError(failures.agent) };
   }
-  return { message, observation: await observeTurn(session, before), failure };
+  const classifierFailure: TurnFailure | undefined =
+    failures.classifier === undefined
+      ? undefined
+      : { kind: classifyProviderError(failures.classifier), detail: "o classificador falhou" };
+  return { message, observation: await observeTurn(session, before), failure, classifierFailure };
 }
 
 export type ScenarioPlay = {
@@ -272,7 +285,7 @@ export async function playScenario(
     await options.beforeMessage();
     const turn = await playTurn(session, message);
     turns.push(turn);
-    if (turn.failure) break;
+    if (turn.failure || turn.classifierFailure) break;
   }
   return { turns };
 }
