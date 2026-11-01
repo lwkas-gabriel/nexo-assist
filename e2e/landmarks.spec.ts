@@ -1,5 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import {
+  DRAFT_PROPOSAL_MESSAGE,
+  PENDING_DRAFT,
+  forgeConversation,
+} from "./support/chat-fixture.ts";
 import { forgeWaitingConversation } from "./support/console-fixture.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
@@ -45,5 +50,17 @@ test.describe("analista", () => {
     await expect(page.getByRole("group", { name: "Filtro das conversas" })).toBeVisible();
 
     expect(await violationsOf(page, "label-content-name-mismatch")).toEqual([]);
+  });
+});
+
+test.describe("funcionário", () => {
+  test.use({ storageState: SHARED_SESSIONS.ana.file });
+
+  test("o card do rascunho não pula nível de título", async ({ page }) => {
+    await forgeConversation(page, { messages: [DRAFT_PROPOSAL_MESSAGE], drafts: [PENDING_DRAFT] });
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: /Confirmar/ })).toBeVisible();
+
+    expect(await violationsOf(page, "heading-order")).toEqual([]);
   });
 });

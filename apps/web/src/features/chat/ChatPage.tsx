@@ -447,6 +447,8 @@ function ChatConversation({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex-1 overflow-y-auto">
           <div className={cx("flex min-h-full flex-col justify-end gap-5 pt-7 pb-1", sidePadding)}>
+            {/* O título da página é o h1 "Atendimento"; os cards (h3) ficam abaixo deste nível. */}
+            <h2 className="sr-only">Mensagens</h2>
             {messages.length === 0 && (
               <p className="text-center text-[14.5px] text-ink-3">
                 Olá, {user.name.split(" ")[0]}. Conte o que está acontecendo, ou pergunte pelos seus
