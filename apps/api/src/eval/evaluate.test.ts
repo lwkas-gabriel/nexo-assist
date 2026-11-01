@@ -60,6 +60,23 @@ describe("avaliador: tools", () => {
     expect(result.actual).toContain("list_my_tickets");
   });
 
+  it("tools.mustCall: uma chamada sem resultado (recusada na validação) não conta como chamada", () => {
+    const failed = observation({
+      toolCalls: [{ name: "get_ticket", origin: "agent", input: {}, output: undefined }],
+    });
+
+    expect(checkOf({ tools: { mustCall: ["get_ticket"] } }, failed, "tools.mustCall").passed).toBe(
+      false,
+    );
+    expect(
+      checkOf({ tools: { mustCallOneOf: ["get_ticket"] } }, failed, "tools.mustCallOneOf").passed,
+    ).toBe(false);
+    // Mas continua valendo para o que não podia ser chamado.
+    expect(
+      checkOf({ tools: { mustNotCall: ["get_ticket"] } }, failed, "tools.mustNotCall").passed,
+    ).toBe(false);
+  });
+
   it("tools.mustCallOneOf: passa com uma das opções e falha sem nenhuma", () => {
     const expectation: TurnExpectation = {
       tools: { mustCallOneOf: ["get_ticket", "list_my_tickets"] },

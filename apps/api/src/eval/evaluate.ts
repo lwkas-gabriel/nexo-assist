@@ -65,6 +65,12 @@ function agentCalls(observation: TurnObservation) {
 const agentToolNames = (observation: TurnObservation) =>
   agentCalls(observation).map((call) => call.name);
 
+/** Tools que terminaram com resultado: uma chamada recusada na validação dos argumentos não conta. */
+const completedToolNames = (observation: TurnObservation) =>
+  agentCalls(observation)
+    .filter((call) => call.output !== undefined)
+    .map((call) => call.name);
+
 // --- Expectativas por turno ---
 
 function checkTools(
@@ -73,17 +79,18 @@ function checkTools(
   turn: number,
 ): Check[] {
   const called = new Set(agentToolNames(observation));
+  const completed = new Set(completedToolNames(observation));
   const actual = list([...called]);
   const checks: Check[] = [];
   if (tools.none) {
     checks.push(check("tools.none", turn, called.size === 0, "nenhuma tool", actual));
   }
   if (tools.mustCall) {
-    const passed = tools.mustCall.every((tool) => called.has(tool));
+    const passed = tools.mustCall.every((tool) => completed.has(tool));
     checks.push(check("tools.mustCall", turn, passed, `chama ${list(tools.mustCall)}`, actual));
   }
   if (tools.mustCallOneOf) {
-    const passed = tools.mustCallOneOf.some((tool) => called.has(tool));
+    const passed = tools.mustCallOneOf.some((tool) => completed.has(tool));
     const expected = `chama uma entre ${list(tools.mustCallOneOf)}`;
     checks.push(check("tools.mustCallOneOf", turn, passed, expected, actual));
   }
