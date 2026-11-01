@@ -143,14 +143,15 @@ test.describe("lista do console (10.6)", () => {
     const item = page.getByRole("button", { name: /Quero falar com um analista/ });
     await expect(item).toBeVisible();
 
-    const spaceAboveItem = await item.evaluate((element) => {
+    const spaceAboveItem = await page.evaluate(`(() => {
+      const element = document.querySelector("[data-conversation-id]");
       let scroller = element.parentElement;
       while (scroller && getComputedStyle(scroller).overflowY !== "auto") {
         scroller = scroller.parentElement;
       }
       if (!scroller) throw new Error("A lista não tem região de rolagem.");
       return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-    });
+    })()`);
 
     expect(spaceAboveItem).toBeGreaterThanOrEqual(FOCUS_OUTLINE_REACH);
   });
