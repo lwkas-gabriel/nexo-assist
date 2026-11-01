@@ -66,6 +66,7 @@ describe("chat do funcionário", () => {
       session: null,
       messages: [],
       drafts: [],
+      isBusy: false,
     });
   });
 

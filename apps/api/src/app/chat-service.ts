@@ -80,6 +80,11 @@ export type ConversationView = {
   messages: UIMessage[];
   /** Estado atual dos rascunhos da conversa: o card mostra o que aconteceu depois (RF07). */
   drafts: DraftView[];
+  /**
+   * A trava da conversa está tomada (um turno do agent, por exemplo, que esta tela não viu
+   * começar): uma mensagem sem resposta, agora, pode ser só uma resposta a caminho.
+   */
+  isBusy: boolean;
 };
 
 /**
@@ -220,7 +225,11 @@ export function createChatService({
       // A20: "online" no console e o ✓✓ das mensagens que saíram para ele.
       await userStore.markSeen(employee.id, clock.now());
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
+      if (!conversation)
+        return { conversation: null, session: null, messages: [], drafts: [], isBusy: false };
+      // Lido antes das mensagens: se o turno terminar no meio da leitura, o pior é um "ocupado"
+      // a mais (a tela confere de novo), nunca uma resposta ainda a caminho tida como perdida.
+      const isBusy = locks.isBusy(conversation.id);
       // R27: quem atende aparece pelo nome e setor, na pílula do topo e nas bolhas do analista.
       const analysts = await conversationReader.analysts();
       const messages = await conversationReader.messages(conversation.id, analysts);
@@ -238,6 +247,7 @@ export function createChatService({
         session: await chatSessionService.view(conversation),
         drafts: await draftService.listForConversation(employee.id, conversation.id),
         messages,
+        isBusy,
       };
     },
 

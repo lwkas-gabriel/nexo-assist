@@ -26,6 +26,9 @@ export function createConversationLocks() {
     /** Trava a conversa e devolve quem a solta; para ações que terminam depois (streaming). */
     acquire,
 
+    /** Há uma ação em andamento nesta conversa (um turno do agent, um clique, o console)? */
+    isBusy: (conversationId: string) => busy.has(conversationId),
+
     async run<T>(conversationId: string, busyMessage: string, action: () => Promise<T>) {
       const release = acquire(conversationId, busyMessage);
       try {

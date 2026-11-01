@@ -39,6 +39,7 @@ describe("RN09: um funcionário nunca vê a conversa de outro", () => {
       session: null,
       messages: [],
       drafts: [],
+      isBusy: false,
     });
   });
 

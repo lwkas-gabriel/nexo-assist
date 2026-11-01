@@ -199,6 +199,30 @@ describe("reenvio de uma mensagem já gravada (Tentar novamente)", () => {
   });
 });
 
+describe("conversa com um turno em andamento", () => {
+  it("diz que está ocupada enquanto o agent responde, e livre depois", async () => {
+    const { chatService, authService } = await createTestContainer();
+    const { user: employee } = await authService.login({
+      email: "ana.souza@nexo.com.br",
+      password: "x",
+      remember: false,
+    });
+    const stream = await chatService.sendMessage(employee, "Como configuro a VPN?", {
+      ip: "local",
+    });
+
+    const during = await chatService.getConversation(employee);
+    const reader = stream.getReader();
+    while (!(await reader.read()).done) {
+      // lê o stream até o fim: o turno termina
+    }
+    const after = await chatService.getConversation(employee);
+
+    expect(during.isBusy).toBe(true);
+    expect(after.isBusy).toBe(false);
+  });
+});
+
 describe("histórico que o agent recebe (R18)", () => {
   const row = (author: MessageRow["author"], text: string): MessageRow => ({
     id: `m-${author}`,
