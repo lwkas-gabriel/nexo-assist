@@ -40,7 +40,7 @@ describe("useQueryView (10.5)", () => {
               return ["a"];
             },
           }),
-        ),
+        ).view,
       { wrapper: wrapperFor(client) },
     );
 
@@ -67,7 +67,7 @@ describe("useQueryView (10.5)", () => {
             return ["a"];
           },
         });
-        return { query, view: useQueryView(query) };
+        return { query, view: useQueryView(query).view };
       },
       { wrapper: wrapperFor(newClient()) },
     );

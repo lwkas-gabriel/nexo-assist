@@ -931,7 +931,7 @@ describe("tela do chat (tela 2)", () => {
       expect(screen.queryByRole("alert")).toBeNull();
     });
 
-    it("enquanto tenta de novo, o botão diz Tentando… e fica desabilitado", async () => {
+    it("enquanto tenta de novo, o botão diz Tentando… e fica aria-disabled", async () => {
       let attempts = 0;
       let release = () => undefined as void;
       const gate = new Promise<void>((resolve) => (release = resolve));
@@ -945,7 +945,7 @@ describe("tela do chat (tela 2)", () => {
       await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
 
       const busy = await screen.findByRole("button", { name: "Tentando…" });
-      expect(busy).toHaveProperty("disabled", true);
+      expect(busy.getAttribute("aria-disabled")).toBe("true");
       await act(() => {
         release();
         return gate;

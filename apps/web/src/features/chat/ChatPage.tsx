@@ -90,7 +90,7 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       return withAgent && data?.isBusy !== true ? false : ANALYST_POLL_MS;
     },
   });
-  const view = useQueryView(conversation);
+  const { view, retry, isRetrying } = useQueryView(conversation);
   // Sem a conversa carregada, a pílula do topo não afirma nada ("Assistente online" seria chute).
   const mode = view.status === "ready" ? (view.data.conversation?.mode ?? "agent") : null;
   const page = useHashPage();
@@ -111,12 +111,7 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
         rascunho do campo, a edição do card e o "Tentar novamente" também se perderiam.
       */}
       <div hidden={page === "profile"} className="flex min-h-0 flex-1 flex-col">
-        <ConversationArea
-          user={user}
-          view={view}
-          onRetry={() => void conversation.refetch()}
-          isRetrying={conversation.isFetching}
-        />
+        <ConversationArea user={user} view={view} onRetry={retry} isRetrying={isRetrying} />
       </div>
       {page === "profile" && <ProfilePage user={user} />}
     </ChatShell>

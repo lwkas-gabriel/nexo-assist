@@ -37,7 +37,9 @@ export function LoadingState({
 
 /**
  * Erro de carregamento (10.5): o que aconteceu e, quando dá para tentar de novo, o botão. Sem
- * `autoFocus`: roubar o foco de quem digita ao lado seria pior que o erro (AI_LOG 68).
+ * `autoFocus`: roubar o foco de quem digita ao lado seria pior que o erro (AI_LOG 68). Enquanto a
+ * nova tentativa corre, o botão fica `aria-disabled` e não `disabled`: um botão desabilitado
+ * perde o foco, e quem usa o teclado cairia no `<body>`.
  */
 export function ErrorState({
   message,
@@ -57,7 +59,12 @@ export function ErrorState({
     >
       <p className="text-[14.5px] text-ink-2">{message}</p>
       {onRetry && (
-        <Button variant="secondary" onClick={onRetry} disabled={isRetrying}>
+        <Button
+          variant="secondary"
+          onClick={isRetrying ? undefined : onRetry}
+          aria-disabled={isRetrying}
+          className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+        >
           {isRetrying ? RETRYING_LABEL : RETRY_LABEL}
         </Button>
       )}

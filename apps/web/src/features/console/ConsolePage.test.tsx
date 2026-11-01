@@ -658,6 +658,75 @@ describe("console do analista (tela 4)", () => {
       expect(within(panel).queryByRole("alert")).toBeNull();
     });
 
+    it("o polling não rouba o foco do Tentar novamente nem muda o texto do alerta", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const control = controllableConsole();
+        control.tickets = "unavailable";
+        renderConsole();
+        await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+        const panel = await screen.findByRole("complementary", { name: "Chamados de Ana" });
+        const alert = await within(panel).findByRole("alert");
+        const textBefore = alert.textContent;
+        const button = within(panel).getByRole("button", { name: "Tentar novamente" });
+        button.focus();
+
+        // A consulta dos chamados é refeita sozinha a cada 30 s, falhando de novo.
+        for (let cycle = 0; cycle < 3; cycle++) {
+          await vi.advanceTimersByTimeAsync(10_500);
+          expect(within(panel).getByRole("alert").textContent).toBe(textBefore);
+          expect(document.activeElement).toBe(button);
+        }
+        expect(button.textContent).toBe("Tentar novamente");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a lista com erro, em polling de 3 s, mantém o foco no botão e o mesmo texto", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const control = controllableConsole();
+        control.list = "down";
+        renderConsole();
+        const alert = await screen.findByRole("alert");
+        const textBefore = alert.textContent;
+        const button = screen.getByRole("button", { name: "Tentar novamente" });
+        button.focus();
+
+        control.list = "hold";
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(document.activeElement).toBe(button);
+        expect(screen.getByRole("alert").textContent).toBe(textBefore);
+        expect(button.textContent).toBe("Tentar novamente");
+        await act(() => {
+          control.release();
+          return Promise.resolve();
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("o Tentar novamente manual diz Tentando… até a consulta assentar", async () => {
+      const control = controllableConsole();
+      control.list = "down";
+      renderConsole();
+      await screen.findByRole("alert");
+
+      control.list = "hold";
+      await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+      const busy = await screen.findByRole("button", { name: "Tentando…" });
+      expect(busy.getAttribute("aria-disabled")).toBe("true");
+      await act(() => {
+        control.release();
+        return Promise.resolve();
+      });
+
+      expect(await screen.findByRole("list", { name: "Conversas" })).toBeDefined();
+    });
+
     describe("listas vazias", () => {
       it("filtro sem conversas: a frase do 10.5, sem botão de limpar busca", async () => {
         const control = controllableConsole();

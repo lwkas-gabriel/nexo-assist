@@ -91,7 +91,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     refetchInterval: POLL_MS,
     placeholderData: (previous) => previous,
   });
-  const listView = useQueryView(list);
+  const { view: listView, retry: retryList, isRetrying: isRetryingList } = useQueryView(list);
   const listData = listView.status === "ready" ? listView.data : undefined;
   const conversation = useQuery({
     queryKey: ["console", "conversation", selectedId],
@@ -99,14 +99,22 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     enabled: selectedId !== null,
     refetchInterval: POLL_MS,
   });
-  const conversationView = useQueryView(conversation);
+  const {
+    view: conversationView,
+    retry: retryConversation,
+    isRetrying: isRetryingConversation,
+  } = useQueryView(conversation);
   const tickets = useQuery({
     queryKey: ["console", "tickets", selectedId],
     queryFn: () => fetchConsoleTickets(selectedId ?? ""),
     enabled: selectedId !== null,
     refetchInterval: TICKETS_POLL_MS,
   });
-  const ticketsView = useQueryView(tickets);
+  const {
+    view: ticketsView,
+    retry: retryTickets,
+    isRetrying: isRetryingTickets,
+  } = useQueryView(tickets);
 
   // Tela 5: cada ação recarrega a conversa, a lista e os chamados (o status do chamado muda ao
   // assumir, R31). O erro fica na barra de baixo da conversa.
@@ -227,8 +235,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
       return (
         <ErrorState
           message={conversationView.message}
-          onRetry={() => void conversation.refetch()}
-          isRetrying={conversation.isFetching}
+          onRetry={retryConversation}
+          isRetrying={isRetryingConversation}
           className="flex-1 justify-center bg-console"
         />
       );
@@ -303,8 +311,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
           )}
           <ConversationList
             view={listView}
-            onRetry={() => void list.refetch()}
-            isRetrying={list.isFetching}
+            onRetry={retryList}
+            isRetrying={isRetryingList}
             filter={filter}
             onFilter={setFilter}
             query={query}
@@ -350,8 +358,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
               ) : (
                 <TicketHistoryPanel
                   view={ticketsView}
-                  onRetry={() => void tickets.refetch()}
-                  isRetrying={tickets.isFetching}
+                  onRetry={retryTickets}
+                  isRetrying={isRetryingTickets}
                 />
               )}
             </SidePanel>

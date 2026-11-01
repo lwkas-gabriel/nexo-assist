@@ -94,12 +94,25 @@ describe("estados de carregamento, erro e vazio (10.5)", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("ErrorState: enquanto tenta, o botão diz Tentando… e fica desabilitado; sem foco automático", () => {
+  it("ErrorState: enquanto tenta, o botão diz Tentando… e fica aria-disabled; sem foco automático", () => {
     render(<ErrorState message="Falhou." onRetry={() => undefined} isRetrying />);
 
     const button = screen.getByRole("button", { name: "Tentando…" });
-    expect(button).toHaveProperty("disabled", true);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it("ErrorState: tentando, o botão não perde o foco e o clique não chama a nova tentativa de novo", async () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(<ErrorState message="Falhou." onRetry={onRetry} />);
+    const button = screen.getByRole("button", { name: "Tentar novamente" });
+    button.focus();
+
+    rerender(<ErrorState message="Falhou." onRetry={onRetry} isRetrying />);
+    await userEvent.click(button);
+
+    expect(document.activeElement).toBe(button);
+    expect(onRetry).not.toHaveBeenCalled();
   });
 
   it("ErrorState: sem onRetry, não há botão", () => {
