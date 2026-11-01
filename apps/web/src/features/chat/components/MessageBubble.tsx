@@ -1,4 +1,5 @@
 import { isToolUIPart, type UIMessage } from "ai";
+import { TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import type { DraftFields, DraftView } from "../chat-api.ts";
 import {
@@ -110,7 +111,10 @@ export function MessageBubble(props: MessageBubbleProps) {
           {text}
         </p>
         {props.delivery === "unsent" && (
-          <span className="text-[12.5px] text-danger-text">Não enviada</span>
+          <span className="flex items-center gap-1 text-[12.5px] text-danger-text">
+            <TriangleAlert aria-hidden size={12} />
+            Não enviada
+          </span>
         )}
         {props.delivery === "interrupted" && (
           <div className="flex flex-wrap items-center justify-end gap-2">

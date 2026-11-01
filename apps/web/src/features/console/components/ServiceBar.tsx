@@ -5,9 +5,21 @@ import { Button } from "../../../ui/Button.tsx";
 import type { ConsoleConversation } from "../console-api.ts";
 import { describeContactDue } from "../console-model.ts";
 
+export type ServiceActionKind = "assume" | "release" | "close" | "reply";
+
+/** O que o botão diz enquanto a ação roda (10.5): a pessoa vê o que está acontecendo. */
+const WORKING_LABELS: Record<ServiceActionKind, string> = {
+  assume: "Assumindo…",
+  release: "Devolvendo…",
+  close: "Encerrando…",
+  reply: "Enviando…",
+};
+
 /** As ações da tela 5 (RF20), feitas pela página; aqui só os botões e o campo. */
 export type ServiceActions = {
   isWorking: boolean;
+  /** Qual ação está em curso, se alguma. */
+  pending: ServiceActionKind | null;
   error: string | null;
   assume: () => void;
   release: () => void;
@@ -29,7 +41,7 @@ export function ServiceHeaderActions({ actions }: { actions: ServiceActions }) {
         <Undo2 aria-hidden size={15} />
         {/* Abaixo de 1024 px, só o ícone: o nome vem do aria-label. */}
         <span aria-hidden className="hidden lg:inline">
-          Devolver ao agent
+          {actions.pending === "release" ? WORKING_LABELS.release : "Devolver ao agent"}
         </span>
       </Button>
       <Button
@@ -40,7 +52,7 @@ export function ServiceHeaderActions({ actions }: { actions: ServiceActions }) {
       >
         <CircleX aria-hidden size={15} />
         <span aria-hidden className="hidden lg:inline">
-          Encerrar atendimento
+          {actions.pending === "close" ? WORKING_LABELS.close : "Encerrar atendimento"}
         </span>
       </Button>
     </div>
@@ -102,11 +114,11 @@ export function ServiceBar({
           <div className="flex gap-1.5">
             <Button variant="secondary" onClick={actions.release} disabled={actions.isWorking}>
               <Undo2 aria-hidden size={15} />
-              Devolver ao agent
+              {actions.pending === "release" ? WORKING_LABELS.release : "Devolver ao agent"}
             </Button>
             <Button onClick={actions.assume} disabled={actions.isWorking}>
               <Hand aria-hidden size={16} />
-              Assumir atendimento
+              {actions.pending === "assume" ? WORKING_LABELS.assume : "Assumir atendimento"}
             </Button>
           </div>
         </div>
@@ -163,7 +175,7 @@ function ReplyForm({ actions, recipient }: { actions: ServiceActions; recipient:
       />
       <Button type="submit" size="lg" disabled={!canSend}>
         <SendHorizontal aria-hidden size={16} />
-        Enviar
+        {actions.pending === "reply" ? WORKING_LABELS.reply : "Enviar"}
       </Button>
     </form>
   );

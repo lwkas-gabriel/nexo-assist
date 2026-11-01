@@ -361,6 +361,37 @@ describe("console do analista (tela 4)", () => {
       expect(posts.map((post) => post.path)).toContain("/api/console/conversations/c-ana/assume");
     });
 
+    it("10.5: enquanto a ação roda, o botão diz o que está acontecendo e fica desabilitado", async () => {
+      let release = () => undefined as void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          await gate;
+          return new Response("{}", { status: 200 });
+        }
+        const body = input.startsWith("/api/console/conversations?")
+          ? LIST
+          : input.endsWith("/tickets")
+            ? TICKETS
+            : CONVERSATION;
+        return new Response(JSON.stringify(body), { status: 200 });
+      });
+      await open();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Assumir atendimento" }));
+
+      const working = await screen.findByRole("button", { name: "Assumindo…" });
+      expect(working).toHaveProperty("disabled", true);
+      expect(screen.getByRole("button", { name: "Devolver ao agent" })).toHaveProperty(
+        "disabled",
+        true,
+      );
+      await act(() => {
+        release();
+        return gate;
+      });
+    });
+
     it("aguardando: devolver ao agent sem assumir", async () => {
       const posts = stubActions(CONVERSATION);
       await open();

@@ -21,7 +21,7 @@ import {
   replyToConversation,
   type ConsoleFilter,
 } from "./console-api.ts";
-import type { ServiceActions } from "./components/ServiceBar.tsx";
+import type { ServiceActionKind, ServiceActions } from "./components/ServiceBar.tsx";
 import { ConsoleConversationView } from "./components/ConsoleConversationView.tsx";
 import { ConversationList } from "./components/ConversationList.tsx";
 import { TicketHistoryPanel } from "./components/TicketHistoryPanel.tsx";
@@ -113,7 +113,13 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   const queryClient = useQueryClient();
   // 10.7: depois da ação, o botão clicado some; o foco vai para onde o trabalho continua.
   const service = useMutation({
-    mutationFn: ({ run }: { run: () => Promise<unknown>; focusAfter: string }) => run(),
+    mutationFn: ({
+      run,
+    }: {
+      kind: ServiceActionKind;
+      run: () => Promise<unknown>;
+      focusAfter: string;
+    }) => run(),
     onSuccess: (_result, { focusAfter }) => {
       pendingFocusRef.current = () => document.getElementById(focusAfter);
       return queryClient.invalidateQueries({ queryKey: ["console"] });
@@ -121,24 +127,29 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   });
   const serviceActions: ServiceActions = {
     isWorking: service.isPending,
+    pending: service.isPending ? service.variables.kind : null,
     error: service.error ? service.error.message : null,
     assume: () =>
       service.mutate({
+        kind: "assume",
         run: () => assumeConversation(selectedId ?? ""),
         focusAfter: "console-reply",
       }),
     release: () =>
       service.mutate({
+        kind: "release",
         run: () => releaseConversation(selectedId ?? ""),
         focusAfter: "console-conversation-title",
       }),
     close: () =>
       service.mutate({
+        kind: "close",
         run: () => closeService(selectedId ?? ""),
         focusAfter: "console-conversation-title",
       }),
     reply: (text) =>
       service.mutateAsync({
+        kind: "reply",
         run: () => replyToConversation(selectedId ?? "", text),
         focusAfter: "console-reply",
       }),
