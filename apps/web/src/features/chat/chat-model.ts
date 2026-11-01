@@ -1,3 +1,4 @@
+import type { ConversationMode } from "@nexo/shared/domain";
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import type { AnalystView, DraftView, SessionView } from "./chat-api.ts";
 
@@ -49,6 +50,24 @@ export function textOf(message: UIMessage): string {
 /** A mensagem mais recente do funcionário: a que fica sem resposta quando o envio falha. */
 export function lastEmployeeMessage(messages: readonly UIMessage[]): UIMessage | undefined {
   return messages.findLast((message) => messageAuthor(message) === "employee");
+}
+
+/**
+ * 10.5, "resposta interrompida": a mensagem do funcionário que o servidor guardou mas ficou sem
+ * resposta, com o agent atendendo e nada mais depois dela na tela. É deduzida pelo cliente: a api
+ * não grava uma marca; quando o servidor reinicia no meio do turno, o que sobra é uma conversa
+ * que termina numa mensagem do funcionário. Quem chama garante que não há envio nem falha em
+ * curso (aí a tela já tem o próprio aviso).
+ */
+export function interruptedMessageId(
+  messages: readonly UIMessage[],
+  serverMessages: readonly UIMessage[],
+  mode: ConversationMode,
+): string | undefined {
+  if (mode !== "agent") return undefined;
+  const lastOnServer = serverMessages.at(-1);
+  if (!lastOnServer || lastOnServer.id !== messages.at(-1)?.id) return undefined;
+  return messageAuthor(lastOnServer) === "employee" ? lastOnServer.id : undefined;
 }
 
 /** Saída de uma tool já concluída, pelo nome. */

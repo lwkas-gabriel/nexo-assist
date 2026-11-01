@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { DraftView, SessionView } from "./chat-api.ts";
 import {
   confirmableDraft,
+  interruptedMessageId,
   lastEmployeeMessage,
   mergeServerMessages,
   liveDraft,
@@ -135,5 +136,45 @@ describe("leitura das mensagens do chat", () => {
     ]);
     const empty: UIMessage = { id: "x", role: "assistant", parts: [] };
     expect(mergeServerMessages([...old, empty], old, undefined)).toEqual(old);
+  });
+
+  describe("interruptedMessageId (10.5, resposta interrompida)", () => {
+    const fromEmployee = message("e-1", { author: "employee" });
+    const fromAgent = message("a-1", { author: "agent" });
+
+    it("o agent atendendo e a conversa terminando numa mensagem do funcionário: interrompida", () => {
+      expect(interruptedMessageId([fromEmployee], [fromEmployee], "agent")).toBe("e-1");
+    });
+
+    it("com a mensagem ainda sem resposta no fim das duas conversas, mesmo com histórico antes", () => {
+      const history = [fromEmployee, fromAgent, message("e-2", { author: "employee" })];
+
+      expect(interruptedMessageId(history, history, "agent")).toBe("e-2");
+    });
+
+    it("com um analista, ou esperando por ele, o agent não responde: não é interrupção", () => {
+      expect(interruptedMessageId([fromEmployee], [fromEmployee], "analyst")).toBeUndefined();
+      expect(
+        interruptedMessageId([fromEmployee], [fromEmployee], "waiting_analyst"),
+      ).toBeUndefined();
+    });
+
+    it("a última do agent ou do sistema não é interrupção", () => {
+      const system = message("s-1", { author: "system" });
+
+      expect(
+        interruptedMessageId([fromEmployee, fromAgent], [fromEmployee, fromAgent], "agent"),
+      ).toBeUndefined();
+      expect(
+        interruptedMessageId([fromEmployee, system], [fromEmployee, system], "agent"),
+      ).toBeUndefined();
+    });
+
+    it("se a tela tem algo depois (a resposta chegando), ou a conversa é outra, não marca", () => {
+      expect(
+        interruptedMessageId([fromEmployee, fromAgent], [fromEmployee], "agent"),
+      ).toBeUndefined();
+      expect(interruptedMessageId([], [], "agent")).toBeUndefined();
+    });
   });
 });

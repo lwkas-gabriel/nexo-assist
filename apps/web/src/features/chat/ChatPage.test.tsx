@@ -887,4 +887,68 @@ describe("tela do chat (tela 2)", () => {
       expect(await screen.findByLabelText("Mensagem para o Nexo")).toBeDefined();
     });
   });
+
+  describe("resposta interrompida (10.5)", () => {
+    const employeeAsks = (id: string, text: string) => ({
+      id,
+      role: "user" as const,
+      metadata: { author: "employee" },
+      parts: [{ type: "text" as const, text }],
+    });
+    const endingInEmployee = (mode: ConversationMode = "agent"): ConversationView => ({
+      ...conversationAt(mode, false),
+      messages: [employeeAsks("e-1", "Minha VPN caiu")],
+    });
+
+    it("a conversa que termina numa mensagem do funcionário marca a bolha; Tentar novamente reenvia o mesmo id e texto", async () => {
+      const { sentBodies } = stubApi(endingInEmployee());
+      renderChat();
+
+      expect(await screen.findByText("Resposta interrompida")).toBeDefined();
+      expect(screen.queryByText("Não enviada")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+      await waitFor(() => expect(sentBodies).toHaveLength(1));
+      expect(sentBodies[0]).toMatchObject({ id: "e-1", text: "Minha VPN caiu" });
+      expect(screen.getAllByText("Minha VPN caiu")).toHaveLength(1);
+    });
+
+    it("se o reenvio também falha, só o alerta de falha aparece, nunca os dois", async () => {
+      stubApi(endingInEmployee());
+      renderChat();
+      await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+
+      expect(await screen.findByText("Muitas mensagens em pouco tempo.")).toBeDefined();
+      expect(screen.queryByText("Resposta interrompida")).toBeNull();
+      expect(screen.getAllByRole("button", { name: "Tentar novamente" })).toHaveLength(1);
+    });
+
+    it("com a conversa esperando um analista, ou com ele, não é interrupção", async () => {
+      stubApi(endingInEmployee("waiting_analyst"));
+      renderChat();
+
+      await screen.findByText("Aguardando analista");
+      expect(screen.getByText("Minha VPN caiu")).toBeDefined();
+      expect(screen.queryByText("Resposta interrompida")).toBeNull();
+    });
+
+    it("a conversa que termina numa resposta do agent não tem marca", async () => {
+      stubApi({
+        ...conversationAt("agent", false),
+        messages: [
+          employeeAsks("e-1", "Minha VPN caiu"),
+          {
+            id: "a-1",
+            role: "assistant",
+            metadata: { author: "agent" },
+            parts: [{ type: "text", text: "Vou olhar." }],
+          },
+        ],
+      });
+      renderChat();
+
+      expect(await screen.findByText("Vou olhar.")).toBeDefined();
+      expect(screen.queryByText("Resposta interrompida")).toBeNull();
+    });
+  });
 });

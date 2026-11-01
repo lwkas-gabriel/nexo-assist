@@ -25,6 +25,7 @@ import {
 import { CONVERSATION_OUT_OF_SYNC, describeChatError } from "./chat-error.ts";
 import {
   confirmableDraft,
+  interruptedMessageId,
   lastEmployeeMessage,
   mergeServerMessages,
   messageAuthor,
@@ -42,6 +43,7 @@ import { Composer, SessionLimitNotice } from "./components/Composer.tsx";
 import {
   MessageBubble,
   type DraftActions,
+  type MessageDelivery,
   type TicketActions,
 } from "./components/MessageBubble.tsx";
 import type { SuggestedAction } from "./components/SuggestedActions.tsx";
@@ -280,6 +282,16 @@ function ChatConversation({
     failedMessage && !view.messages.some((message) => message.id === failedMessage.id)
       ? failedMessage.id
       : undefined;
+  // 10.5: a conversa guardada termina numa mensagem sem resposta (o servidor caiu no meio do
+  // turno). Só quando nada está em curso nem falhou, para nunca vir junto ao alerta de falha.
+  const interruptedId =
+    status === "ready" && !error && unsentMessageId === undefined
+      ? interruptedMessageId(messages, view.messages, mode)
+      : undefined;
+  const deliveryOf = (messageId: string): MessageDelivery => {
+    if (messageId === unsentMessageId) return "unsent";
+    return messageId === interruptedId ? "interrupted" : "sent";
+  };
   // RN14: o limite vale para o agent; com um analista, o funcionário continua escrevendo.
   const isAtLimit = mode === "agent" && view.session?.isAtLimit === true;
 
@@ -357,7 +369,8 @@ function ChatConversation({
                       drafts={view.drafts}
                       optionsActive={message === lastMessage && activeOptions !== undefined}
                       actionableDraftNumber={pendingDraft?.number}
-                      isUnsent={message.id === unsentMessageId}
+                      delivery={deliveryOf(message.id)}
+                      onRetry={retry}
                       onOpenDecision={toggleDecision}
                       openDecisionId={shownDecisionId}
                       decisionPanelId={decisionPanelId}

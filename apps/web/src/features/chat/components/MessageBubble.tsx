@@ -16,6 +16,7 @@ import {
   listedTicketsOf,
   type TicketSummaryView,
 } from "../ticket-model.ts";
+import { Button } from "../../../ui/Button.tsx";
 import { SuggestedActions, type SuggestedAction } from "./SuggestedActions.tsx";
 import { TicketCard } from "./TicketCard.tsx";
 import { TicketPickerList } from "./TicketPickerList.tsx";
@@ -32,6 +33,8 @@ export type TicketActions = {
   select: (messageId: string, ticket: TicketSummaryView) => void;
   suggest: (messageId: string, action: SuggestedAction, ticket: TicketSummaryView) => void;
 };
+
+export type MessageDelivery = "sent" | "unsent" | "interrupted";
 
 export type DraftActions = {
   isWorking: boolean;
@@ -50,8 +53,13 @@ type MessageBubbleProps = {
   optionsActive: boolean;
   /** O rascunho que aceita ação (o mais recente ainda confirmável); os outros são registro. */
   actionableDraftNumber: number | undefined;
-  /** O envio falhou antes de a mensagem chegar ao servidor. */
-  isUnsent: boolean;
+  /**
+   * Da mensagem do funcionário: entregue; "unsent" se o envio falhou antes de chegar ao servidor
+   * (o alerta da tela já tem o "Tentar novamente"); "interrupted" se chegou e ficou sem resposta
+   * (10.5), caso em que a própria bolha oferece tentar de novo.
+   */
+  delivery: MessageDelivery;
+  onRetry: (message: UIMessage) => void;
   /** Abre o detalhe da decisão desta resposta (RF05); `opener` recebe o foco de volta ao fechar. */
   onOpenDecision: (messageId: string, opener: HTMLElement) => void;
   /** A resposta cujo detalhe está aberto, se alguma. */
@@ -94,7 +102,17 @@ export function MessageBubble(props: MessageBubbleProps) {
           <span className="sr-only">Você: </span>
           {text}
         </p>
-        {props.isUnsent && <span className="text-[12.5px] text-danger-text">Não enviada</span>}
+        {props.delivery === "unsent" && (
+          <span className="text-[12.5px] text-danger-text">Não enviada</span>
+        )}
+        {props.delivery === "interrupted" && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-[12.5px] text-danger-text">Resposta interrompida</span>
+            <Button variant="secondary" onClick={() => props.onRetry(message)}>
+              Tentar novamente
+            </Button>
+          </div>
+        )}
       </li>
     );
   }
