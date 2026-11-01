@@ -336,6 +336,18 @@ describe("tela do chat (tela 2)", () => {
       );
     });
 
+    it("10.5: lista vazia vira um cartão, conforme o filtro que o agent pediu", async () => {
+      stubWithBodies([
+        agentWithTool("a-1", "list_my_tickets", { ok: true, tickets: [] }, "", { filter: "open" }),
+        agentWithTool("a-2", "list_my_tickets", { ok: true, tickets: [] }, "", { filter: "all" }),
+      ]);
+      renderChat();
+
+      expect(await screen.findByText("Você não tem chamados abertos")).toBeDefined();
+      expect(screen.getByText("Você não tem chamados")).toBeDefined();
+      expect(screen.queryByRole("list", { name: "Seus chamados" })).toBeNull();
+    });
+
     it("RN07: chamado vencido na última resposta oferece analista, ligado ao chamado", async () => {
       const posts = stubWithBodies([
         agentWithTool("a-1", "get_ticket", { ok: true, ticket: overdueTicket }, "Venceu."),

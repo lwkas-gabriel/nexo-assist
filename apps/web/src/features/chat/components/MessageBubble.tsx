@@ -12,6 +12,7 @@ import {
 import { decisionOf } from "../decision-model.ts";
 import {
   consultedTicketOf,
+  emptyTicketListOf,
   isOverdueAndOpen,
   listedTicketsOf,
   offeredActions,
@@ -25,6 +26,7 @@ import { TicketCard } from "./TicketCard.tsx";
 import { TicketPickerList } from "./TicketPickerList.tsx";
 import { ActionChips } from "./ActionChips.tsx";
 import { DraftCard } from "./DraftCard.tsx";
+import { EmptyTicketList } from "./EmptyTicketList.tsx";
 import { QuickOptions } from "./QuickOptions.tsx";
 
 /** Tela 3: escolher um chamado da lista e responder à oferta de analista (11.5, sem o modelo). */
@@ -170,6 +172,7 @@ function AgentMessage({
   const consulted = consultedTicketOf(message);
   // Com o chamado já consultado no mesmo turno, a lista vira só o caminho até ele: nada a escolher.
   const listed = consulted ? undefined : listedTicketsOf(message);
+  const emptyTickets = emptyTicketListOf(message);
   const actionError = ticketActions.errorFor(message.id);
   const canAct = isLatestAgentTurn && !ticketActions.isWorking;
   // Só a resposta mais recente oferece analista; o chamado vencido tem prioridade (o sistema
@@ -203,6 +206,7 @@ function AgentMessage({
           )}
         </div>
       )}
+      {emptyTickets && <EmptyTicketList scope={emptyTickets} />}
       {listed && (
         <TicketPickerList
           tickets={listed}

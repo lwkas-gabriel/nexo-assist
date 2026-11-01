@@ -18,13 +18,14 @@ import {
   textOf,
 } from "../../chat/chat-model.ts";
 import { ActionChips } from "../../chat/components/ActionChips.tsx";
+import { EmptyTicketList } from "../../chat/components/EmptyTicketList.tsx";
 import { DraftCard } from "../../chat/components/DraftCard.tsx";
 import { QuickOptions } from "../../chat/components/QuickOptions.tsx";
 import { TicketCard } from "../../chat/components/TicketCard.tsx";
 import { TicketPickerList } from "../../chat/components/TicketPickerList.tsx";
 import { CONVERSATION_OUT_OF_SYNC } from "../../chat/chat-error.ts";
 import { decisionOf } from "../../chat/decision-model.ts";
-import { consultedTicketOf, listedTicketsOf } from "../../chat/ticket-model.ts";
+import { consultedTicketOf, emptyTicketListOf, listedTicketsOf } from "../../chat/ticket-model.ts";
 import type { ConsoleConversation } from "../console-api.ts";
 import { dayLabel, headerTag, messageTime } from "../console-model.ts";
 import { SeenTicks } from "./ConversationList.tsx";
@@ -163,13 +164,15 @@ function DayDivider({ label }: { label: string }) {
 function SeenArtifacts({ message, drafts }: { message: UIMessage; drafts: readonly DraftView[] }) {
   const consulted = consultedTicketOf(message);
   const listed = consulted ? undefined : listedTicketsOf(message);
+  const emptyTickets = emptyTicketListOf(message);
   const options = quickOptionsOf(message);
   const proposal = proposedDraft(message);
   const draft = proposal ? liveDraft(proposal, drafts) : undefined;
-  if (!consulted && !listed && !options && !draft) return null;
+  if (!consulted && !listed && !emptyTickets && !options && !draft) return null;
   return (
     <div className="flex w-full max-w-[560px] flex-col gap-2">
       {consulted && <TicketCard ticket={consulted} />}
+      {emptyTickets && <EmptyTicketList scope={emptyTickets} />}
       {listed && <TicketPickerList tickets={listed} isActive={false} onSelect={noop} />}
       {options && (
         <div className="rounded-xl bg-paper px-4 py-3">

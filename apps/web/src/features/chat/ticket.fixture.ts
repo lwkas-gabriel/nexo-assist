@@ -29,7 +29,13 @@ export const onTimeTicket: TicketDetailsView = {
 };
 
 /** Resposta do agent com a saída de uma tool de chamados. */
-export function agentWithTool(id: string, toolName: string, output: unknown, text = ""): UIMessage {
+export function agentWithTool(
+  id: string,
+  toolName: string,
+  output: unknown,
+  text = "",
+  input: unknown = {},
+): UIMessage {
   return {
     id,
     role: "assistant",
@@ -39,7 +45,7 @@ export function agentWithTool(id: string, toolName: string, output: unknown, tex
         type: `tool-${toolName}`,
         toolCallId: `c-${id}`,
         state: "output-available",
-        input: {},
+        input,
         output,
       },
       ...(text ? [{ type: "text" as const, text }] : []),

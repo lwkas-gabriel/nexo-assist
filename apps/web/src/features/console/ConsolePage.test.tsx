@@ -282,6 +282,21 @@ describe("console do analista (tela 4)", () => {
     expect(within(log).queryByRole("button", { name: "Não, obrigado" })).toBeNull();
   });
 
+  it("10.5: a lista de chamados vazia que o funcionário viu aparece como registro", async () => {
+    stubConsole({
+      ...CONVERSATION,
+      messages: [
+        agentWithTool("m-4", "list_my_tickets", { ok: true, tickets: [] }, "", { filter: "open" }),
+      ],
+    });
+    renderConsole();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Ana Souza/ }));
+
+    const log = await screen.findByRole("log", { name: "Conversa com Ana Souza" });
+    expect(within(log).getByText("Você não tem chamados abertos")).toBeDefined();
+  });
+
   describe("tela 5: assumir, responder, devolver e encerrar (RF20)", () => {
     /** A api do console que guarda os POSTs; `failing` responde 409 a uma ação. */
     function stubActions(

@@ -43,6 +43,26 @@ export function listedTicketsOf(message: UIMessage): TicketSummaryView[] | undef
   return parsed.success && parsed.data.tickets.length > 0 ? parsed.data.tickets : undefined;
 }
 
+export type EmptyTicketList = "open" | "all";
+
+/**
+ * 10.5, lista vazia: a consulta deu certo e não há chamado nenhum. Diz se o agent pediu só os
+ * abertos ou todos (o `filter` da chamada); sem o filtro gravado vale "open", que é verdade nos
+ * dois casos (quem não tem chamado algum também não tem aberto).
+ */
+export function emptyTicketListOf(message: UIMessage): EmptyTicketList | undefined {
+  const part = message.parts
+    .filter(isToolUIPart)
+    .findLast((candidate) => getToolName(candidate) === "list_my_tickets");
+  if (part?.state !== "output-available") return undefined;
+  const parsed = listOutputSchema.safeParse(part.output);
+  if (!parsed.success || parsed.data.tickets.length > 0) return undefined;
+  const input: unknown = part.input;
+  return typeof input === "object" && input !== null && "filter" in input && input.filter === "all"
+    ? "all"
+    : "open";
+}
+
 /** RF09: o chamado consultado (pelo agent ou pela escolha na lista). */
 export function consultedTicketOf(message: UIMessage): TicketDetailsView | undefined {
   const parsed = getOutputSchema.safeParse(lastOutput(message, "get_ticket"));

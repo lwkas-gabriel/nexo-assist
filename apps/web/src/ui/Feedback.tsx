@@ -83,15 +83,23 @@ export function EmptyState({
   title,
   description,
   action,
+  isCompact = false,
 }: {
   icon?: ReactNode;
   title: string;
   description?: string;
   /** Uma saída para quem chegou aqui, como "Limpar busca". */
   action?: ReactNode;
+  /** Menos respiro, para caber como cartão no meio de uma conversa. */
+  isCompact?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+    <div
+      className={cx(
+        "flex flex-col items-center gap-2 px-6 text-center",
+        isCompact ? "py-4" : "py-10",
+      )}
+    >
       {icon && (
         <span aria-hidden className="text-ink-3">
           {icon}
