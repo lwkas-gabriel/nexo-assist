@@ -316,6 +316,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
             filter={filter}
             onFilter={setFilter}
             query={query}
+            isSearchPending={query !== searchedQuery}
             onQuery={setQuery}
             selectedId={selectedId}
             onSelect={selectConversation}

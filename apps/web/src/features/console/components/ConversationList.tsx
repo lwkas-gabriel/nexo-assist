@@ -39,6 +39,8 @@ type ConversationListProps = {
   filter: ConsoleFilter;
   onFilter: (filter: ConsoleFilter) => void;
   query: string;
+  /** O campo mudou, mas a consulta ainda espera a pessoa parar de digitar: a lista é a da busca anterior. */
+  isSearchPending: boolean;
   onQuery: (query: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -127,12 +129,19 @@ function ListBody({
   isRetrying,
   filter,
   query,
+  isSearchPending,
   onClearSearch,
   selectedId,
   onSelect,
   now,
 }: ConversationListProps & { onClearSearch: () => void }) {
-  if (view.status === "loading") {
+  // Uma lista vazia que é a da busca ou do filtro anterior (provisória, ou à espera da consulta
+  // nova) não diz nada sobre o que a pessoa pediu agora: "Nenhuma conversa" seria falso.
+  const isEmptyAndStale =
+    view.status === "ready" &&
+    view.data.conversations.length === 0 &&
+    (view.isSwitching || isSearchPending);
+  if (view.status === "loading" || isEmptyAndStale) {
     return (
       <LoadingState label="Carregando conversas" className="flex flex-col gap-2 p-2">
         <Skeleton className="h-16" />

@@ -765,6 +765,57 @@ describe("console do analista (tela 4)", () => {
         expect(screen.queryByText(/Nenhuma conversa encontrada/)).toBeNull();
       });
 
+      it("Limpar busca: enquanto a lista sem busca carrega, não diz que não há conversas", async () => {
+        let release = () => undefined as void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        let isHoldingUnfiltered = false;
+        vi.stubGlobal("fetch", async (input: string) => {
+          if (input.startsWith("/api/console/conversations?")) {
+            const params = new URL(input, "http://x").searchParams;
+            if (params.get("q")) return json({ ...LIST, conversations: [] });
+            if (isHoldingUnfiltered && params.get("filter") === "mine") await gate;
+            return json(LIST);
+          }
+          return json(CONVERSATION);
+        });
+        renderConsole();
+        const search = await screen.findByLabelText("Pesquisar conversa ou chamado");
+        await userEvent.type(search, "zzz");
+        await screen.findByText("Nenhuma conversa encontrada para “zzz”.");
+        await userEvent.click(screen.getByRole("button", { name: /^Minhas/ }));
+        await screen.findByText("Nenhuma conversa encontrada para “zzz”.");
+
+        // "Minhas" sem busca nunca foi carregada: a lista provisória é o resultado vazio da busca.
+        isHoldingUnfiltered = true;
+        await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+        await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+
+        expect(screen.queryByText("Nenhuma conversa neste filtro.")).toBeNull();
+        expect(screen.queryByText("Nenhuma conversa ainda.")).toBeNull();
+        expect(screen.getByText("Carregando conversas")).toBeDefined();
+        await act(() => {
+          release();
+          return gate;
+        });
+        expect(await screen.findByText("Ana Souza")).toBeDefined();
+      });
+
+      it("Limpar busca: nem durante a espera da busca (debounce) a lista diz que está vazia", async () => {
+        const control = controllableConsole();
+        control.isListEmpty = true;
+        renderConsole();
+        const search = await screen.findByLabelText("Pesquisar conversa ou chamado");
+        await userEvent.type(search, "zzz");
+        await screen.findByText("Nenhuma conversa encontrada para “zzz”.");
+
+        await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+
+        // O campo já está vazio, mas a lista ainda é a da busca "zzz" (a consulta espera 300 ms).
+        expect(screen.queryByText("Nenhuma conversa ainda.")).toBeNull();
+        expect(screen.getByText("Carregando conversas")).toBeDefined();
+        expect(await screen.findByText("Nenhuma conversa ainda.")).toBeDefined();
+      });
+
       it("funcionário sem chamados: uma mensagem só, no painel", async () => {
         const control = controllableConsole();
         control.tickets = "empty";
