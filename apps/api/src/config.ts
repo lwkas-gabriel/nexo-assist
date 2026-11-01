@@ -5,7 +5,7 @@ import { z } from "zod";
  * LLM_MODE=gemini usa o Gemini no plano gratuito do Google e exige chave e modelo (ADR-0010).
  * LLM_MODE=mock usa um modelo falso roteirizado (testes E2E e CI), sem chave e sem chamadas externas.
  */
-export const llmSchema = z.discriminatedUnion("LLM_MODE", [
+const llmSchema = z.discriminatedUnion("LLM_MODE", [
   z.object({
     LLM_MODE: z.literal("gemini"),
     GEMINI_API_KEY: z.string().min(1),
@@ -47,6 +47,14 @@ const envSchema = z
 
 export type Config = z.infer<typeof envSchema>;
 export type LlmConfig = z.infer<typeof llmSchema>;
+
+/**
+ * Só a parte do modelo, para quem não precisa do resto (a avaliação do agent, T27): sem banco,
+ * porta HTTP nem serviço de chamados (menor privilégio).
+ */
+export function loadLlmConfig(source: Record<string, string | undefined> = process.env): LlmConfig {
+  return parseEnv(llmSchema, source);
+}
 
 export function loadConfig(source: Record<string, string | undefined> = process.env): Config {
   return parseEnv(envSchema, source);

@@ -2,8 +2,9 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { loadLlmConfig } from "../config.ts";
 import { systemClock } from "@nexo/shared/domain";
-import { loadEvalConfig } from "./config.ts";
+
 import { exitCodeOf, formatReport } from "./report.ts";
 import { GEMINI_LIMITS, MOCK_LIMITS, runEvaluation } from "./run-evaluation.ts";
 import { EVAL_SCENARIOS } from "./scenarios.ts";
@@ -11,7 +12,7 @@ import { EVAL_SCENARIOS } from "./scenarios.ts";
 /** Fica fora do git (.gitignore): é o resultado de cada execução, não código. */
 const REPORT_FILE = join(import.meta.dirname, "..", "..", "eval-report.json");
 
-const llm = loadEvalConfig();
+const llm = loadLlmConfig();
 
 const report = await runEvaluation({
   scenarios: EVAL_SCENARIOS,
