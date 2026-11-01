@@ -38,7 +38,8 @@ import {
   sessionSummaryIndex,
   textOf,
 } from "./chat-model.ts";
-import { queryViewOf, type QueryView } from "../../lib/query-view.ts";
+import type { QueryView } from "../../lib/query-view.ts";
+import { useQueryView } from "../../lib/use-query-view.ts";
 import { useHashPage } from "../../lib/use-hash-page.ts";
 import { ProfilePage } from "../profile/ProfilePage.tsx";
 import { ChatShell } from "./ChatShell.tsx";
@@ -89,7 +90,7 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       return withAgent && data?.isBusy !== true ? false : ANALYST_POLL_MS;
     },
   });
-  const view = queryViewOf(conversation);
+  const view = useQueryView(conversation);
   // Sem a conversa carregada, a pílula do topo não afirma nada ("Assistente online" seria chute).
   const mode = view.status === "ready" ? (view.data.conversation?.mode ?? "agent") : null;
   const page = useHashPage();

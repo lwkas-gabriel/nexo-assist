@@ -18,36 +18,47 @@ export type QueryView<T> =
       isSwitching: boolean;
     };
 
-type QuerySnapshot<T> = Pick<
+export type QuerySnapshot<T> = Pick<
   UseQueryResult<T, Error>,
   "data" | "error" | "isPlaceholderData" | "isFetching" | "errorUpdatedAt"
 >;
 
+/**
+ * Uma falha que esta tela viu acontecer: quando (o `errorUpdatedAt` da consulta) e o que dizer.
+ * A biblioteca apaga o erro a cada nova tentativa, mas mantém o instante; a tela guarda o texto.
+ */
+export type SeenFailure = { at: number; message: string };
+
 /** Só a mensagem da nossa api é feita para a tela; qualquer outro erro vira a frase genérica. */
-function messageOf(error: Error | null): string {
+export function messageOf(error: Error): string {
   return error instanceof ApiError ? error.message : GENERIC_MESSAGE;
 }
 
 /**
  * Traduz o resultado da consulta. Dois detalhes do TanStack Query que a tela não pode adivinhar:
  * - uma consulta sem dados que falhou volta a "pendente" (com o erro apagado) a cada nova
- *   tentativa, e o `placeholderData` reaparece: sem a regra do `errorUpdatedAt` (o instante da
- *   última falha, que a biblioteca mantém), a lista do filtro anterior voltaria em silêncio entre
- *   uma falha e outra;
+ *   tentativa, e o `placeholderData` reaparece: sem a falha vista (`seen`), a lista do filtro
+ *   anterior voltaria em silêncio entre uma falha e outra, e a tela piscaria o esqueleto. Só vale
+ *   a falha que esta tela viu (mesmo `errorUpdatedAt`): uma consulta que falhou antes de a tela
+ *   abrir, e ainda está no cache, não é erro de agora;
  * - com dados, uma falha vira `error` mas os dados ficam: isso é "desatualizada", não erro.
  */
-export function queryViewOf<T>(query: QuerySnapshot<T>): QueryView<T> {
+export function queryViewOf<T>(
+  query: QuerySnapshot<T>,
+  seen: SeenFailure | null = null,
+): QueryView<T> {
   const { data, error } = query;
+  // A nova tentativa de uma falha vista: o erro já foi apagado, a mensagem vem do que a tela guardou.
+  const retryMessage =
+    error === null && seen !== null && seen.at === query.errorUpdatedAt ? seen.message : undefined;
   if (data === undefined) {
     if (error) return { status: "error", message: messageOf(error) };
-    // Nova tentativa depois de uma falha: segue o erro (o botão diz "Tentando…") em vez de piscar
-    // o esqueleto. A mensagem original já foi apagada pela biblioteca; vale a frase genérica.
-    return query.errorUpdatedAt > 0
-      ? { status: "error", message: GENERIC_MESSAGE }
-      : { status: "loading" };
+    return retryMessage === undefined
+      ? { status: "loading" }
+      : { status: "error", message: retryMessage };
   }
-  if (query.isPlaceholderData && query.errorUpdatedAt > 0) {
-    return { status: "error", message: messageOf(error) };
+  if (query.isPlaceholderData && retryMessage !== undefined) {
+    return { status: "error", message: retryMessage };
   }
   return {
     status: "ready",

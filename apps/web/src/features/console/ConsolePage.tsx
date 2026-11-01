@@ -3,7 +3,7 @@ import { LogOut, MessageSquare } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useBreakpoint } from "../../lib/use-breakpoint.ts";
 import { Avatar } from "../../ui/Avatar.tsx";
-import { queryViewOf } from "../../lib/query-view.ts";
+import { useQueryView } from "../../lib/use-query-view.ts";
 import { ErrorState, LoadingState, Skeleton } from "../../ui/Feedback.tsx";
 import { IconButton } from "../../ui/IconButton.tsx";
 import { SidePanel } from "../../ui/SidePanel.tsx";
@@ -91,7 +91,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     refetchInterval: POLL_MS,
     placeholderData: (previous) => previous,
   });
-  const listView = queryViewOf(list);
+  const listView = useQueryView(list);
   const listData = listView.status === "ready" ? listView.data : undefined;
   const conversation = useQuery({
     queryKey: ["console", "conversation", selectedId],
@@ -99,14 +99,14 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
     enabled: selectedId !== null,
     refetchInterval: POLL_MS,
   });
-  const conversationView = queryViewOf(conversation);
+  const conversationView = useQueryView(conversation);
   const tickets = useQuery({
     queryKey: ["console", "tickets", selectedId],
     queryFn: () => fetchConsoleTickets(selectedId ?? ""),
     enabled: selectedId !== null,
     refetchInterval: TICKETS_POLL_MS,
   });
-  const ticketsView = queryViewOf(tickets);
+  const ticketsView = useQueryView(tickets);
 
   // Tela 5: cada ação recarrega a conversa, a lista e os chamados (o status do chamado muda ao
   // assumir, R31). O erro fica na barra de baixo da conversa.

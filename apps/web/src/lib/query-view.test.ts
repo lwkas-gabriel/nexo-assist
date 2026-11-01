@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ApiError, GENERIC_MESSAGE } from "./api-client.ts";
-import { queryViewOf } from "./query-view.ts";
+import { queryViewOf, type SeenFailure } from "./query-view.ts";
+
+/** A falha que a tela viu acontecer, no instante 5 (o `errorUpdatedAt` das consultas abaixo). */
+const seenAt5: SeenFailure = { at: 5, message: "O sistema de chamados não respondeu." };
 
 const idle = {
   data: undefined,
@@ -24,10 +27,21 @@ describe("queryViewOf (10.5)", () => {
     });
   });
 
-  it("nova tentativa depois de uma falha segue como erro, sem piscar o carregamento", () => {
-    expect(queryViewOf({ ...idle, isFetching: true, errorUpdatedAt: 5 })).toEqual({
+  it("nova tentativa depois de uma falha vista segue como erro, com a mesma mensagem, sem piscar o carregamento", () => {
+    const retrying = { ...idle, isFetching: true, errorUpdatedAt: 5 };
+
+    expect(queryViewOf(retrying, seenAt5)).toEqual({
       status: "error",
-      message: GENERIC_MESSAGE,
+      message: "O sistema de chamados não respondeu.",
+    });
+  });
+
+  it("falha de antes de a tela abrir (ainda no cache) não é erro de agora: está carregando", () => {
+    const reopened = { ...idle, isFetching: true, errorUpdatedAt: 5 };
+
+    expect(queryViewOf(reopened)).toEqual({ status: "loading" });
+    expect(queryViewOf(reopened, { at: 3, message: "de outra consulta" })).toEqual({
+      status: "loading",
     });
   });
 
@@ -67,15 +81,18 @@ describe("queryViewOf (10.5)", () => {
 
   it("lista provisória de uma consulta que já falhou mostra o erro, não a lista antiga", () => {
     // A nova tentativa apaga o erro e devolve a lista provisória; a falha anterior não pode sumir.
-    const view = queryViewOf({
-      ...idle,
-      data: ["velha"],
-      isPlaceholderData: true,
-      isFetching: true,
-      errorUpdatedAt: 5,
-    });
+    const view = queryViewOf(
+      {
+        ...idle,
+        data: ["velha"],
+        isPlaceholderData: true,
+        isFetching: true,
+        errorUpdatedAt: 5,
+      },
+      seenAt5,
+    );
 
-    expect(view).toEqual({ status: "error", message: GENERIC_MESSAGE });
+    expect(view).toEqual({ status: "error", message: "O sistema de chamados não respondeu." });
   });
 
   it("com dados em dia, está pronta e sincronizada", () => {
