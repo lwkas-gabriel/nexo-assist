@@ -39,6 +39,22 @@ No plano gratuito há cota por minuto e por dia (no `gemini-3.5-flash-lite`: 15 
 | `pnpm test:e2e`                                | Testes ponta a ponta (Playwright), em desktop e celular. Na primeira vez: `pnpm exec playwright install chromium` |
 | `pnpm lint` · `pnpm typecheck` · `pnpm format` | Lint · checagem de tipos · formatação                                                                             |
 | `pnpm build`                                   | Checagem de tipos de tudo + build do front                                                                        |
+| `pnpm eval`                                    | Avaliação roteirizada do agent (ver [Avaliação do agent](#avaliação-do-agent))                                    |
+
+### Avaliação do agent
+
+`pnpm eval` joga 18 conversas roteirizadas no **agent de verdade** (o mesmo container do chat: classificador, tools, rascunhos, registro de decisão), com banco em memória, um sistema de chamados fictício e relógio injetado. Não sobe servidor e a única chamada de rede possível é a do modelo. O que se confere é a **ação escolhida**, não a redação da resposta: qual tool foi chamada, o tipo e a prioridade do rascunho, se transferiu e para qual nível, se bloqueou a duplicidade, se criou chamado. Em todo cenário valem ainda os invariantes de privacidade e confirmação: só o dono da sessão é consultado ou recebe chamado (RN09), nenhuma resposta cita chamado de outra pessoa e nada é gravado sem um `confirm_draft` de um rascunho mostrado antes (RN04, R04).
+
+Os cenários cobrem dúvida na central de ajuda, fora de escopo, pedido vago, incidente, requisição, duplicidade, chamado vencido, caso crítico, consulta sem o número, pedido de analista, confirmação de rascunho e privacidade/prompt injection. Eles são dados validados com Zod em [apps/api/src/eval/scenarios.ts](apps/api/src/eval/scenarios.ts), separados do executor.
+
+A saída é uma tabela por cenário (ok, FALHOU ou não avaliado, com a ação esperada e a escolhida) e um resumo com o percentual por categoria. O código de saída é 1 se algum cenário falhar e 2 se nada puder ser avaliado. O relatório também vai para `apps/api/eval-report.json` (ignorado pelo git, sem o texto das conversas).
+
+**Dois modos, escolhidos pelo `LLM_MODE` do `apps/api/.env`:**
+
+- **`mock` (padrão):** usa o modelo falso, que escolhe a tool por palavras-chave. Serve só para provar que o harness funciona e roda em segundos, sem chave nem cota. **O resultado no mock não mede a qualidade do modelo**, e o relatório diz isso em destaque. Seis cenários exigem o modelo real (`requiresRealModel`: o modelo falso monta sempre um incidente, não pergunta diante de uma mensagem vaga, não detecta duplicidade e não reconhece assunto fora de TI) e são ignorados com aviso, nunca adaptados ao mock.
+- **`gemini`:** usa o Gemini real e produz a nota que importa. Com `LLM_MODE=gemini`, `GEMINI_API_KEY` e `LLM_MODEL` no `apps/api/.env`, rode `pnpm eval`. Para respeitar a cota gratuita ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)), as mensagens saem espaçadas em 20 s (3 por minuto), no máximo 60 por execução (são 22 no conjunto, até 4 chamadas ao modelo cada), e uma resposta 429 deixa o cenário como "não avaliado", nunca como erro de decisão; depois de duas falhas seguidas de cota, o resto nem tenta. Uma execução leva alguns minutos.
+
+> **Ainda não medido:** a avaliação foi construída e validada só no modo mock. Nenhuma nota do Gemini foi medida até aqui; ela entra neste README quando a execução com `LLM_MODE=gemini` for feita.
 
 ### Variáveis de ambiente
 
@@ -147,11 +163,12 @@ Cada decisão tem um registro curto com contexto, alternativas descartadas e con
 - **Separação em três apps** ([ADR-0001](docs/decisions/0001-stack-e-monorepo.md), [ADR-0002](docs/decisions/0002-servico-de-chamados-separado.md)): interface, api com o agent e serviço de chamados, com regras de negócio num pacote compartilhado.
 - **O LLM interpreta, o código garante as regras** ([ADR-0005](docs/decisions/0005-llm-interpreta-codigo-garante.md)): confirmação antes de criar, pausa durante atendimento humano e privacidade entre funcionários são garantidas pelo servidor, não pelo prompt.
 - **Transparência em todo turno** ([ADR-0006](docs/decisions/0006-turno-em-duas-etapas.md)): um classificador registra o que foi entendido, com confiança e justificativa, antes de o agent agir.
+- **Qualidade das decisões medida, não suposta** (T27): a avaliação roteirizada confere a ação escolhida pelo agent em 18 conversas e os invariantes de privacidade e confirmação em todas elas, enquanto as regras críticas seguem garantidas por testes unitários determinísticos ([ADR-0005](docs/decisions/0005-llm-interpreta-codigo-garante.md)). O resultado com o Gemini ainda não foi medido (ver [Avaliação do agent](#avaliação-do-agent)).
 - **TypeScript nativo no Node 24** ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)): os servidores rodam direto do código-fonte, sem etapa de build.
 - **SQLite e Railway** ([ADR-0003](docs/decisions/0003-sqlite-e-railway.md)): persistência sem Docker localmente e deploy com disco persistente.
 - **Gemini no plano gratuito** ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)): custo zero para um desafio sem orçamento, com tools e saída estruturada. Substituiu o Claude Haiku, a escolha inicial ([ADR-0008](docs/decisions/0008-modelo-claude-haiku.md)), que exigiria crédito pago.
 
-_Seções a completar ao longo do desenvolvimento: como o agent decide, como a qualidade das decisões foi garantida, segurança, trade-offs e custo por conversa._
+_Seções a completar ao longo do desenvolvimento: como o agent decide, segurança, trade-offs e custo por conversa._
 
 ## Suposições
 
