@@ -91,13 +91,13 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 | Método e rota | Uso | Papel |
 |---|---|---|
 | `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/auth/me` | Sessão | público / logado |
-| `GET /api/chat` | Sessão atual + histórico + resumo das anteriores | funcionário |
-| `POST /api/chat/messages` | Mensagem (stream): `{ text, id?, quickOption? }`; `quickOption` marca a resposta rápida clicada (R38) | funcionário |
+| `GET /api/chat` | Sessão atual + histórico + resumo das anteriores + `isBusy` (a trava da conversa está tomada: um turno em curso) | funcionário |
+| `POST /api/chat/messages` | Mensagem (stream): `{ text, id?, quickOption? }`; `quickOption` marca a resposta rápida clicada (R38). Reenviar um `id` já gravado, com o mesmo texto: se algo veio depois dele, nada roda de novo (stream vazio); se ficou sem resposta, o agent roda sem contar outra vez no limite (RN14) | funcionário |
 | `POST /api/chat/actions/select-ticket` | Clique num chamado da lista (`{ ticketNumber }`), respondido pelo código, sem o LLM | funcionário |
 | `POST /api/chat/handoff` · `POST /api/chat/sessions` | "Falar com um analista" pelo botão · "Nova sessão" (RN14) | funcionário |
 | `POST /api/chat/drafts/:id/confirm` · `/cancel` · `PATCH /api/chat/drafts/:id` | Rascunho (botões/edição) | funcionário |
 | `POST /api/chat/sessions` | Nova sessão (RN14): encerra a atual com resumo e abre outra | funcionário |
-| `POST /api/chat/handoff` | "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão) | funcionário |
+| `POST /api/chat/handoff` | "Falar com um analista" pelo botão, sem o agent (vale também no limite da sessão). Idempotente: com a conversa já aguardando analista (ou com um), devolve a transferência gravada | funcionário |
 | `GET /api/chat/updates?since=` | Polling de mensagens do analista e mudanças de estado | funcionário |
 | `GET /api/console/conversations?filter=&q=` | Lista com contagens por filtro | analista |
 | `GET /api/console/conversations/:id` | Histórico + traces + resumo da transferência | analista |
