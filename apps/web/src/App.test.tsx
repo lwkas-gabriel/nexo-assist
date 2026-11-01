@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.tsx";
@@ -78,6 +78,36 @@ describe("início do app (quem está logado?)", () => {
 
     expect(await screen.findByRole("heading", { name: "Entrar" })).toBeDefined();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("início do app: nova tentativa depois de uma falha (10.5)", () => {
+  it("durante a nova tentativa o erro fica, com Tentando…, sem piscar o esqueleto nem perder o foco", async () => {
+    let attempts = 0;
+    let release = () => undefined as void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal("fetch", async (input: string) => {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError("Failed to fetch");
+      await gate;
+      return input === "/api/auth/me" ? json(UNAUTHORIZED, 401) : json(NO_STATS);
+    });
+    renderApp();
+    const button = await screen.findByRole("button", { name: "Tentar novamente" });
+    button.focus();
+
+    await userEvent.click(button);
+
+    const retrying = await screen.findByRole("button", { name: "Tentando…" });
+    expect(retrying).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.queryByText("Carregando…")).toBeNull();
+    await act(async () => {
+      release();
+      await gate;
+    });
+    expect(await screen.findByRole("heading", { name: "Entrar" })).toBeDefined();
   });
 });
 

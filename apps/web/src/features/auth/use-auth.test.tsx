@@ -33,7 +33,7 @@ describe("sessão do usuário (useAuth)", () => {
     );
     window.location.hash = "#/perfil";
     const { result } = renderHook(() => useAuth(), { wrapper });
-    await waitFor(() => expect(result.current.user).not.toBeNull());
+    await waitFor(() => expect(result.current.userView.status).toBe("ready"));
 
     await act(() => result.current.logout.mutateAsync());
 

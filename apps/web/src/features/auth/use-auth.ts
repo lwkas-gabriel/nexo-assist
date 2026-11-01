@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { clearPageHash } from "../../lib/use-hash-page.ts";
+import { useQueryView } from "../../lib/use-query-view.ts";
 import { fetchCurrentUser, login, logout, type LoginInput } from "./auth-api.ts";
 
 export const CURRENT_USER_KEY = ["current-user"] as const;
@@ -60,15 +61,17 @@ export function useAuth() {
     },
   });
 
+  // Carregando, erro ou o usuário (null: ninguém logado). Na nova tentativa depois de uma falha,
+  // a tela segue no erro, com "Tentando…", em vez de piscar o esqueleto.
+  const { view: userView, retry, isRetrying } = useQueryView(currentUser);
+
   return {
-    user: currentUser.data ?? null,
-    isLoading: currentUser.isPending,
-    loadError: currentUser.error,
+    userView,
     /** O aviso para a tela de login, ou null. */
     sessionNotice: sessionNotice.data ?? null,
     /** Tentar de novo a pergunta "quem está logado?" depois de uma falha. */
-    retry: () => void currentUser.refetch(),
-    isRetrying: currentUser.isFetching,
+    retry,
+    isRetrying,
     login: loginMutation,
     logout: logoutMutation,
   };

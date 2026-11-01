@@ -19,25 +19,26 @@ export function App({ client = appQueryClient }: { client?: QueryClient }) {
 
 /** Decide a tela pelo usuário logado: login, chat do funcionário ou console do analista. */
 function AuthenticatedArea() {
-  const { user, isLoading, loadError, isRetrying, retry, logout } = useAuth();
+  const { userView, isRetrying, retry, logout } = useAuth();
 
-  if (isLoading) {
+  if (userView.status === "loading") {
     return (
       <LoadingState label="Carregando…" className="flex min-h-dvh items-center justify-center p-6">
         <Skeleton className="h-10 w-64" />
       </LoadingState>
     );
   }
-  if (loadError) {
+  if (userView.status === "error") {
     return (
       <ErrorState
-        message={loadError.message}
+        message={userView.message}
         onRetry={retry}
         isRetrying={isRetrying}
         className="min-h-dvh justify-center"
       />
     );
   }
+  const user = userView.data;
   if (!user) return <LoginPage />;
 
   if (user.role === "employee") {
