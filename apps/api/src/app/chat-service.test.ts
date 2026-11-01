@@ -1,9 +1,10 @@
 import { APICallError, type UIMessageChunk } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { GENERIC_AGENT_ERROR_MESSAGE, QUOTA_EXCEEDED_MESSAGE } from "../agent/agent-errors.ts";
-import type { MessageRow } from "../db/schema.ts";
-import { createTestContainer } from "../test-support.ts";
+import { messages, type MessageRow } from "../db/schema.ts";
+import { createTestContainer, recordingMockModel } from "../test-support.ts";
 import { keepWithinCharBudget, toAgentHistoryMessage } from "./chat-service.ts";
 
 /** Modelo que sempre falha como o provedor falharia (chave inválida, cota esgotada...). */
@@ -133,6 +134,68 @@ describe("ids das mensagens", () => {
       [{ type: "text", text: "Como configuro a VPN?" }],
       [{ type: "text", text: "E o e-mail no celular?" }],
     ]);
+  });
+});
+
+describe("reenvio de uma mensagem já gravada (Tentar novamente)", () => {
+  async function setup() {
+    const { model, agentCalls } = recordingMockModel();
+    const { chatService, authService, db } = await createTestContainer({ model });
+    const { user: employee } = await authService.login({
+      email: "ana.souza@nexo.com.br",
+      password: "x",
+      remember: false,
+    });
+    async function send(text: string, messageId: string) {
+      const stream = await chatService.sendMessage(employee, text, { ip: "local", messageId });
+      const reader = stream.getReader();
+      let chunks = 0;
+      for (let result = await reader.read(); !result.done; result = await reader.read()) chunks++;
+      return chunks;
+    }
+    const view = async () => {
+      const { messages: shown, session } = await chatService.getConversation(employee);
+      return { roles: shown.map((message) => message.role), counted: session?.agentMessages };
+    };
+    return { db, send, view, agentCalls };
+  }
+
+  it("RN14: reenviar depois de um turno completo não duplica a resposta nem conta de novo", async () => {
+    const { send, view, agentCalls } = await setup();
+    await send("Como configuro a VPN?", "msg-da-tela");
+    const callsAfterTurn = agentCalls();
+
+    const chunks = await send("Como configuro a VPN?", "msg-da-tela");
+
+    expect(chunks).toBe(0);
+    expect(await view()).toEqual({ roles: ["user", "assistant"], counted: 1 });
+    expect(agentCalls()).toBe(callsAfterTurn);
+  });
+
+  it("o reenvio de uma mensagem sem resposta roda o agent e conta uma vez só", async () => {
+    const { db, send, view, agentCalls } = await setup();
+    await send("Como configuro a VPN?", "msg-da-tela");
+    // O servidor caiu no meio do turno: a mensagem ficou gravada e a resposta, não.
+    await db.delete(messages).where(eq(messages.author, "agent"));
+    expect(await view()).toEqual({ roles: ["user"], counted: 1 });
+    const callsBeforeRetry = agentCalls();
+
+    await send("Como configuro a VPN?", "msg-da-tela");
+
+    expect(await view()).toEqual({ roles: ["user", "assistant"], counted: 1 });
+    expect(agentCalls()).toBeGreaterThan(callsBeforeRetry);
+  });
+
+  it("a mesma mensagem com outro id é mensagem nova: roda o agent e conta", async () => {
+    const { send, view } = await setup();
+    await send("Como configuro a VPN?", "msg-1");
+
+    await send("Como configuro a VPN?", "msg-2");
+
+    expect(await view()).toEqual({
+      roles: ["user", "assistant", "user", "assistant"],
+      counted: 2,
+    });
   });
 });
 

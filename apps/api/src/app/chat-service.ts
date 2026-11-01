@@ -113,6 +113,36 @@ export function createChatService({
     );
   }
 
+  /** A mensagem do funcionário já gravada com este id e este texto (o reenvio da mesma bolha). */
+  async function findSavedEmployeeMessage(
+    conversationId: string,
+    text: string,
+    messageId: string | undefined,
+  ): Promise<MessageRow | undefined> {
+    if (!messageId) return undefined;
+    const saved = await conversationStore.findMessage(conversationId, messageId);
+    const isSame =
+      saved?.author === "employee" && saved.parts === JSON.stringify([{ type: "text", text }]);
+    return isSame ? saved : undefined;
+  }
+
+  /**
+   * O que um envio é para a conversa: mensagem nova, reenvio de uma que ficou sem resposta (o
+   * servidor caiu no meio do turno) ou reenvio de uma que já tem algo depois dela (o "Tentar
+   * novamente" de uma tela que não viu o fim do turno). Este último não pode rodar o agent de
+   * novo nem contar outra vez no limite da sessão (RN14).
+   */
+  async function classifyDelivery(
+    conversationId: string,
+    text: string,
+    messageId: string | undefined,
+  ): Promise<"new" | "unanswered_resend" | "answered_resend"> {
+    const saved = await findSavedEmployeeMessage(conversationId, text, messageId);
+    if (!saved) return "new";
+    const [newest] = await conversationStore.listRecentMessages(conversationId, 1);
+    return newest?.id === saved.id ? "unanswered_resend" : "answered_resend";
+  }
+
   /**
    * Grava a mensagem do funcionário com o id da bolha da tela. Se a mesma mensagem (id, autor e
    * texto) já está na conversa, é o "Tentar novamente" de uma resposta que falhou depois de a
@@ -126,8 +156,7 @@ export function createChatService({
     messageId: string | undefined,
   ): Promise<void> {
     const parts = [{ type: "text", text }];
-    const saved = messageId && (await conversationStore.findMessage(conversationId, messageId));
-    if (saved && saved.author === "employee" && saved.parts === JSON.stringify(parts)) return;
+    if (await findSavedEmployeeMessage(conversationId, text, messageId)) return;
     await conversationStore.appendMessage({
       ...(messageId ? { id: messageId } : {}),
       conversationId,
@@ -402,8 +431,17 @@ export function createChatService({
       const release = locks.acquire(conversation.id, BUSY_MESSAGE);
 
       try {
-        // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.
-        await chatSessionService.assertBelowLimit(conversation);
+        const delivery = await classifyDelivery(conversation.id, text, client.messageId);
+        // A mensagem já tem resposta (ou outra coisa depois dela): o turno aconteceu e o cliente
+        // só não viu o fim. Nada roda de novo; a tela recarrega e mostra o que está gravado.
+        if (delivery === "answered_resend") {
+          release();
+          return createUIMessageStream({ execute: () => undefined });
+        }
+        const isResend = delivery === "unanswered_resend";
+        // RN14: com a sessão no limite, recusa antes de gastar a cota de uso. O reenvio não é
+        // mensagem nova: ele já foi contado quando chegou da primeira vez.
+        if (!isResend) await chatSessionService.assertBelowLimit(conversation);
         // A cota do modelo é gasta aqui, com a trava da conversa e a mesma leitura que decidiu
         // chamar o agent (ADR-0010, A13).
         const withinQuota = await quota.tryConsumeForAgent({
@@ -416,7 +454,9 @@ export function createChatService({
             "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
           );
         // RN14: conta a mensagem na sessão (ou recusa, na 31ª).
-        const session = await chatSessionService.countAgentMessage(conversation);
+        const session = isResend
+          ? await chatSessionService.current(conversation)
+          : await chatSessionService.countAgentMessage(conversation);
         const turnStartedAt = clock.now();
         // Etapa 1 (R05): o classificador vê a mensagem nova e um pouco do que veio antes.
         const previous = await conversationStore.listRecentMessages(
