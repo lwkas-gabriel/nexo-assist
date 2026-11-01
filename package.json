@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "eval": "pnpm --filter @nexo/api run eval",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
