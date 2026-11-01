@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Contraste dos tokens (WCAG 2.x, 10.7), lido do próprio `tokens.css`: mudar uma cor do tema que
- * derrube um par abaixo do mínimo quebra aqui, antes do axe do E2E. Só entram os pares que a
- * tela usa de verdade; a regra das pílulas sobre `desk` e `console` (10.7) fica de fora de
- * propósito, porque ali o texto de tom já está abaixo de 4,5:1 e a etiqueta ganha fundo `paper`.
+ * derrube um par abaixo do mínimo quebra aqui, antes do axe do E2E. Entram os pares principais do
+ * tema, não todas as combinações possíveis (o axe do E2E olha as telas). A regra das pílulas sobre
+ * `desk` e `console` (10.7) fica de fora de propósito: ali o texto de tom já está abaixo de 4,5:1 e
+ * a etiqueta ganha fundo `paper`.
  */
 const TEXT_MIN_RATIO = 4.5;
 /** Contornos de foco e bordas de componente (WCAG 1.4.11). */
@@ -88,11 +89,17 @@ describe("contraste dos tokens (10.7)", () => {
       });
     }
 
+    for (const bubble of ["bubble-agent", "bubble-analyst"]) {
+      it(`ink-3 (os horários) sobre a bolha ${bubble} passa de ${TEXT_MIN_RATIO}:1`, () => {
+        expect(ratio("ink-3", bubble)).toBeGreaterThanOrEqual(TEXT_MIN_RATIO);
+      });
+    }
+
     it("texto branco no botão e na etiqueta de fundo cta passa", () => {
       expect(ratio("paper", "cta")).toBeGreaterThanOrEqual(TEXT_MIN_RATIO);
     });
 
-    it("texto branco no fundo ink (resposta do analista, painel de apresentação) passa", () => {
+    it("texto branco no fundo ink (bolha do funcionário, painel de apresentação) passa", () => {
       expect(ratio("paper", "ink")).toBeGreaterThanOrEqual(TEXT_MIN_RATIO);
     });
 
@@ -143,7 +150,7 @@ describe("contraste dos tokens (10.7)", () => {
       });
     }
 
-    it("a borda de foco e o contorno do item selecionado (cta) sobre paper passam", () => {
+    it("a borda dos campos com foco (cta) sobre paper passa", () => {
       expect(ratio("cta", "paper")).toBeGreaterThanOrEqual(COMPONENT_MIN_RATIO);
     });
   });
