@@ -32,6 +32,7 @@ function conversationAt(mode: ConversationMode, isAtLimit: boolean): Conversatio
     },
     messages: [],
     drafts: [],
+    isBusy: false,
   };
 }
 
@@ -995,6 +996,62 @@ describe("tela do chat (tela 2)", () => {
       await screen.findByText("Aguardando analista");
       expect(screen.getByText("Minha VPN caiu")).toBeDefined();
       expect(screen.queryByText("Resposta interrompida")).toBeNull();
+    });
+
+    it("com a trava da conversa tomada (turno em curso no servidor), não é interrupção; a resposta chega ao terminar", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let current: ConversationView = { ...endingInEmployee(), isBusy: true };
+        vi.stubGlobal("fetch", (input: string) =>
+          Promise.resolve(
+            new Response(JSON.stringify(input === "/api/chat" ? current : {}), { status: 200 }),
+          ),
+        );
+        renderChat();
+        expect(await screen.findByText("Minha VPN caiu")).toBeDefined();
+        expect(screen.queryByText("Resposta interrompida")).toBeNull();
+
+        current = {
+          ...conversationAt("agent", false),
+          messages: [
+            employeeAsks("e-1", "Minha VPN caiu"),
+            {
+              id: "a-1",
+              role: "assistant",
+              metadata: { author: "agent" },
+              parts: [{ type: "text", text: "Vou olhar." }],
+            },
+          ],
+        };
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(await screen.findByText("Vou olhar.")).toBeDefined();
+        expect(screen.queryByText("Resposta interrompida")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("se o turno em curso termina sem resposta gravada, a marca aparece só então", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        let current: ConversationView = { ...endingInEmployee(), isBusy: true };
+        vi.stubGlobal("fetch", (input: string) =>
+          Promise.resolve(
+            new Response(JSON.stringify(input === "/api/chat" ? current : {}), { status: 200 }),
+          ),
+        );
+        renderChat();
+        await screen.findByText("Minha VPN caiu");
+        expect(screen.queryByText("Resposta interrompida")).toBeNull();
+
+        current = endingInEmployee();
+        await vi.advanceTimersByTimeAsync(3100);
+
+        expect(await screen.findByText("Resposta interrompida")).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("a conversa que termina numa resposta do agent não tem marca", async () => {

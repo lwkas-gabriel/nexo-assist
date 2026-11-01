@@ -81,8 +81,13 @@ export function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     queryKey: CONVERSATION_KEY,
     queryFn: fetchConversation,
     // RF17: com os analistas, as respostas deles chegam por aqui (polling curto, ADR do tempo real).
-    refetchInterval: (query) =>
-      (query.state.data?.conversation?.mode ?? "agent") === "agent" ? false : ANALYST_POLL_MS,
+    // Com o agent, só enquanto o servidor diz que há um turno em curso que esta tela não iniciou
+    // (a página foi recarregada no meio dele): a resposta aparece quando ele termina.
+    refetchInterval: (query) => {
+      const { data } = query.state;
+      const withAgent = (data?.conversation?.mode ?? "agent") === "agent";
+      return withAgent && data?.isBusy !== true ? false : ANALYST_POLL_MS;
+    },
   });
   const view = queryViewOf(conversation);
   // Sem a conversa carregada, a pílula do topo não afirma nada ("Assistente online" seria chute).
@@ -294,9 +299,10 @@ function ChatConversation({
       ? failedMessage.id
       : undefined;
   // 10.5: a conversa guardada termina numa mensagem sem resposta (o servidor caiu no meio do
-  // turno). Só quando nada está em curso nem falhou, para nunca vir junto ao alerta de falha.
+  // turno). Só quando nada está em curso, nem aqui nem no servidor (a trava da conversa), e nada
+  // falhou, para nunca vir junto ao alerta de falha nem marcar uma resposta que está a caminho.
   const interruptedId =
-    status === "ready" && !error && unsentMessageId === undefined
+    status === "ready" && !error && unsentMessageId === undefined && !view.isBusy
       ? interruptedMessageId(messages, view.messages, mode)
       : undefined;
   const deliveryOf = (messageId: string): MessageDelivery => {

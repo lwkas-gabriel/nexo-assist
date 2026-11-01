@@ -55,6 +55,8 @@ export type ConversationView = {
   messages: UIMessage[];
   /** Estado atual dos rascunhos: o card mostra o que aconteceu depois de proposto (RF07). */
   drafts: DraftView[];
+  /** A conversa tem uma ação em andamento no servidor (um turno do agent, por exemplo). */
+  isBusy: boolean;
 };
 
 /** Conversa em andamento do funcionário, com o histórico guardado no servidor. */
