@@ -20,6 +20,9 @@ export function expireSession(queryClient: QueryClient) {
     predicate: (query) =>
       query.queryKey[0] !== CURRENT_USER_KEY[0] && query.queryKey[0] !== SESSION_NOTICE_KEY[0],
   });
+  // As mutações guardam dados e erros (ex.: o card de rascunho do usuário anterior); o logout as
+  // limpa com `clear()`, e aqui também: elas não são observadas pela tela de sessão.
+  queryClient.getMutationCache().clear();
   clearPageHash();
   queryClient.setQueryData(CURRENT_USER_KEY, null);
   queryClient.setQueryData(SESSION_NOTICE_KEY, SESSION_EXPIRED_MESSAGE);

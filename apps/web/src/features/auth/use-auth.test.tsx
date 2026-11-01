@@ -53,4 +53,17 @@ describe("sessão do usuário (useAuth)", () => {
     expect(client.getQueryData(["conversation"])).toBeUndefined();
     expect(client.getQueryData(["session-notice"])).toBe(SESSION_EXPIRED_MESSAGE);
   });
+
+  it("10.3: expireSession também esvazia as mutações do usuário anterior (como o logout)", async () => {
+    const client = new QueryClient();
+    await client
+      .getMutationCache()
+      .build(client, { mutationFn: () => Promise.resolve("rascunho do usuário anterior") })
+      .execute(undefined);
+    expect(client.getMutationCache().getAll()).toHaveLength(1);
+
+    expireSession(client);
+
+    expect(client.getMutationCache().getAll()).toHaveLength(0);
+  });
 });
