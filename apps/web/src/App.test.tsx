@@ -91,6 +91,22 @@ describe("sessão expirada (10.3)", () => {
     expect(screen.queryByLabelText("Mensagem para o Nexo")).toBeNull();
   });
 
+  it("a tela de login não pergunta de novo quem está logado: a sessão dada como expirada fica expirada", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", (input: string) => {
+      asked.push(input);
+      if (input === "/api/auth/me") return Promise.resolve(json({ user: ANA }));
+      if (input === "/api/chat") return Promise.resolve(json(UNAUTHORIZED, 401));
+      return Promise.resolve(json(NO_STATS));
+    });
+    renderApp();
+
+    await screen.findByText(SESSION_EXPIRED);
+
+    expect(asked.filter((path) => path === "/api/auth/me")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Entrar" })).toBeDefined();
+  });
+
   it("o hash da página some, para a próxima pessoa não cair no perfil de quem estava", async () => {
     window.location.hash = "#/perfil";
     stubExpiringSession("/api/chat");

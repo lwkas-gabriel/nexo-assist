@@ -23,6 +23,8 @@ data/
 coverage/
 playwright-report/
 test-results/
+# Sessões de demonstração guardadas pelo projeto `setup` do E2E
+e2e/.auth/
 
 # Sistema e editor
 .DS_Store

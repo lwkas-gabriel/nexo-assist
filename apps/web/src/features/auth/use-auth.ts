@@ -27,7 +27,14 @@ export function expireSession(queryClient: QueryClient) {
 /** Sessão do usuário: quem está logado, entrar e sair. O servidor guarda a sessão num cookie. */
 export function useAuth() {
   const queryClient = useQueryClient();
-  const currentUser = useQuery({ queryKey: CURRENT_USER_KEY, queryFn: fetchCurrentUser });
+  // Quem está logado só muda por entrar, sair ou a sessão expirar, e os três gravam o resultado:
+  // sem perguntar de novo a cada vez que uma tela monta (a do login, ao expirar, não pode reabrir
+  // a sessão que acabou de ser dada como expirada).
+  const currentUser = useQuery({
+    queryKey: CURRENT_USER_KEY,
+    queryFn: fetchCurrentUser,
+    staleTime: Infinity,
+  });
   // Só guarda o que `expireSession` põe no cache: nunca busca nada.
   const sessionNotice = useQuery<string | null>({
     queryKey: SESSION_NOTICE_KEY,

@@ -24,11 +24,14 @@ export default defineConfig({
   },
   // Fluxos validados no desktop do protótipo e num celular (ver docs/FRONTEND.md 10.6).
   projects: [
+    // Entra uma vez com as contas dos testes de estados (e2e/support/shared-sessions.ts).
+    { name: "setup", testMatch: /shared-sessions.setup.ts/ },
     {
       name: "desktop",
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "mobile", dependencies: ["setup"], use: { ...devices["Pixel 7"] } },
   ],
   webServer: [
     {
