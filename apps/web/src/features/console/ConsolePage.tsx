@@ -77,6 +77,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [decisionId, setDecisionId] = useState<string | null>(null);
+  const [hasRetriedConversation, setHasRetriedConversation] = useState(false);
   const decisionPanelId = useId();
   // Para onde o foco volta depois que o painel ou a coluna mudam (10.7): aplicado num efeito,
   // depois de o React montar o que mudou, para nada o roubar em seguida.
@@ -210,6 +211,7 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
 
   const selectConversation = (id: string) => {
     service.reset();
+    setHasRetriedConversation(false);
     setSelectedId(id);
     setDecisionId(null);
     setPanel("auto");
@@ -260,7 +262,10 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
       return (
         <ErrorState
           message={conversationView.message}
-          onRetry={retryConversation}
+          onRetry={() => {
+            setHasRetriedConversation(true);
+            retryConversation();
+          }}
           isRetrying={isRetryingConversation}
           className="flex-1 justify-center bg-console"
         />
@@ -277,7 +282,8 @@ export function ConsolePage({ user, isLoggingOut, onLogout }: ConsolePageProps) 
         onOpenDecision={toggleDecision}
         openDecisionId={effectivePanel === "decision" ? decisionId : null}
         decisionPanelId={decisionPanelId}
-        focusTitleOnOpen={isMobile}
+        // O "Tentar novamente" some quando dá certo: o foco vai ao título, em vez de cair no <body>.
+        focusTitleOnOpen={isMobile || hasRetriedConversation}
         actions={serviceActions}
       />
     );

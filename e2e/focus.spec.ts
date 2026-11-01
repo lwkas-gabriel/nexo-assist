@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import { forgeWaitingConversation } from "./support/console-fixture.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
@@ -12,6 +12,7 @@ const RETRY_LABEL = "Tentar novamente";
 
 const CHAT_URL = /\/api\/chat$/;
 const SESSIONS_URL = /\/api\/chat\/sessions$/;
+const CONVERSATION_URL = /\/api\/console\/conversations\/[^/?]+$/;
 const SESSION_LIMIT = 30;
 const SESSION_CREATED_AT = "2026-10-31T12:00:00.000Z";
 /** Resposta do agent em streaming, já terminada: o envio dá certo sem tocar no servidor. */
@@ -209,5 +210,26 @@ test.describe("funcionário que tenta de novo", () => {
     await page.getByRole("button", { name: RETRY_LABEL }).click();
 
     await expect(page.getByLabel("Mensagem para o Nexo")).toBeFocused();
+  });
+});
+
+test.describe("analista que tenta de novo", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+
+  test("a conversa que volta depois de Tentar novamente leva o foco ao título dela", async ({
+    page,
+  }) => {
+    await forgeWaitingConversation(page);
+    // Registrada depois da conversa forjada, a rota que falha tem precedência até ser retirada.
+    const failConversation = (route: Route) => route.abort("internetdisconnected");
+    await page.route(CONVERSATION_URL, failConversation);
+    await page.goto("/");
+    await page.getByRole("button", { name: /Ana Souza/ }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page.unroute(CONVERSATION_URL, failConversation);
+
+    await page.getByRole("button", { name: RETRY_LABEL }).click();
+
+    await expect(page.getByRole("heading", { level: 2, name: "Ana Souza" })).toBeFocused();
   });
 });
