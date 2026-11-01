@@ -84,4 +84,13 @@ describe("observador do sistema de chamados da avaliação", () => {
     expect(accessedOwners).toEqual([ANA]);
     expect(contentWrites).toEqual([]);
   });
+
+  it("RN09: assumir e devolver o chamado também registram o dono", async () => {
+    const { gateway, accessedOwners } = setup();
+
+    await gateway.assumeTicket(ANA, "INC-20311", "Rafael Lima", "chave-6");
+    await gateway.releaseTicket(ANA, "INC-20311", "Rafael Lima", "chave-7");
+
+    expect(accessedOwners).toEqual([ANA, ANA]);
+  });
 });
