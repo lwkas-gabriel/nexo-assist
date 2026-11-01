@@ -366,7 +366,7 @@ const SCENARIOS: readonly ScenarioData[] = [
   },
   {
     id: "confirmar-sem-rascunho",
-    category: "privacy",
+    category: "draft_confirmation",
     description: "Tenta confirmar sem ter visto rascunho (R04): nada é criado",
     employeeId: "emp-henrique-alves",
     requiresRealModel: false,
