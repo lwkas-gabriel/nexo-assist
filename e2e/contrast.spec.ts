@@ -5,6 +5,8 @@ import {
   PENDING_DRAFT,
   forgeConversation,
 } from "./support/chat-fixture.ts";
+import { forgeWaitingConversation } from "./support/console-fixture.ts";
+import { contrastRatio, parseRgba } from "./support/contrast.ts";
 import { SHARED_SESSIONS } from "./support/shared-sessions.ts";
 
 /**
@@ -49,5 +51,33 @@ test.describe("login", () => {
     expect(
       await colorContrastViolationsIn(page, "section[aria-label='Sobre o Nexo Assist']"),
     ).toEqual([]);
+  });
+});
+
+/** WCAG 1.4.11: o que marca o item selecionado é um componente de interface, mínimo de 3:1. */
+const NON_TEXT_CONTRAST_MIN = 3;
+const RING_SHADOW_PATTERN = /(rgba?\([^)]*\))\s+0px\s+0px\s+0px\s+2px/;
+
+test.describe("analista", () => {
+  test.use({ storageState: SHARED_SESSIONS.juliana.file });
+
+  test("o contorno do item selecionado da lista tem contraste de componente (3:1)", async ({
+    page,
+  }, testInfo) => {
+    // No celular, a lista dá lugar à conversa: não há item selecionado à vista.
+    test.skip(testInfo.project.name === "mobile", "a lista some quando a conversa abre");
+    await forgeWaitingConversation(page);
+    await page.goto("/");
+    await page.getByRole("button", { name: /Ana Souza/ }).click();
+    const selected = page.locator("[data-conversation-id][aria-current='true']");
+    await expect(selected).toBeVisible();
+
+    const boxShadow = await page.evaluate(
+      `getComputedStyle(document.querySelector("[data-conversation-id][aria-current=true]")).boxShadow`,
+    );
+    const ring = RING_SHADOW_PATTERN.exec(String(boxShadow));
+
+    expect(ring, `contorno de 2 px não encontrado em: ${String(boxShadow)}`).not.toBeNull();
+    expect(contrastRatio(parseRgba(ring?.[1] ?? ""))).toBeGreaterThanOrEqual(NON_TEXT_CONTRAST_MIN);
   });
 });

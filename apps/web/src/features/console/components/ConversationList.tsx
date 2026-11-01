@@ -215,7 +215,7 @@ function ConversationItem({
       // 10.7: as etiquetas coloridas ficam sobre paper; o selecionado ganha contorno, não fundo.
       className={cx(
         "flex w-full gap-3 rounded-xl p-2.5 text-left",
-        isSelected ? "bg-paper ring-2 ring-primary-soft" : "hover:bg-desk/60",
+        isSelected ? "bg-paper ring-2 ring-primary" : "hover:bg-desk/60",
       )}
     >
       <span className="relative flex h-fit shrink-0">
