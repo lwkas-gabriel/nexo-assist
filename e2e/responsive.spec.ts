@@ -25,8 +25,11 @@ const PHONE_SIDE_PADDING = 16;
 const TABLET_SIDE_PADDING = 48;
 const DESKTOP_SIDE_PADDING = 200;
 const NO_SESSION = { cookies: [], origins: [] };
-/** Meio pixel de folga para as medidas fracionárias do navegador. */
+/** Um pixel de folga para as medidas fracionárias do navegador. */
 const TOLERANCE = 1;
+const LOGIN_SHOWCASE_LAPTOP_SHARE = 0.45;
+const LOGIN_SHOWCASE_DESKTOP_WIDTH = 800;
+const TOP_BAR_HEIGHT = 64;
 /** Abaixo disso o motivo do atendimento vira uma coluna de poucas palavras por linha. */
 const MIN_HANDOFF_TEXT_WIDTH = 150;
 
@@ -73,8 +76,20 @@ for (const width of WIDTHS) {
         await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
 
         const showcase = page.getByRole("region", { name: "Sobre o Nexo Assist" });
-        if (width >= LAPTOP_MIN) await expect(showcase).toBeVisible();
-        else await expect(showcase).toBeHidden();
+        // Sem o painel (abaixo de 1024 px), a marca vem para o topo do formulário.
+        const topBrand = page.locator("header").getByText("Nexo Assist", { exact: true });
+        if (width >= LAPTOP_MIN) {
+          await expect(showcase).toBeVisible();
+          await expect(topBrand).toBeHidden();
+          const expectedWidth =
+            width >= DESKTOP_MIN
+              ? LOGIN_SHOWCASE_DESKTOP_WIDTH
+              : width * LOGIN_SHOWCASE_LAPTOP_SHARE;
+          expect((await boxOf(showcase)).width).toBeCloseTo(expectedWidth, 0);
+        } else {
+          await expect(showcase).toBeHidden();
+          await expect(topBrand).toBeVisible();
+        }
         await expectNoHorizontalScroll(page, width);
       });
     });
@@ -90,6 +105,9 @@ for (const width of WIDTHS) {
         if (width < TABLET_MIN) {
           await expect(navigation).toBeHidden();
           await expect(page.getByRole("link", { name: "Meu perfil" })).toBeVisible();
+          // Sem a lateral, "Sair" fica na barra do topo.
+          const logout = await boxOf(page.getByRole("button", { name: "Sair" }));
+          expect(logout.y + logout.height).toBeLessThanOrEqual(TOP_BAR_HEIGHT);
         } else {
           const expectedWidth = width >= LAPTOP_MIN ? SIDEBAR_WIDTH : RAIL_WIDTH;
           expect((await boxOf(navigation)).width).toBeCloseTo(expectedWidth, 0);
@@ -115,7 +133,7 @@ for (const width of WIDTHS) {
           await expect(overlay).toBeVisible();
           const box = await boxOf(overlay);
           if (width >= TABLET_MIN) {
-            // Gaveta à direita, no máximo 340 px e 90% da tela.
+            // Gaveta à direita, do tamanho do painel (e no máximo 90% da tela).
             expect(box.x + box.width).toBeCloseTo(width, 0);
             expect(box.width).toBeLessThanOrEqual(DECISION_PANEL_WIDTH + TOLERANCE);
           } else {
