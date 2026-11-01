@@ -1,6 +1,6 @@
 import type { ConversationMode } from "@nexo/shared/domain";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setViewportWidth } from "../../test-setup.ts";
@@ -747,6 +747,39 @@ describe("tela do chat (tela 2)", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it("com o agent, o recarregamento do fim do turno falha: o aviso não promete nova tentativa e oferece o botão", async () => {
+      let gets = 0;
+      let isReloadDown = false;
+      vi.stubGlobal("fetch", (_input: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          isReloadDown = true;
+          return Promise.resolve(stream([]));
+        }
+        gets += 1;
+        return Promise.resolve(
+          isReloadDown
+            ? json({ error: { code: "INTERNAL", message: "Falhou." } }, 502)
+            : json(conversationAt("agent", false)),
+        );
+      });
+      renderChat();
+      await userEvent.type(await screen.findByLabelText("Mensagem para o Nexo"), "Oi{Enter}");
+
+      const notice = await screen.findByText("Não consegui atualizar a conversa agora.");
+      expect(screen.queryByText(/tentando de novo/)).toBeNull();
+      isReloadDown = false;
+      await userEvent.click(
+        within(notice.parentElement as HTMLElement).getByRole("button", {
+          name: "Tentar novamente",
+        }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByText("Não consegui atualizar a conversa agora.")).toBeNull(),
+      );
+      expect(gets).toBeGreaterThanOrEqual(3);
     });
 
     it("RT10: com o agent, não há polling", async () => {

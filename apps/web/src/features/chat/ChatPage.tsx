@@ -5,7 +5,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../ui/Button.tsx";
-import { ErrorState, LoadingState, Skeleton, SyncNotice } from "../../ui/Feedback.tsx";
+import { ErrorState, LoadingState, RetryButton, Skeleton, SyncNotice } from "../../ui/Feedback.tsx";
 import { cx } from "../../ui/cx.ts";
 import { SidePanel } from "../../ui/SidePanel.tsx";
 import type { CurrentUser } from "../auth/auth-api.ts";
@@ -24,6 +24,7 @@ import {
 } from "./chat-api.ts";
 import { expireSession } from "../auth/use-auth.ts";
 import {
+  CONVERSATION_NOT_REFRESHED,
   CONVERSATION_OUT_OF_SYNC,
   describeChatError,
   isSessionExpiredChatError,
@@ -155,7 +156,15 @@ function ConversationArea({
       />
     );
   }
-  return <ChatConversation user={user} view={view.data} isOutOfSync={view.isOutOfSync} />;
+  return (
+    <ChatConversation
+      user={user}
+      view={view.data}
+      isOutOfSync={view.isOutOfSync}
+      onRetry={onRetry}
+      isRetrying={isRetrying}
+    />
+  );
 }
 
 type DraftAction = { draft: DraftView; run: () => Promise<unknown> };
@@ -164,15 +173,23 @@ function ChatConversation({
   user,
   view,
   isOutOfSync,
+  onRetry,
+  isRetrying,
 }: {
   user: CurrentUser;
   view: ConversationView;
   isOutOfSync: boolean;
+  onRetry: () => void;
+  isRetrying: boolean;
 }) {
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
   const mode = view.conversation?.mode ?? "agent";
+  // Só com os analistas (ou com um turno em curso que esta tela não iniciou) a conversa é
+  // recarregada sozinha; com o agent, quem recarrega é a própria tela, ao fim de cada resposta.
+  const isPolling = mode !== "agent" || view.isBusy;
+  const outOfSyncMessage = isPolling ? CONVERSATION_OUT_OF_SYNC : CONVERSATION_NOT_REFRESHED;
   // Detalhe da decisão (RF05): qual resposta, e quem abriu, para o foco voltar ao fechar.
   const [openDecisionId, setOpenDecisionId] = useState<string | null>(null);
   const decisionOpenerRef = useRef<HTMLElement | null>(null);
@@ -197,7 +214,10 @@ function ChatConversation({
     transport: chatTransport,
     messages: view.messages,
     // Depois de uma falha, a bolha que não teve resposta fica na tela para o "Tentar novamente".
-    onFinish: ({ isError }) => void (isError ? reloadView() : refresh()),
+    onFinish: ({ isError }) =>
+      // Se o recarregamento falha, o erro fica na consulta e o aviso da tela o mostra (com o botão
+      // de nova tentativa); aqui não há mais ninguém para tratá-lo.
+      void (isError ? reloadView() : refresh()).catch(() => undefined),
   });
   const isBusy = status === "submitted" || status === "streaming";
   // 10.3: sessão que acabou no meio do envio volta ao login com o aviso. Aqui desmontar a conversa
@@ -436,7 +456,15 @@ function ChatConversation({
           </div>
         </div>
 
-        <SyncNotice message={isOutOfSync ? CONVERSATION_OUT_OF_SYNC : null} className="shrink-0" />
+        <SyncNotice
+          message={isOutOfSync ? outOfSyncMessage : null}
+          action={
+            isOutOfSync && !isPolling ? (
+              <RetryButton onRetry={onRetry} isRetrying={isRetrying} />
+            ) : undefined
+          }
+          className="shrink-0"
+        />
         <div className={cx("shrink-0 pt-2.5 pb-[18px]", sidePadding)}>
           {isAtLimit ? (
             <SessionLimitNotice

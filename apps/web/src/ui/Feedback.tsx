@@ -36,10 +36,31 @@ export function LoadingState({
 }
 
 /**
+ * "Tentar novamente" que vira "Tentando…" enquanto a nova tentativa corre. Fica `aria-disabled` e
+ * não `disabled`: um botão desabilitado perde o foco, e quem usa o teclado cairia no `<body>`.
+ */
+export function RetryButton({
+  onRetry,
+  isRetrying = false,
+}: {
+  onRetry: () => void;
+  isRetrying?: boolean;
+}) {
+  return (
+    <Button
+      variant="secondary"
+      onClick={isRetrying ? undefined : onRetry}
+      aria-disabled={isRetrying}
+      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+    >
+      {isRetrying ? RETRYING_LABEL : RETRY_LABEL}
+    </Button>
+  );
+}
+
+/**
  * Erro de carregamento (10.5): o que aconteceu e, quando dá para tentar de novo, o botão. Sem
- * `autoFocus`: roubar o foco de quem digita ao lado seria pior que o erro (AI_LOG 68). Enquanto a
- * nova tentativa corre, o botão fica `aria-disabled` e não `disabled`: um botão desabilitado
- * perde o foco, e quem usa o teclado cairia no `<body>`.
+ * `autoFocus`: roubar o foco de quem digita ao lado seria pior que o erro (AI_LOG 68).
  */
 export function ErrorState({
   message,
@@ -58,16 +79,7 @@ export function ErrorState({
       className={cx("flex flex-col items-center gap-3 px-6 py-6 text-center", className)}
     >
       <p className="text-[14.5px] text-ink-2">{message}</p>
-      {onRetry && (
-        <Button
-          variant="secondary"
-          onClick={isRetrying ? undefined : onRetry}
-          aria-disabled={isRetrying}
-          className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-        >
-          {isRetrying ? RETRYING_LABEL : RETRY_LABEL}
-        </Button>
-      )}
+      {onRetry && <RetryButton onRetry={onRetry} isRetrying={isRetrying} />}
     </div>
   );
 }
@@ -76,10 +88,24 @@ export function ErrorState({
  * Aviso de que a tela está desatualizada (o polling falhou, mas os dados antigos continuam
  * úteis). Como o `Toast`, a região fica sempre montada e só o texto muda (10.7).
  */
-export function SyncNotice({ message, className }: { message: string | null; className?: string }) {
+export function SyncNotice({
+  message,
+  action,
+  className,
+}: {
+  message: string | null;
+  /** Uma saída, quando nada vai tentar de novo sozinho (ex.: o botão "Tentar novamente"). */
+  action?: ReactNode;
+  className?: string;
+}) {
   return (
     <div role="status" className={className}>
-      {message && <p className="px-4 text-center text-[12.5px] text-ink-3">{message}</p>}
+      {message && (
+        <div className="flex items-center justify-center gap-3 px-4">
+          <p className="text-center text-[12.5px] text-ink-3">{message}</p>
+          {action}
+        </div>
+      )}
     </div>
   );
 }
