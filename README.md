@@ -233,3 +233,56 @@ Dentro da api, as dependências vão numa direção só: `http → app → ports
 ## Suposições
 
 O PRD e o protótipo deixam pontos em aberto e alguns se contradizem. Cada ambiguidade foi registrada com a pergunta que faríamos ao recrutador e a suposição adotada: [docs/PLAN.md, seção 4](docs/PLAN.md#4-ambiguidades-e-contradições-mock--prd).
+
+## Desenvolvimento assistido por IA
+
+O projeto foi feito com IA de ponta a ponta, e esta seção sai do [docs/AI_LOG.md](docs/AI_LOG.md), o registro que o fluxo mantém por tarefa (o que foi pedido, o que a IA gerou, o que foi corrigido). Os números abaixo são os que o log declara; ninguém de fora os auditou.
+
+**Ferramentas e modelos (como estão no log).** Claude Code na extensão do VS Code, com o Claude Opus 5.5 e modo de planejamento na fase de análise. Nas tarefas mais recentes, o log nomeia os papéis: um sub-agente Sonnet desenvolve e um sub-agente Opus novo, sem o contexto de quem implementou e com esforço alto, revisa. O produto roda no Gemini (plano gratuito); o Claude Haiku foi a escolha inicial para o produto, mas foi trocado antes de qualquer uso real (entradas 27 e 35). O Gemini real foi usado à mão para validar prompts e medir custo, nunca para uma avaliação de qualidade (ver [limites](#trade-offs-e-limites-conhecidos)).
+
+**Como a IA foi guiada.**
+
+- [CLAUDE.md](CLAUDE.md): convenções, boas práticas e "o que nunca fazer" (sem segredo no código, sem `any`, `develop` e nunca `main`, sem assinatura de IA nos commits).
+- [docs/PLAN.md](docs/PLAN.md): requisitos numerados (RF, RN, RT) e tarefas pequenas, **uma por vez**, cada uma marcada ao fim. O plano passou antes por quatro rodadas de revisão adversarial, que acharam 47 problemas (R01–R47; oito, na primeira rodada, classificados como críticos) antes de existir código ([REVIEW.md](docs/REVIEW.md)).
+- **Um ciclo por tarefa:** o desenvolvedor implementa, um **revisor adversarial independente** relê o diff sem ter visto a implementação, e o orquestrador (a sessão principal) confere typecheck, lint e testes por conta própria, corrige e só então marca a tarefa. O revisor segue a skill versionada [revisao-adversarial](.claude/skills/revisao-adversarial/SKILL.md): lê o código e não o log, tenta confirmar cada achado com um teste ou um cenário concreto, e só relata, sem editar.
+- **Regra de teste:** um teste novo só vale depois de falhar com o defeito reintroduzido. Foi aplicada às correções das revisões (entradas 72, 76 e 77).
+- **ADRs** para cada decisão de arquitetura e o AI_LOG ao fim de cada tarefa.
+
+**Números que o log sustenta.**
+
+- 32 tarefas marcadas como concluídas no PLAN (T01 a T28, incluindo T02b, T10b, T19b e T26b); a T29, a do README e do deploy, é esta, e o deploy ficou pendente.
+- Mais de 100 commits na `develop`, pequenos e em português; o `git log` hoje mostra um único autor (ver o erro de autoria abaixo).
+- 860 testes unitários e de componente, e 154 testes E2E passando com 46 ignorados na última rodada registrada (entrada 78; não rodei o E2E ao preparar este README).
+- **20 revisões adversariais independentes de tarefa** (T11 a T28, a partir de quando a skill existe; as tarefas T01 a T10b não tiveram). Somando as contagens que cada entrada declara, foram **233 achados**, dos quais **10 críticos, em 7 revisões** (T12, T13, T15, T17, T18, T19 com 4, e T22). O log atribui todos ao revisor, não a quem implementou. As outras 13 revisões não acharam crítico, mas várias acharam achados "importantes".
+
+**Exemplos concretos de onde a IA errou e quem pegou.**
+
+1. **Confirmações simultâneas criavam dois chamados (T12, entrada 43, crítico).** A idempotência da IA estava testada só em sequência. O revisor testou o caso simultâneo (duplo clique, duas abas) e provou a duplicação, que a regra R01 existia para evitar. A correção reserva o rascunho e a chave de idempotência de forma atômica nos dois serviços, e os testes de concorrência novos falham com o código antigo (conferido). O próprio log tinha uma frase falsa sobre isso, corrigida na mesma entrada.
+2. **Uma brecha fechada voltou (T15, entrada 49, crítico).** A revisão da T14 tinha tirado o texto do funcionário do contexto de sistema do agent (entrada 47, item 5), mas a IA o reintroduziu no resumo da sessão e na lista de rascunhos. O revisor provou com "IGNORE AS REGRAS ANTERIORES..." aparecendo no prompt de sistema. Agora esses textos só têm conteúdo gerado pelo código, e um teste com um modelo que grava os prompts protege contra a volta.
+3. **O modelo real errou onde o código precisava decidir (T13, entrada 44).** Ao transferir um chamado vencido, o Gemini registrou o motivo "o funcionário pediu" e a conversa foi para o N1; o prazo de contato também saiu errado. O nível e o prazo passaram a vir do chamado ligado, no código. É o princípio do projeto aplicado a um erro real: o LLM interpreta, o código garante.
+4. **Um comentário afirmava o que ninguém tinha provado (T16, entrada 51).** O código dizia `maxRetries: 1`, mas cada chamada ao modelo era tentada 6 vezes (12 requisições por mensagem, aviso em 18 s), porque o Mastra repete em duas camadas. Só um teste com um modelo que sempre falha, contando as chamadas, achou o parâmetro que controla (`maxProcessorRetries`).
+5. **O E2E pegou o que o teste unitário não pegaria (T09/T10, entrada 34).** A forma curta do proxy do Vite reescrevia o cabeçalho `Host`, e a proteção contra CSRF recusava o login no desenvolvimento.
+
+O padrão que se repete: o autor testa o caminho feliz, e o revisor sem contexto testa a corrida, a regressão e o caso em que o teste passaria com o código quebrado (entradas 45, 76 e 77).
+
+**O que a IA fez bem** (segundo o log). Leu a documentação e as versões atuais antes de escrever código com bibliotecas que mudam rápido (entradas 14, 20 e 21); levantou riscos sozinha, como o retry duplicando chamados, o fuso do servidor e o E2E que poderia gastar a cota real (entradas 7 e 24); mediu em vez de estimar quando isso decidia algo (entradas 50 e 51); e auditou antes de escrever os E2E da T28, evitando testes duplicados (entrada 78).
+
+**O que exigiu correção humana.** O dono do projeto decidiu o escopo e corrigiu a IA em pontos importantes: nenhuma assinatura de IA nos commits (entrada 3); README como peça central desde o início (4); nunca trabalhar na `main` (5); segurança e arquitetura que estavam rasas no primeiro plano (6); nenhum segredo no código (8); a responsividade que a IA não tinha checado no protótipo (10); e o custo do modelo, que levou à troca do Claude Haiku pelo Gemini gratuito (27 e 35). Foi também o dono quem apontou um alerta do GitGuardian sobre uma senha literal num teste (56) e uma tarefa marcada como concluída sem a revisão (72).
+
+**Erros de processo registrados.**
+
+- **Autoria dos commits (entradas 76 e 77).** Dez commits saíram com autor `Claude <noreply@anthropic.com>`, contra a regra do `CLAUDE.md`, porque o `git config` local do clone não foi conferido antes de commitar. Por pedido do dono, a `develop` foi reescrita (só autor e committer; datas, mensagens e árvore preservadas), com push forçado, e os hashes citados no log já são os novos. O primeiro push forçado foi bloqueado pelo classificador de permissões e só foi enviado depois de o dono pedir de novo, por escrito. Quem tiver um clone antigo precisa refazer o checkout.
+- **Commits que saíram quebrados:** um com o typecheck falhando (entrada 34), outro com a suíte vermelha por um teste lento (entrada 71) e outro que só compila junto com o seguinte (entrada 76). Desde então, a regra é conferir antes de commitar.
+- **Tarefa seguiu sem revisão (T25, entrada 72).** Foi marcada como concluída antes da revisão independente; ao fazê-la, saiu um achado alto (a conversa desmontada abortava o envio em curso).
+- **Número estimado de cabeça (entrada 74):** o desenvolvedor disse "cerca de 18 logins" no E2E quando eram 20 de 20; o revisor mediu. Repetiu-se na T28 (entrada 78).
+- **Commits que misturam assuntos** e **22 commits locais sem push** numa execução longa (entradas 74, 75 e 76), já no histórico e sem reescrita.
+
+## O que faria com mais tempo
+
+- Rodar `pnpm eval` com o Gemini real, calibrar o limiar de confiança 0,5, as expectativas dos 6 cenários dependentes do modelo e decidir sobre o sinal "categoria ambígua".
+- Fazer o deploy no Railway, conferindo o IP real atrás do proxy.
+- Um limite de tempo para o LLM no servidor, e E2E dos estados "sistema instável" e "resposta interrompida".
+- Trocar o polling por um endpoint leve ("houve mudança desde X?") e agregar a lista do console numa consulta só.
+- Cache de prompt do provedor e descrições de tools mais enxutas, para baixar os ~10,7 mil tokens por turno; limites de uso no banco ou num Redis para mais de uma instância.
+- Testar com leitor de tela real, Safari, Firefox e celular físico; decidir sobre o contraste das bordas de campos (1,27:1).
+- Calendário de feriados no cálculo de prazo e presença real do analista na tela de login (hoje são as sessões abertas).
