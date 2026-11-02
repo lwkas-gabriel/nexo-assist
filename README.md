@@ -1,14 +1,14 @@
 # Nexo Assist
 
-Agent de atendimento do service desk de TI da Nexo. O funcionário descreve o problema com as próprias palavras, e o agent consulta os chamados dele, busca na central de ajuda, abre ou atualiza chamados e chama um analista quando precisa. Do outro lado, o analista acompanha e assume conversas num console.
+Agent de atendimento do service desk de TI da Nexo (desafio técnico). O funcionário descreve o problema com as próprias palavras, e o agent consulta os chamados dele, busca na central de ajuda, propõe a abertura ou a atualização de um chamado e chama um analista quando precisa. Do outro lado, o analista acompanha e assume conversas num console. Cada resposta do agent mostra **o que ele entendeu, o que fez, com que confiança e por quê**.
 
-> **Status:** em desenvolvimento. Já funciona um esqueleto ponta a ponta (chat → agent → central de ajuda, com streaming); as demais funcionalidades entram tarefa a tarefa, conforme o [plano](docs/PLAN.md).
->
-> **Deploy:** _link será adicionado quando o deploy no Railway estiver no ar (ver [Deploy](#deploy))._
+- **Repositório:** este. Trabalho na branch `develop`.
+- **Deploy público:** não há. O deploy no Railway ficou pendente (ver [Deploy](#deploy)); o projeto roda localmente com os comandos abaixo.
+- **Para quem tem pouco tempo:** [Como rodar](#como-rodar) · [Principais decisões](#principais-decisões) · [Como o agent decide](#como-o-agent-decide) · [Limites conhecidos](#trade-offs-e-limites-conhecidos) · [Desenvolvimento assistido por IA](#desenvolvimento-assistido-por-ia).
 
 ## Como rodar
 
-**Pré-requisitos:** Node.js 24 ou superior e pnpm 12 (`npm install -g pnpm` ou `corepack enable`).
+**Pré-requisitos:** Node.js 24 ou superior (`.nvmrc` e `engines`) e pnpm 12 (`corepack enable`, ou `npm install -g pnpm`). Não precisa de Docker nem de banco instalado: o SQLite é um arquivo local.
 
 ```bash
 pnpm install       # instala as dependências
@@ -17,9 +17,9 @@ pnpm db:seed       # cria os bancos e grava os dados de demonstração
 pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-service (:3001)
 ```
 
-Acesse http://localhost:5173.
+Acesse http://localhost:5173 e entre com uma das [contas de demonstração](#contas-de-demonstração). Para conferir que a api subiu: `curl http://localhost:3000/api/health`.
 
-Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave, com respostas roteirizadas. Para usar o modelo de verdade, o **Gemini no plano gratuito** (sem cartão e sem custo), crie uma chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e edite `apps/api/.env`:
+Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave, com respostas roteirizadas por palavras-chave. Isso basta para ver o fluxo, mas **não representa a qualidade do modelo real**. Para usar o Gemini de verdade, no plano gratuito (sem cartão e sem custo), crie uma chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e edite `apps/api/.env`:
 
 ```bash
 LLM_MODE=gemini
@@ -27,45 +27,35 @@ GEMINI_API_KEY=sua-chave   # nunca commite este valor
 LLM_MODEL=gemini-3.5-flash-lite
 ```
 
-No plano gratuito há cota por minuto e por dia (no `gemini-3.5-flash-lite`: 15 requisições por minuto e 500 por dia); quando ela acaba, o chat mostra um aviso e volta a funcionar depois. O Google pode usar o conteúdo do plano gratuito para melhorar os produtos dele, o que é aceitável aqui porque os dados são fictícios ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)).
+No plano gratuito há cota por minuto e por dia (no `gemini-3.5-flash-lite`: 15 requisições por minuto e 500 por dia); quando ela acaba, o chat mostra um aviso e volta a funcionar depois. O Google pode usar o conteúdo enviado no plano gratuito para melhorar os produtos dele, o que é aceitável aqui porque os dados são fictícios ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)).
 
 > **Windows:** clone o repositório num caminho curto (ex.: `C:\dev\nexo-assist`). Em pastas muito profundas, o pnpm ultrapassa o limite de 260 caracteres de caminho do Windows e falha com "O sistema não pode encontrar o caminho especificado". Outra saída é habilitar caminhos longos no Windows.
 
-### Outros comandos
+### Comandos
 
-| Comando                                        | O que faz                                                                                                         |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `pnpm test`                                    | Testes unitários (Vitest)                                                                                         |
-| `pnpm test:e2e`                                | Testes ponta a ponta (Playwright), em desktop e celular. Na primeira vez: `pnpm exec playwright install chromium` |
-| `pnpm lint` · `pnpm typecheck` · `pnpm format` | Lint · checagem de tipos · formatação                                                                             |
-| `pnpm build`                                   | Checagem de tipos de tudo + build do front                                                                        |
-| `pnpm eval`                                    | Avaliação roteirizada do agent (ver [Avaliação do agent](#avaliação-do-agent))                                    |
-
-### Avaliação do agent
-
-`pnpm eval` joga 18 conversas roteirizadas no **agent de verdade** (o mesmo container do chat: classificador, tools, rascunhos, registro de decisão), com banco em memória, um sistema de chamados fictício e relógio injetado. Não sobe servidor e a única chamada de rede possível é a do modelo. O que se confere é a **ação escolhida**, não a redação da resposta: qual tool foi chamada, o tipo e a prioridade do rascunho, se transferiu e para qual nível, se bloqueou a duplicidade, se criou chamado. Em todo cenário valem ainda os invariantes de privacidade e confirmação: só o dono da sessão é consultado ou recebe chamado (RN09), nenhuma resposta cita chamado de outra pessoa e nada é gravado sem um `confirm_draft` de um rascunho proposto em turno anterior (RN04, R04).
-
-Os cenários cobrem dúvida na central de ajuda, fora de escopo, pedido vago, incidente, requisição, duplicidade, chamado vencido, caso crítico, consulta sem o número, pedido de analista, confirmação de rascunho e privacidade/prompt injection. Eles são dados validados com Zod em [apps/api/src/eval/scenarios.ts](apps/api/src/eval/scenarios.ts), separados do executor.
-
-A saída é uma tabela por cenário (ok, FALHOU ou não avaliado, com a ação esperada e a escolhida) e um resumo com o percentual por categoria. O código de saída é 1 se algum cenário falhar; 2 se nada passou ou, com o Gemini, se qualquer cenário ficou sem avaliar. O relatório também vai para `apps/api/eval-report.json` (ignorado pelo git, sem o texto das conversas).
-
-**Dois modos, escolhidos pelo `LLM_MODE` do `apps/api/.env`:**
-
-- **`mock`** (não há modo padrão: vale o `LLM_MODE` do `apps/api/.env`, e o `.env.example` traz `mock`): usa o modelo falso, que escolhe a tool por palavras-chave. Serve só para provar que o harness funciona e roda em segundos, sem chave nem cota. **O resultado no mock não mede a qualidade do modelo**, e o relatório diz isso em destaque. Seis cenários exigem o modelo real (`requiresRealModel`: o modelo falso monta sempre um incidente, não pergunta diante de uma mensagem vaga, não detecta duplicidade e não reconhece assunto fora de TI) e são ignorados com aviso, nunca adaptados ao mock.
-- **`gemini`:** usa o Gemini real e produz a nota que importa. Com `LLM_MODE=gemini`, `GEMINI_API_KEY` e `LLM_MODEL` no `apps/api/.env`, rode `pnpm eval`. Para respeitar a cota gratuita ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)), as mensagens saem espaçadas em 20 s (3 por minuto), no máximo 60 por **execução** (são 22 no conjunto), e uma resposta 429 ou uma indisponibilidade do provedor (5xx, tempo esgotado, sobrecarga) deixa o cenário como "não avaliado", nunca como erro de decisão; depois de duas execuções de cenário seguidas sem resposta do provedor, o resto nem tenta. Cuidados com a cota: o teto é por execução, não por dia (duas execuções seguidas gastam o dia); o uso da avaliação não entra nos contadores do produto, que não enxergam esse consumo; e, como o agent e o classificador repetem uma vez a chamada que falha, uma mensagem pode chegar a 8 requisições em vez de 4. Uma execução leva alguns minutos. Se algum cenário ficar sem avaliar, o relatório diz "PARCIAL: N de M avaliados" com a cobertura ao lado do percentual, e o comando sai com código diferente de 0.
-
-> **Ainda não medido:** a avaliação foi construída e validada só no modo mock. Nenhuma nota do Gemini foi medida até aqui; ela entra neste README quando a execução com `LLM_MODE=gemini` for feita.
+| Comando                                        | O que faz                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                 | Instala as dependências                                                                                                                       |
+| `pnpm setup:env`                               | Cria o `.env` de cada app a partir do `.env.example`, sem sobrescrever o que existe, e gera o token compartilhado entre api e tickets-service |
+| `pnpm db:seed`                                 | Recria os dados de demonstração (chamados e funcionários)                                                                                     |
+| `pnpm dev`                                     | Sobe os três apps em modo de desenvolvimento                                                                                                  |
+| `pnpm test`                                    | Testes unitários e de componente (Vitest)                                                                                                     |
+| `pnpm test:e2e`                                | Testes ponta a ponta (Playwright), em desktop e celular. Na primeira vez: `pnpm exec playwright install chromium`                             |
+| `pnpm eval`                                    | Avaliação roteirizada do agent (ver [Como a qualidade foi garantida](#como-a-qualidade-das-decisões-foi-garantida))                           |
+| `pnpm build`                                   | Checagem de tipos de tudo + build do front                                                                                                    |
+| `pnpm typecheck` · `pnpm lint` · `pnpm format` | Tipos · lint · formatação (`pnpm format:check` só confere)                                                                                    |
+| `pnpm --filter @nexo/api usage:report`         | Resume tokens e latência por turno e por conversa, a partir dos registros gravados                                                            |
 
 ### Variáveis de ambiente
 
-Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
+Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app (Zod), e a aplicação não sobe se faltar alguma variável. O `pnpm setup:env` já deixa tudo pronto para rodar localmente em modo `mock`.
 
 | App             | Variável                                                        | Para quê                                                                                                    |
 | --------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | api             | `PORT`                                                          | Porta HTTP da api                                                                                           |
 | api             | `DATABASE_URL`                                                  | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)                                  |
 | api             | `COOKIE_SECURE`                                                 | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local                                  |
-| api             | `SEED_ON_START`                                                 | `true` apaga as conversas de demonstração a cada inicialização (deploy)                                     |
+| api             | `SEED_ON_START`                                                 | `true` apaga as conversas de demonstração a cada inicialização (para um deploy); `false` localmente         |
 | api             | `LLM_MODE`                                                      | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)                                  |
 | api             | `GEMINI_API_KEY`                                                | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`                                    |
 | api             | `LLM_MODEL`                                                     | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`                      |
@@ -79,22 +69,14 @@ Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum
 | tickets-service | `DATABASE_URL`                                                  | Banco SQLite do serviço (`file:./data/tickets.db`)                                                          |
 | tickets-service | `SERVICE_TOKEN`                                                 | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`                                  |
 | tickets-service | `FAILURE_RATE`                                                  | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável                         |
-| tickets-service | `SEED_ON_START`                                                 | `true` recria os dados de demonstração a cada inicialização (deploy)                                        |
+| tickets-service | `SEED_ON_START`                                                 | `true` recria os dados de demonstração a cada inicialização (para um deploy); `false` localmente            |
 | web             | `API_PROXY_TARGET`                                              | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                                        |
 
 Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o modelo real nem gasta a cota gratuita, qualquer que seja o seu `.env`.
 
-### Sistema de chamados instável (simulado)
-
-O PRD diz que o sistema de chamados é legado e às vezes fica indisponível por alguns segundos. O `tickets-service` simula isso com `FAILURE_RATE` (10% por padrão): metade das falhas acontece antes de processar e metade **depois de gravar**, quando a resposta se perde. A api tenta de novo até 3 vezes, com espera crescente, e toda escrita leva uma chave de idempotência: repetir a operação devolve o resultado original em vez de criar um chamado duplicado.
-
-### Dados de demonstração
-
-O `pnpm db:seed` recria os chamados de exemplo (Anexo B) com datas relativas ao momento em que roda, então os cenários do protótipo valem em qualquer dia: a Ana Souza tem 3 chamados abertos (um deles vencido), um resolvido há 4 dias (ainda reabrível) e chamados antigos. Rodar de novo apaga os chamados criados durante os testes.
-
 ### Contas de demonstração
 
-Qualquer senha funciona (requisito do desafio). A própria tela de login lista as contas:
+Qualquer senha funciona (requisito do desafio, não uma prática de produção). A própria tela de login lista as contas:
 
 | E-mail                                                                                                                                                                                                                              | Quem é                                                                                                               |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -103,48 +85,112 @@ Qualquer senha funciona (requisito do desafio). A própria tela de login lista a
 | `rafael.lima@nexo.com.br`                                                                                                                                                                                                           | Rafael Lima, analista (Suporte N2)                                                                                   |
 | `juliana.costa@nexo.com.br`                                                                                                                                                                                                         | Juliana Costa, analista (Suporte N1)                                                                                 |
 
-As conversas ficam salvas no banco: dá para sair, voltar outro dia e continuar de onde parou.
+O `pnpm db:seed` recria os 10 chamados de exemplo (Anexo B) com datas relativas ao momento em que roda, então os cenários do protótipo valem em qualquer dia: a Ana tem 3 chamados abertos (um deles vencido), um resolvido há 4 dias (ainda reabrível) e chamados antigos. Rodar de novo apaga os chamados criados durante os testes. As conversas ficam salvas no banco: dá para sair, voltar outro dia e continuar de onde parou.
 
-### Qualidade e CI
+Para ver o fluxo completo com dois lados, abra duas janelas: uma com a Ana (funcionária) e outra com o Rafael (analista). Quando a Ana pede um analista, a conversa aparece no console do Rafael.
 
-A cada push e pull request para `develop` e `main`, o GitHub Actions ([ci.yml](.github/workflows/ci.yml)) roda três verificações em paralelo:
+## Principais decisões
 
-- **Qualidade:** tipos, lint, formatação, testes unitários e build.
-- **E2E:** fluxos no navegador, em desktop e celular.
-- **Segurança:** varredura de segredos em todo o histórico (gitleaks) e auditoria de dependências (`pnpm audit`, falha em vulnerabilidade alta ou crítica).
+Cada decisão tem um registro curto (contexto, alternativas descartadas, consequências) em [docs/decisions/](docs/decisions/). O diagrama e as camadas estão em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-As actions são fixadas pelo hash do commit, e o workflow só tem permissão de leitura.
+```
+ navegador (React + Vite)
+        │  /api  (cookie de sessão, streaming)
+        ▼
+ apps/api (Hono)  ──►  agent (Mastra)  ──►  Gemini
+   http → app → ports ← adapters
+        │  HTTP + token de serviço, retry com idempotência
+        ▼
+ apps/tickets-service (legado simulado, banco próprio)
+```
 
-Localmente, um hook de pre-commit (ativado sozinho no `pnpm install`) roda o gitleaks antes de cada commit, se ele estiver instalado. É opcional, porque o CI faz a mesma varredura: `winget install Gitleaks.Gitleaks` (Windows) ou `brew install gitleaks` (macOS).
+- **Três apps e um pacote compartilhado** ([ADR-0001](docs/decisions/0001-stack-e-monorepo.md), [ADR-0002](docs/decisions/0002-servico-de-chamados-separado.md)). Interface, api com o agent e serviço de chamados são separados, como o desafio pede; as regras de negócio e os contratos HTTP ficam uma vez só em `packages/shared`. O `tickets-service` tem banco próprio e só é acessado pela porta `TicketGateway`: trocar o simulado por um sistema real é escrever outro adapter.
+- **React + Vite e Hono, em vez de Next.js.** As telas são todas autenticadas e interativas, sem ganho em renderizar no servidor, e o Next.js juntaria interface e servidor, justamente a separação que o desafio avalia. O Hono é pequeno e serve o front estático na mesma origem.
+- **SQLite** ([ADR-0003](docs/decisions/0003-sqlite-e-railway.md)). Conversas e chamados precisam sobreviver a reinício, e rodar local não pode exigir Docker nem conta externa. O limite é um processo de escrita por banco, adequado a este tamanho; escalar pediria Postgres (o Drizzle facilita a migração). As migrações são SQL escrito à mão ([ADR-0009](docs/decisions/0009-migracoes-em-sql-puro.md)).
+- **O LLM interpreta, o código garante as regras** ([ADR-0005](docs/decisions/0005-llm-interpreta-codigo-garante.md)): detalhado em [Como o agent decide](#como-o-agent-decide).
+- **Turno em duas etapas** ([ADR-0006](docs/decisions/0006-turno-em-duas-etapas.md)). Pedir ao modelo que "registre a decisão no fim" não garante o registro. Um classificador com saída estruturada roda antes do agent e sempre deixa o registro. O custo é uma chamada a mais por mensagem de texto.
+- **Gemini no plano gratuito** ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)). O desafio não tem orçamento, e o plano gratuito não exige cartão e suporta tools e saída estruturada. Substituiu o Claude Haiku, a escolha inicial ([ADR-0008](docs/decisions/0008-modelo-claude-haiku.md)), que exigiria crédito pago. A troca de modelo é só a variável `LLM_MODEL`. O preço são as cotas e o uso do conteúdo pelo Google.
+- **TypeScript nativo no Node 24** ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)): os servidores rodam direto do código-fonte, sem etapa de build e sem `tsx`.
+- **Sessões de chat de 30 mensagens com herança de contexto** ([ADR-0007](docs/decisions/0007-sessoes-de-chat.md)), para o limite não impedir "voltar outro dia e continuar".
+- **Navegação por hash** ([ADR-0011](docs/decisions/0011-navegacao-por-hash.md)), sem roteador, para duas páginas do funcionário.
+- **Railway** foi a escolha de hospedagem ([ADR-0003](docs/decisions/0003-sqlite-e-railway.md)): servidor de longa duração com disco persistente, que combina com SQLite, streaming e polling. Não foi publicado (ver [Deploy](#deploy)).
+
+## Como o agent decide
+
+Princípio: **o LLM interpreta, o código garante as regras.**
+
+1. **Antes do modelo, o servidor decide se ele deve falar.** Sessão e papel vêm do cookie; os limites de uso são conferidos; se a conversa está com um analista, **o LLM nem é chamado** (RN08).
+2. **Etapa 1, classificador.** Saída estruturada com intenção, o que entendeu, campos extraídos, confiança e justificativa. Se ele falhar, o turno segue com confiança neutra e o registro diz isso. Com confiança abaixo de 0,5 o agent pergunta antes de agir; na segunda mensagem seguida com confiança baixa, o código transfere para um analista antes de o agent falar. Esse limiar de 0,5 é provisório (ver [limites](#trade-offs-e-limites-conhecidos)).
+3. **Etapa 2, agent com tools.** Recebe a classificação como contexto e tem 8 tools: `search_knowledge_base`, `list_my_tickets`, `get_ticket`, `propose_ticket_draft`, `propose_ticket_update`, `confirm_draft`, `ask_with_options` e `handoff_to_analyst`, em no máximo 3 passos por resposta. Nenhuma tool recebe o dono do chamado: ele vem da sessão.
+4. **Regras em código puro e testado** (`packages/shared/src/domain`): prioridade pela matriz impacto × urgência (RN11), prazo em horário útil no fuso de Brasília (RN12, RN13), janela de reabertura de 7 dias (RN06) e candidatos a duplicidade (RN05). O modelo não escolhe a prioridade nem calcula prazo.
+5. **O modelo propõe, o código executa.** Abrir ou atualizar chamado só acontece por `confirmDraft`, que exige um rascunho pendente, desta conversa, já mostrado ao funcionário e não alterado (RN04, R04). A confirmação vale igual pelo botão, por Ctrl/⌘+Enter ou digitando "pode criar".
+6. **Cliques não passam pelo modelo.** Confirmar, cancelar, escolher um chamado e "Falar com um analista" são ações estruturadas tratadas pelo código, com confiança 100%. A resposta rápida dispensa só o classificador.
+7. **Registro de decisão por turno.** Gravado junto da resposta e exibido no botão "detalhes": o que entendeu, os passos (com a entrada e as fontes), as regras que o código aplicou, a confiança e os sinais que a reduziram (central de ajuda sem artigo, campo faltando, mais de um duplicado, sistema de chamados falhando). A confiança final é a nota do classificador ajustada por esses sinais.
+8. **Transferência (handoff).** Pedida pelo funcionário, caso crítico, chamado vencido ou baixa confiança, sempre com um resumo do caso. O nível (N1 ou N2) e o prazo de contato são calculados pelo código a partir do chamado ligado, não pelo motivo que o modelo escolhe. Um chamado crítico confirmado é transferido sozinho.
+
+Estados explícitos e testados para conversa, chamado, rascunho e sessão, com troca condicionada à versão (dois analistas assumindo ao mesmo tempo: só um consegue). Detalhes em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), seção 11.3.
+
+### Sistema de chamados instável (simulado)
+
+O PRD diz que o sistema de chamados é legado e às vezes fica indisponível por alguns segundos. O `tickets-service` simula isso com `FAILURE_RATE` (10% por padrão): metade das falhas acontece antes de processar e metade **depois de gravar**, quando a resposta se perde. A api tenta de novo até 3 vezes, com espera crescente e timeout de 2 s por tentativa, e toda escrita leva uma chave de idempotência: repetir a operação devolve o resultado original em vez de criar um chamado duplicado. Se esgotar, o funcionário vê uma mensagem honesta e a oferta de falar com um analista.
+
+## Como a qualidade das decisões foi garantida
+
+Três camadas, cada uma cobrindo o que a outra não alcança:
+
+1. **Testes unitários das regras** (Vitest, ID da regra no nome: `it("RN06: ...")`). Regras de negócio, máquinas de estado, privacidade (RN09), confirmação (RN04, R04), limites de uso e validação de config. São determinísticos: sem rede e com relógio injetado.
+2. **Avaliação roteirizada do agent (`pnpm eval`).** 18 conversas (22 mensagens) jogadas no **agent de verdade** (o mesmo container do chat), com banco em memória, sistema de chamados fictício e relógio injetado. Confere a **ação escolhida**, não a redação: qual tool foi chamada, tipo e prioridade do rascunho, se transferiu e para qual nível, se bloqueou a duplicidade. Em todo cenário valem os invariantes de privacidade e confirmação: só o dono da sessão é consultado ou recebe chamado (RN09), nenhuma resposta cita chamado alheio e nada é gravado sem um `confirm_draft` de um rascunho proposto em turno anterior. Cobre dúvida na central de ajuda, fora de escopo, pedido vago, incidente, requisição, duplicidade, chamado vencido, caso crítico, consulta sem número, pedido de analista, confirmação e prompt injection. Os cenários são dados validados por Zod em [apps/api/src/eval/scenarios.ts](apps/api/src/eval/scenarios.ts).
+3. **E2E (Playwright)** nos fluxos principais, em desktop (1440 × 900) e celular (390 × 844), com o modelo falso: abrir chamado com rascunho, editar, cancelar e confirmar; transferência, o analista assumir, responder e devolver, vistos pelos dois lados. Há também varredura de acessibilidade com axe em 11 estados.
+
+O CI ([ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request para `develop` e `main`: qualidade (tipos, lint, formatação, testes, build), E2E e segurança (varredura de segredos com gitleaks em todo o histórico e `pnpm audit`, que falha em vulnerabilidade alta ou crítica). As actions são fixadas pelo hash do commit e o workflow só tem permissão de leitura. Um hook de pre-commit roda o gitleaks localmente, se instalado.
+
+**Dois modos da avaliação, escolhidos pelo `LLM_MODE` do `apps/api/.env`:**
+
+- **`mock`** (o `.env.example` traz `mock`): usa o modelo falso, que escolhe a tool por palavras-chave. Roda em segundos, sem chave nem cota, e **só prova que o harness funciona; não mede a qualidade do modelo** (o relatório diz isso em destaque). 12 dos 18 cenários rodam; 6 exigem o modelo real (`requiresRealModel`: fora de escopo, pedido vago com pergunta, requisição, duplicidade, vencido com oferta de analista e crítico com transferência) e ficam "não avaliados", nunca adaptados ao mock.
+- **`gemini`:** produz a nota que importa. As mensagens saem espaçadas em 20 s, no máximo 60 por execução, respeitando a cota gratuita; uma resposta 429 ou indisponibilidade do provedor deixa o cenário "não avaliado", nunca como erro de decisão. Uma execução leva alguns minutos; o teto de 60 mensagens é por execução, não por dia, então duas execuções seguidas gastam a cota do dia. Rode uma vez por dia. O comando sai com código 1 se algum cenário falhar e 2 se nada passou ou, no Gemini, se algum ficou sem avaliar. O relatório vai para `apps/api/eval-report.json` (ignorado pelo git, sem o texto das conversas).
+
+> **Nada foi medido com o Gemini real na avaliação.** Num clone limpo, `pnpm eval` no mock dá 12/12 avaliados e cobertura 12/18. Não existe nota do modelo em lugar nenhum deste projeto, porque ela depende de uma chave que não foi usada para rodar o `pnpm eval`. O modelo real foi usado à mão, durante o desenvolvimento, para validar o prompt e medir custo (ver [Desenvolvimento assistido por IA](#desenvolvimento-assistido-por-ia)), mas isso não é uma medição de qualidade.
+
+## Segurança e privacidade
+
+| Ameaça                                  | Medida                                                                                                                                                                                                                                                            |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Funcionário ver chamado de outro (RN09) | O dono vem **sempre da sessão**, nunca do cliente nem do LLM; nenhuma tool aceita identificação de usuário; o `tickets-service` também filtra pelo dono na própria consulta e responde "não encontrado". Testes tentam acessar chamado alheio                     |
+| Prompt injection                        | O LLM não grava nada livremente: só propõe rascunhos, e a única escrita passa pelas checagens de `confirmDraft`. O texto do funcionário não entra no contexto de sistema do agent (há teste com um modelo que grava os prompts). Cenários de injeção na avaliação |
+| Criar chamado sem consentimento (RN04)  | Confirmação explícita sobre um rascunho que o funcionário já viu; o servidor recusa o resto, mesmo que o modelo tente                                                                                                                                             |
+| Analista e console                      | Middleware de papel em todas as rotas do console. O analista vê os chamados de quem está numa conversa aberta (exceção à RN09, A15) e o acesso fica no log                                                                                                        |
+| Sessão e CSRF                           | Cookie `HttpOnly`, `SameSite=Lax`, `Secure` em produção; só o hash do token fica no banco; escritas de outra origem são recusadas; mesma mensagem para e-mail desconhecido                                                                                        |
+| Chave do LLM e segredos                 | Nenhuma chave, token ou URL escrito no código, nem como valor padrão; `process.env` só no `config.ts` de cada app; `.env` fora do git; gitleaks no CI e no pre-commit; nada sensível em variável do front                                                         |
+| Tickets-service exposto                 | Token de serviço comparado em tempo constante; em produção ficaria só na rede privada                                                                                                                                                                             |
+| Entrada malformada                      | Zod em toda fronteira: corpo HTTP, resposta do tickets-service, argumentos de tools, variáveis de ambiente                                                                                                                                                        |
+| Erro interno chegando ao navegador      | O erro bruto do provedor vai só para o log; o funcionário vê mensagem amigável, e cota esgotada vira um aviso claro                                                                                                                                               |
+| Abuso e custo (qualquer senha entra)    | Limites de uso, abaixo                                                                                                                                                                                                                                            |
+
+**Limites de uso** (o login aceita qualquer senha, por requisito do desafio; com o Gemini gratuito não há gasto possível, e os limites protegem a cota). Estão no código e prontos para um deploy público:
+
+- até 30 mensagens por hora por funcionário e, somando todos, 3 por minuto e 120 por dia, respondendo `429` acima disso. Os tetos globais saem da cota do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 4 chamadas ao modelo por mensagem). Mensagens para um analista não chamam o modelo e não entram nesses tetos;
+- até 60 mensagens ao agent por hora e 40 por dia por IP (uma pessoa poderia usar todas as contas de demonstração); IPv6 conta pela rede /64;
+- os tetos diários contam no dia da cota do Gemini (vira à meia-noite do Pacífico) e ficam no banco, sobrevivendo a reinícios;
+- 30 mensagens ao agent por sessão (RN14), no máximo 3 passos do agent por resposta e 2 tentativas por chamada ao modelo;
+- até 60 ações de botão e 60 mensagens ao analista por hora por funcionário; até 20 tentativas de login por minuto por IP;
+- mensagens de até 2.000 caracteres e corpo de até 16 KB; raciocínio baixo no modelo (`thinkingLevel: low`).
+
+Os limites por janela curta (minuto e hora) ficam em memória, o que basta para uma instância só (ADR-0003); com mais de uma, iriam para o banco ou para um Redis. Logs não levam segredos nem o conteúdo das mensagens em nível info.
+
+## Custo e latência por conversa
+
+Cada turno grava os tokens do classificador e do agent e a latência (RT10); `pnpm --filter @nexo/api usage:report` resume por turno e por conversa.
+
+- **Dinheiro:** zero. O Gemini é usado no plano gratuito ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)). Não calculei o custo em dinheiro de um plano pago, porque o preço não está nos documentos do projeto.
+- **Chamadas ao modelo:** até 4 por mensagem de texto (classificador + até 3 passos do agent); resposta rápida clicada dispensa o classificador; botões não chamam o modelo.
+- **Medição real, com o Gemini:** uma única conversa (dúvida na central de ajuda, consulta de chamado e abertura de chamado) deu cerca de **10,7 mil tokens por turno**, quase tudo de entrada (instruções, definições das tools e histórico), **cerca de 32 mil por conversa**, e latência de **3,8 s no p50 e 5,7 s no p95** ([AI_LOG, entrada 50](docs/AI_LOG.md)). É uma amostra pequena, de uma conversa só; serve como ordem de grandeza.
+- **O que limita no plano gratuito** é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto), e os tetos acima cobrem isso. Os ganhos mais baratos que sobraram, e não foram feitos, são o cache de prompt do provedor e enxugar as descrições das tools.
 
 ## Deploy
 
-O deploy é no [Railway](https://railway.com), configurado em [railway.json](railway.json):
+**Não há deploy público.** A configuração do Railway ficou **pendente e adiada**: o cadastro na plataforma não estava liberando, e o dono do projeto decidiu seguir sem ele. Não há data prevista. O que existe é o que roda localmente (acima) e o [railway.json](railway.json), escrito antes (build do front, start da api, health check em `/api/health`), **que nunca foi testado numa plataforma real**.
 
-- **Um serviço Node** constrói o front (`pnpm --filter @nexo/web run build`) e roda a api (`pnpm --filter @nexo/api start`), que entrega o front e a api na mesma origem. O TypeScript roda direto no Node 24, sem etapa de build dos servidores ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)).
-- **Health check** em `/api/health`; reinício automático em caso de falha.
-- **Deploy contínuo a partir da `main`**, que só recebe merge da `develop`.
-
-**Chaves protegidas:** a chave do Gemini existe só nas variáveis do serviço no Railway (`LLM_MODE=gemini`, `GEMINI_API_KEY`, `LLM_MODEL`). Nunca está no código nem no front.
-
-**Uso limitado contra abuso** (o login aceita qualquer senha, por requisito do desafio). Com o Gemini no plano gratuito não há gasto possível; os limites protegem a cota gratuita:
-
-- até 30 mensagens por hora por funcionário e, somando todos, 3 por minuto e 120 por dia, respondendo `429` acima disso. Os tetos globais saem da cota gratuita do Gemini conferida no AI Studio (15 requisições por minuto e 500 por dia, com até 4 chamadas ao modelo por mensagem: o classificador e até 3 passos do agent). Mensagens para um analista não chamam o modelo e não entram nesses tetos;
-- até 60 mensagens ao agent por hora e 40 por dia por IP: como qualquer senha entra, uma pessoa poderia usar todas as contas de demonstração. IPv6 conta pela rede /64;
-- os tetos diários contam no dia da cota do Gemini (vira à meia-noite do Pacífico) e ficam no banco, sobrevivendo a reinícios;
-- no máximo 2 tentativas por chamada ao modelo, quando o provedor falha;
-- 30 mensagens ao agent por sessão (RN14), e no máximo 3 passos do agent por resposta;
-- até 60 ações de botão (rascunho, nova sessão, falar com analista) e 60 mensagens ao analista por hora por funcionário;
-- até 20 tentativas de login por minuto por IP;
-- mensagens de até 2.000 caracteres e corpo de até 16 KB;
-- raciocínio baixo no modelo (`thinkingLevel: low`), para gastar menos cota por mensagem;
-- erros do modelo nunca chegam crus ao navegador: o funcionário vê uma mensagem amigável, e a cota esgotada vira um aviso claro.
-
-Os limites por janela curta (minuto e hora) ficam em memória, o que basta para uma instância só (ADR-0003); com mais de uma instância, iriam para o banco ou para um Redis. Os diários já ficam no banco.
-
-**Custo e latência medidos** (RT10): cada turno grava os tokens do classificador e do agent e a latência, e `pnpm --filter @nexo/api usage:report` resume isso por turno e por conversa. Numa conversa real com o Gemini (dúvida na central de ajuda, consulta de chamado e abertura de chamado), deu **cerca de 10,7 mil tokens por turno**, quase tudo de entrada: instruções, definições das tools e histórico. A conversa toda ficou em **cerca de 32 mil tokens**, com latência de **3,8 s no p50 e 5,7 s no p95**. No plano gratuito isso não custa nada; o que limita é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto).
-
-_O serviço de chamados (`tickets-service`) entra no deploy quando a api passar a usá-lo._
+O plano, descrito em [docs/decisions/0003-sqlite-e-railway.md](docs/decisions/0003-sqlite-e-railway.md), seria uma api que também serve o front na mesma origem e o `tickets-service` num segundo serviço, cada um com seu volume para o SQLite, com deploy contínuo a partir da `main` e a chave do Gemini só nas variáveis do serviço. Ainda faltaria, quando o deploy for feito: criar o projeto e as variáveis, conferir se o proxy da plataforma põe o IP real no fim do `X-Forwarded-For` (o limite por IP depende disso) e acrescentar o `tickets-service` ao deploy.
 
 ## Estrutura do projeto
 
@@ -152,39 +198,13 @@ _O serviço de chamados (`tickets-service`) entra no deploy quando a api passar 
 apps/web               Interface (React + Vite): chat do funcionário e console do analista
 apps/api               Servidor (Hono): autenticação, chat, console e o agent (Mastra)
 apps/tickets-service   Serviço de chamados simulado (legado instável), separado da api
-packages/shared        Código compartilhado: leitura de configuração, regras de negócio, contratos
+packages/shared        Código compartilhado: configuração, regras de negócio (domain), contratos HTTP
 e2e/                   Testes ponta a ponta (Playwright)
 docs/                  Plano, arquitetura, revisões, decisões (ADRs) e registro de uso de IA
 ```
 
-## Principais decisões
-
-Cada decisão tem um registro curto com contexto, alternativas descartadas e consequências em [docs/decisions/](docs/decisions/).
-
-- **Separação em três apps** ([ADR-0001](docs/decisions/0001-stack-e-monorepo.md), [ADR-0002](docs/decisions/0002-servico-de-chamados-separado.md)): interface, api com o agent e serviço de chamados, com regras de negócio num pacote compartilhado.
-- **O LLM interpreta, o código garante as regras** ([ADR-0005](docs/decisions/0005-llm-interpreta-codigo-garante.md)): confirmação antes de criar, pausa durante atendimento humano e privacidade entre funcionários são garantidas pelo servidor, não pelo prompt.
-- **Transparência em todo turno** ([ADR-0006](docs/decisions/0006-turno-em-duas-etapas.md)): um classificador registra o que foi entendido, com confiança e justificativa, antes de o agent agir.
-- **Qualidade das decisões com avaliação roteirizada** (T27): a avaliação roteirizada confere a ação escolhida pelo agent em 18 conversas e os invariantes de privacidade e confirmação em todas elas, enquanto as regras críticas seguem garantidas por testes unitários determinísticos ([ADR-0005](docs/decisions/0005-llm-interpreta-codigo-garante.md)). O resultado com o Gemini ainda não foi medido (ver [Avaliação do agent](#avaliação-do-agent)).
-- **TypeScript nativo no Node 24** ([ADR-0004](docs/decisions/0004-typescript-nativo-no-node.md)): os servidores rodam direto do código-fonte, sem etapa de build.
-- **SQLite e Railway** ([ADR-0003](docs/decisions/0003-sqlite-e-railway.md)): persistência sem Docker localmente e deploy com disco persistente.
-- **Gemini no plano gratuito** ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)): custo zero para um desafio sem orçamento, com tools e saída estruturada. Substituiu o Claude Haiku, a escolha inicial ([ADR-0008](docs/decisions/0008-modelo-claude-haiku.md)), que exigiria crédito pago.
-
-_Seções a completar ao longo do desenvolvimento: como o agent decide, segurança, trade-offs e custo por conversa._
+Dentro da api, as dependências vão numa direção só: `http → app → ports ← adapters`, e o `domain` não depende de nada. A central de ajuda são 8 artigos em Markdown em `apps/api/knowledge/`, com busca por palavras-chave (sem embeddings). Mais em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/FRONTEND.md](docs/FRONTEND.md).
 
 ## Suposições
 
 O PRD e o protótipo deixam pontos em aberto e alguns se contradizem. Cada ambiguidade foi registrada com a pergunta que faríamos ao recrutador e a suposição adotada: [docs/PLAN.md, seção 4](docs/PLAN.md#4-ambiguidades-e-contradições-mock--prd).
-
-## Desenvolvimento assistido por IA
-
-O projeto foi desenvolvido com o Claude Code, guiado por:
-
-- [CLAUDE.md](CLAUDE.md): convenções, boas práticas e o que nunca fazer;
-- [docs/PLAN.md](docs/PLAN.md): requisitos numerados e tarefas pequenas, implementadas uma por vez;
-- [docs/REVIEW.md](docs/REVIEW.md): revisões adversariais do plano antes de escrever código.
-
-O que foi pedido, o que a IA gerou e o que foi corrigido estão em [docs/AI_LOG.md](docs/AI_LOG.md). _Exemplos concretos serão resumidos aqui na entrega._
-
-## O que faria com mais tempo
-
-_A completar na entrega._
