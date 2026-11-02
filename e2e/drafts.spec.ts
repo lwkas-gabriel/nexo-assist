@@ -10,6 +10,10 @@ import {
 } from "./support/drafts.ts";
 import { loginAs } from "./support/login.ts";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_LOW_AFTER_HIGH_DAYS = 3.5;
+const MAX_LOW_AFTER_HIGH_DAYS = 8;
+
 function employeeEmailOf(testInfo: TestInfo): string {
   return testInfo.project.name === "mobile"
     ? "henrique.alves@nexo.com.br"
@@ -30,19 +34,28 @@ test("RF15: abre um chamado conversando, conferindo o rascunho antes", async ({
   const send = page.getByRole("button", { name: "Enviar" });
 
   // A conversa fica salva e os testes deste arquivo dividem o funcionário: cada passo espera o
-  // card novo (e não "o único"), para não confundir com o de um teste anterior.
+  // card novo (e não "o único"), identificado pelo número, e as linhas e etiquetas são contadas
+  // antes e depois, para não aceitar as de um teste anterior.
+  await expect(composer).toBeVisible();
+  const proposedChips = page.getByText("montou o rascunho", { exact: true });
+  const confirmedChips = page.getByText("confirmou o rascunho", { exact: true });
+  const createdAnswers = page.getByText(/chamado INC-\d{5} criado/);
+  const proposedBefore = await proposedChips.count();
+  const createdAnswersBefore = await createdAnswers.count();
+  const confirmedBefore = await confirmedChips.count();
   const byText = await proposeDraft(
     page,
     "Quero abrir um chamado: o notebook não liga desde hoje cedo",
   );
-  await expect(page.getByText(/Montei o rascunho D-\d+/).last()).toBeVisible();
-  await expect(page.getByText("montou o rascunho").last()).toBeVisible();
+  const textDraftId = (await byText.getAttribute("aria-label"))?.replace("Rascunho ", "") ?? "";
+  await expect(proposedChips).toHaveCount(proposedBefore + 1);
+  await expect(page.getByText(new RegExp(`^Montei o rascunho ${textDraftId}:`))).toBeVisible();
 
   await composer.fill("Confirmo, pode criar");
   await send.click();
   await expect(byText.getByText(/^Criado · INC-\d{5}$/)).toBeVisible();
-  await expect(page.getByText(/chamado INC-\d{5} criado/).last()).toBeVisible();
-  await expect(page.getByText("confirmou o rascunho", { exact: true }).last()).toBeVisible();
+  await expect(createdAnswers).toHaveCount(createdAnswersBefore + 1);
+  await expect(confirmedChips).toHaveCount(confirmedBefore + 1);
 
   // RN04 pelo botão do card (11.5): sem passar pelo modelo.
   const byButton = await proposeDraft(
@@ -59,13 +72,17 @@ test("RF15: abre um chamado conversando, conferindo o rascunho antes", async ({
   );
   await composer.press("ControlOrMeta+Enter");
   await expect(byShortcut.getByText(/^Criado · INC-\d{5}$/)).toBeVisible();
+
+  // Os três rascunhos seguem "Criado" depois das ações seguintes (cada um preso ao próprio número).
+  for (const card of [byText, byButton, byShortcut]) {
+    await expect(card.getByText(/^Criado · INC-\d{5}$/)).toBeVisible();
+  }
 });
 
 /**
  * RN04, ponta a ponta: o que o funcionário cancela ou ainda não confirmou não existe no sistema de
  * chamados, e o que ele edita e confirma nasce com o tipo, a prioridade e o prazo do rascunho
- * editado (RN01, RN11, RN12, R16). Gasta 4 mensagens ao agent por projeto (ver o teto por IP em
- * playwright.config.ts).
+ * editado (RN01, RN11, RN12, R16). Gasta 4 mensagens ao agent por projeto.
  */
 test("RF07, R16, RN04: edita e cancela rascunhos, e só o confirmado vira chamado", async ({
   page,
@@ -101,8 +118,13 @@ test("RF07, R16, RN04: edita e cancela rascunhos, e só o confirmado vira chamad
   const editedDeadline = parseBrasiliaDeadline(
     (await cardField(draft, "Prioridade").textContent()) ?? "",
   );
-  // RN12: Baixa responde em 5 dias úteis; Alta, em 4 horas úteis.
-  expect(editedDeadline.getTime()).toBeGreaterThan(proposedDeadline.getTime());
+  // RN12: Alta responde em 4 horas úteis e Baixa em 5 dias úteis. O valor exato depende do
+  // calendário útil e tem teste unitário (sla.test.ts); aqui vale a distância, que não depende do
+  // dia da semana: ao menos 3,5 dias (uma Baixa com o prazo da Média, de 3 dias úteis, não passa)
+  // e no máximo 8.
+  const gapInDays = (editedDeadline.getTime() - proposedDeadline.getTime()) / DAY_MS;
+  expect(gapInDays).toBeGreaterThanOrEqual(MIN_LOW_AFTER_HIGH_DAYS);
+  expect(gapInDays).toBeLessThanOrEqual(MAX_LOW_AFTER_HIGH_DAYS);
   // O histórico guarda cada edição; a deste rascunho tem o número dele.
   const draftId = (await draft.getAttribute("aria-label"))?.replace("Rascunho ", "");
   await expect(
@@ -117,20 +139,25 @@ test("RF07, R16, RN04: edita e cancela rascunhos, e só o confirmado vira chamad
   );
   await expect(beforeConfirming).not.toContainText(tag);
 
-  // Confirmar: o chamado nasce REQ (tipo editado, RN01) e aparece para o funcionário, só o dele.
+  // Confirmar: o chamado nasce REQ (tipo editado, RN01) e aparece para o funcionário, e só os
+  // dele (RN09): nenhum dos chamados de demonstração de outras pessoas.
   await draft.getByRole("button", { name: /^Confirmar/ }).click();
-  await expect(draft.getByText(/^Criado · REQ-\d{5}$/)).toBeVisible();
+  const created = draft.getByText(/^Criado · REQ-\d{5}$/);
+  await expect(created).toBeVisible();
+  const ticketNumber = /REQ-\d{5}/.exec((await created.textContent()) ?? "")?.[0] ?? "";
+  expect(ticketNumber).not.toBe("");
   const afterConfirming = await askAgent(page, "Qual o status do meu chamado?", TICKET_LIST_ANSWER);
   await expect(afterConfirming).toContainText(
-    new RegExp(`REQ-\\d{5} · .*${tag} pasta do projeto.* \\(Novo\\)`),
+    new RegExp(`${ticketNumber} · [^;]*${tag} pasta do projeto[^;]* \\(Novo\\)`),
   );
   await expect(afterConfirming).not.toContainText(`${tag} impressora`);
+  await expect(afterConfirming).not.toContainText(/INC-20311|INC-20298|INC-20480/);
 
-  const picker = page.getByRole("list", { name: "Seus chamados" }).last();
-  await picker
-    .getByRole("button", { name: new RegExp(`REQ-\\d{5}.*${tag} pasta do projeto`) })
+  await page
+    .getByRole("list", { name: "Seus chamados" })
+    .getByRole("button", { name: new RegExp(ticketNumber) })
     .click();
-  const ticketCard = page.getByRole("region", { name: /^Chamado REQ-\d{5}$/ }).last();
+  const ticketCard = page.getByRole("region", { name: `Chamado ${ticketNumber}`, exact: true });
   await expect(cardField(ticketCard, "Prioridade")).toHaveText("Baixa");
   await expect(ticketCard).toContainText("Novo");
 });

@@ -56,11 +56,11 @@ export async function askAgent(page: Page, text: string, answerPattern: RegExp):
   const answers = page.getByText(answerPattern);
   const composer = page.getByLabel("Mensagem para o Nexo");
   await expect(composer).toBeVisible();
-  const signature = async () =>
-    `${await answers.count()}|${await answers
-      .last()
-      .textContent({ timeout: 100 })
-      .catch(() => "")}`;
+  // Sem resposta ainda, a assinatura é só "0|": ler o texto da última esperaria uma que não existe.
+  const signature = async () => {
+    const count = await answers.count();
+    return `${count}|${count === 0 ? "" : await answers.last().textContent()}`;
+  };
   const before = await signature();
   await composer.fill(text);
   await page.getByRole("button", { name: "Enviar" }).click();

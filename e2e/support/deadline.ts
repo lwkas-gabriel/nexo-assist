@@ -26,6 +26,9 @@ export function parseBrasiliaDeadline(text: string, now: Date = new Date()): Dat
  * RN12: a Crítica responde em 1 hora, a qualquer hora (plantão 24 h, RN13). O prazo da tela é
  * recalculado a cada leitura e só mostra minutos: a janela vai do começo do teste a agora, com
  * dois minutos de folga para cada lado.
+ *
+ * Limite: em horário útil, uma Crítica errada que seguisse o calendário útil também daria 1 hora;
+ * o plantão fora do horário é coberto pelo teste unitário de sla.test.ts (madrugada de sábado).
  */
 export function expectCriticalDeadline(text: string, testStartedAt: Date) {
   const deadline = parseBrasiliaDeadline(text).getTime();
