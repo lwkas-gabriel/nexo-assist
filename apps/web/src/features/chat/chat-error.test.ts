@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GENERIC_CHAT_ERROR, describeChatError } from "./chat-error.ts";
+import { GENERIC_CHAT_ERROR, describeChatError, isSessionExpiredChatError } from "./chat-error.ts";
 
 describe("describeChatError", () => {
   it("mostra a mensagem da api quando o envio é recusado (ex.: limite de mensagens)", () => {
@@ -20,5 +20,20 @@ describe("describeChatError", () => {
 
   it("troca mensagens técnicas do navegador pela mensagem genérica", () => {
     expect(describeChatError(new Error("Failed to fetch"))).toBe(GENERIC_CHAT_ERROR);
+  });
+});
+
+describe("isSessionExpiredChatError", () => {
+  it("reconhece o 401 do envio pelo código do corpo", () => {
+    const body = { error: { code: "UNAUTHORIZED", message: "Faça login para continuar." } };
+
+    expect(isSessionExpiredChatError(new Error(JSON.stringify(body)))).toBe(true);
+  });
+
+  it("outros erros do envio não derrubam a sessão", () => {
+    const limited = { error: { code: "RATE_LIMITED", message: "Muitas mensagens." } };
+
+    expect(isSessionExpiredChatError(new Error(JSON.stringify(limited)))).toBe(false);
+    expect(isSessionExpiredChatError(new Error("Failed to fetch"))).toBe(false);
   });
 });

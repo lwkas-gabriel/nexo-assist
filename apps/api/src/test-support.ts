@@ -69,7 +69,10 @@ export async function createTestApp(container?: Container) {
  * serviço real, e registra com qual dono cada consulta foi feita (prova da RN09). As escritas
  * respeitam a chave de idempotência, como o serviço real (R01).
  */
-export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
+export function createFakeTicketGateway(
+  initialTickets: TicketDto[] = [],
+  clock: Clock = { now: () => new Date() },
+) {
   const tickets = initialTickets.map((ticket) => ({ ...ticket, updates: [...ticket.updates] }));
   const queriedOwners: string[] = [];
   const resultsByKey = new Map<string, TicketDto>();
@@ -110,7 +113,7 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
     createTicket: (ownerId, draft, key) =>
       idempotent(key, () => {
         const prefix = draft.type === "incident" ? "INC" : "REQ";
-        const now = new Date().toISOString();
+        const now = clock.now().toISOString();
         const ticket: TicketDto = {
           ...draft,
           number: `${prefix}-${20500 + tickets.length}`,
@@ -128,7 +131,7 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
     addUpdate: (ownerId, number, update, key) =>
       idempotent(key, () => {
         const ticket = findOwned(ownerId, number);
-        ticket.updates.push({ ...update, createdAt: new Date().toISOString() });
+        ticket.updates.push({ ...update, createdAt: clock.now().toISOString() });
         return ticket;
       }),
     reopenTicket: (ownerId, number, key) =>
@@ -149,7 +152,35 @@ export function createFakeTicketGateway(initialTickets: TicketDto[] = []) {
         ticket.updates.push({
           author: "system",
           message: `Transferido para um analista. Resumo: ${summary}`,
-          createdAt: new Date().toISOString(),
+          createdAt: clock.now().toISOString(),
+        });
+        return ticket;
+      }),
+    releaseTicket: (ownerId, number, analystName, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        if (ticket.status !== "waiting_analyst" && ticket.status !== "in_service") return ticket;
+        ticket.status = "in_progress";
+        ticket.updates.push({
+          author: "system",
+          message: `Conversa devolvida ao assistente por ${analystName}.`,
+          createdAt: clock.now().toISOString(),
+        });
+        return ticket;
+      }),
+    assumeTicket: (ownerId, number, analystName, key) =>
+      idempotent(key, () => {
+        const ticket = findOwned(ownerId, number);
+        if (!isOpenStatus(ticket.status)) {
+          throw new AppError("CONFLICT", `O chamado ${number} não está aberto.`);
+        }
+        const at = clock.now().toISOString();
+        ticket.status = "in_service";
+        ticket.lastStaffUpdateAt = at;
+        ticket.updates.push({
+          author: "staff",
+          message: `Atendimento assumido por ${analystName}.`,
+          createdAt: at,
         });
         return ticket;
       }),
@@ -255,7 +286,9 @@ export function recordingMockModel() {
         ),
     };
   };
-  return { model, counter, lastAgentPrompt };
+  /** Quantas chamadas foram do agent (as demais, do classificador). */
+  const agentCalls = () => agentPrompts.length;
+  return { model, counter, lastAgentPrompt, agentCalls };
 }
 
 /** Chamado de exemplo para testes; os campos podem ser trocados. */

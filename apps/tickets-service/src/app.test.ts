@@ -133,6 +133,42 @@ describe("tickets-service HTTP", () => {
   });
 });
 
+describe("atendimento do analista (R31, T24)", () => {
+  it("assumir põe em atendimento; devolver volta a em andamento; ambos exigem a chave", async () => {
+    const { call, post } = await createTestApp();
+    const created = await post("/tickets", { ownerId: ANA, draft });
+    const { number } = (await created.json()) as { number: string };
+    await post(`/tickets/${number}/transfer`, { ownerId: ANA, summary: "VPN parada." });
+
+    const withoutKey = await call(`/tickets/${number}/assume`, {
+      method: "POST",
+      body: JSON.stringify({ ownerId: ANA, analystName: "Rafael Lima" }),
+    });
+    const assumed = await post(`/tickets/${number}/assume`, {
+      ownerId: ANA,
+      analystName: "Rafael Lima",
+    });
+    const released = await post(`/tickets/${number}/release`, {
+      ownerId: ANA,
+      analystName: "Rafael Lima",
+    });
+
+    expect(withoutKey.status).toBe(400);
+    expect(await assumed.json()).toMatchObject({ status: "in_service" });
+    expect(await released.json()).toMatchObject({ status: "in_progress" });
+  });
+
+  it("recusa assumir sem o nome do analista", async () => {
+    const { post } = await createTestApp();
+    const created = await post("/tickets", { ownerId: ANA, draft });
+    const { number } = (await created.json()) as { number: string };
+
+    const response = await post(`/tickets/${number}/assume`, { ownerId: ANA, analystName: " " });
+
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("idempotência (R01)", () => {
   it("exige Idempotency-Key em toda escrita", async () => {
     const { call } = await createTestApp();

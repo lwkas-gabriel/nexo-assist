@@ -1,3 +1,11 @@
+/** O polling da conversa falhou: ela continua na tela, e o aviso diz que pode estar velha. */
+export const CONVERSATION_OUT_OF_SYNC =
+  "Não consegui atualizar a conversa agora; tentando de novo.";
+/**
+ * O mesmo, com o agent: não há polling, e nada tenta de novo sozinho. O aviso vem com o botão que
+ * refaz a consulta, e não promete o que não vai acontecer.
+ */
+export const CONVERSATION_NOT_REFRESHED = "Não consegui atualizar a conversa agora.";
 export const GENERIC_CHAT_ERROR = "Não consegui responder agora. Tente novamente em instantes.";
 
 /**
@@ -24,4 +32,14 @@ function messageFromErrorBody(text: string): string | undefined {
 /** Textos do nosso servidor são frases em português; mensagens técnicas do navegador não. */
 function isFriendlyServerText(text: string): boolean {
   return /^(O assistente|Não consegui)/.test(text);
+}
+
+/** A api respondeu 401 no envio: a sessão acabou no meio da conversa (10.3). */
+export function isSessionExpiredChatError(error: Error): boolean {
+  try {
+    const body = JSON.parse(error.message) as { error?: { code?: unknown } };
+    return body.error?.code === "UNAUTHORIZED";
+  } catch {
+    return false;
+  }
 }

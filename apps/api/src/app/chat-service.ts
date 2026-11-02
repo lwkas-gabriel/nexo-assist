@@ -1,13 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type { Mastra } from "@mastra/core/mastra";
 import { handleChatStream } from "@mastra/ai-sdk";
-import type { Clock } from "@nexo/shared/domain";
+import { confidenceLevel, parseTicketNumber, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
-import {
-  createUIMessageStream,
-  safeValidateUIMessages,
-  type UIMessage,
-  type UIMessageChunk,
-} from "ai";
+import { createUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
 import { createAgentRequestContext } from "../agent/agent-context.ts";
 import { describeAgentError } from "../agent/agent-errors.ts";
 import {
@@ -16,10 +12,12 @@ import {
   type Classifier,
   type TranscriptLine,
 } from "../agent/classifier.ts";
-import { LOW_CONFIDENCE_THRESHOLD } from "../agent/decision-trace.ts";
 import { NEXO_AGENT_ID } from "../agent/nexo-agent.ts";
+import { toTicketDetails } from "../agent/ticket-view.ts";
+import type { TicketGateway } from "../ports/ticket-gateway.ts";
 import { agentMayReply } from "./conversation-state.ts";
 import type { ConversationStore } from "../db/conversation-store.ts";
+import type { UserStore } from "../db/user-store.ts";
 import type { ConversationRow, MessageRow, UserRow } from "../db/schema.ts";
 import {
   toSessionView,
@@ -29,7 +27,22 @@ import {
 import type { AgentQuota } from "./agent-quota.ts";
 import type { DecisionService } from "./decision-service.ts";
 import type { DraftService, DraftView } from "./draft-service.ts";
+import {
+  createConversationReader,
+  readMessages,
+  toUIMessage,
+  type AnalystView,
+} from "./conversation-reader.ts";
 import type { HandoffService } from "./handoff-service.ts";
+import { textOf } from "./chat-text.ts";
+import { CONVERSATION_BUSY_MESSAGE, type ConversationLocks } from "./conversation-locks.ts";
+import { isSessionAtLimit } from "./session-state.ts";
+import {
+  declinedOfferText,
+  offeredTicketNumber,
+  quickAnswerClassification,
+  selectedTicketParts,
+} from "./structured-actions.ts";
 
 /** Quantas mensagens recentes o agent recebe: contexto suficiente, custo controlado (RT10). */
 const HISTORY_WINDOW = 40;
@@ -40,8 +53,6 @@ const HISTORY_WINDOW = 40;
 const HISTORY_MAX_CHARS = 16_000;
 /** Quantas mensagens anteriores o classificador vê: só o bastante para entender a nova. */
 const CLASSIFIER_CONTEXT = 6;
-/** A partir daqui a confiança é alta; entre o limiar e isto, média (como no prompt do classificador). */
-const HIGH_CONFIDENCE = 0.8;
 
 type ChatServiceDependencies = {
   mastra: Mastra;
@@ -52,16 +63,28 @@ type ChatServiceDependencies = {
   decisionService: DecisionService;
   chatSessionService: ChatSessionService;
   quota: AgentQuota;
+  ticketGateway: TicketGateway;
+  userStore: UserStore;
+  locks: ConversationLocks;
   clock: Clock;
 };
 
+const BUSY_MESSAGE = CONVERSATION_BUSY_MESSAGE;
+
+export type { AnalystView };
+
 export type ConversationView = {
-  conversation: Pick<ConversationRow, "id" | "mode"> | null;
+  conversation: (Pick<ConversationRow, "id" | "mode"> & { analyst: AnalystView | null }) | null;
   /** RF10: o contador da sessão atual e o resumo da anterior. Nulo antes da primeira mensagem. */
   session: SessionView | null;
   messages: UIMessage[];
   /** Estado atual dos rascunhos da conversa: o card mostra o que aconteceu depois (RF07). */
   drafts: DraftView[];
+  /**
+   * A trava da conversa está tomada (um turno do agent, por exemplo, que esta tela não viu
+   * começar): uma mensagem sem resposta, agora, pode ser só uma resposta a caminho.
+   */
+  isBusy: boolean;
 };
 
 /**
@@ -77,10 +100,16 @@ export function createChatService({
   decisionService,
   chatSessionService,
   quota,
+  ticketGateway,
+  userStore,
+  locks,
   clock,
 }: ChatServiceDependencies) {
-  /** Conversas com um turno do agent em andamento: um turno por vez em cada conversa (R06). */
-  const busyConversations = new Set<string>();
+  const conversationReader = createConversationReader({
+    conversationStore,
+    decisionService,
+    userStore,
+  });
 
   async function openConversationFor(employee: UserRow): Promise<ConversationRow> {
     return (
@@ -89,50 +118,136 @@ export function createChatService({
     );
   }
 
+  /** A mensagem do funcionário já gravada com este id e este texto (o reenvio da mesma bolha). */
+  async function findSavedEmployeeMessage(
+    conversationId: string,
+    text: string,
+    messageId: string | undefined,
+  ): Promise<MessageRow | undefined> {
+    if (!messageId) return undefined;
+    const saved = await conversationStore.findMessage(conversationId, messageId);
+    const isSame =
+      saved?.author === "employee" && saved.parts === JSON.stringify([{ type: "text", text }]);
+    return isSame ? saved : undefined;
+  }
+
+  /**
+   * O que um envio é para a conversa: mensagem nova, reenvio de uma que ficou sem resposta (o
+   * servidor caiu no meio do turno) ou reenvio de uma que já tem algo depois dela (o "Tentar
+   * novamente" de uma tela que não viu o fim do turno). Este último não pode rodar o agent de
+   * novo nem contar outra vez no limite da sessão (RN14).
+   */
+  async function classifyDelivery(
+    conversationId: string,
+    text: string,
+    messageId: string | undefined,
+  ): Promise<"new" | "unanswered_resend" | "answered_resend"> {
+    const saved = await findSavedEmployeeMessage(conversationId, text, messageId);
+    if (!saved) return "new";
+    const [newest] = await conversationStore.listRecentMessages(conversationId, 1);
+    return newest?.id === saved.id ? "unanswered_resend" : "answered_resend";
+  }
+
+  /**
+   * Grava a mensagem do funcionário com o id da bolha da tela. Se a mesma mensagem (id, autor e
+   * texto) já está na conversa, é o "Tentar novamente" de uma resposta que falhou depois de a
+   * mensagem ser gravada: não duplica. Com id de outra mensagem, grava com um id novo.
+   */
+  async function saveEmployeeMessage(
+    conversationId: string,
+    employeeId: string,
+    text: string,
+    createdAt: Date,
+    messageId: string | undefined,
+  ): Promise<void> {
+    const parts = [{ type: "text", text }];
+    if (await findSavedEmployeeMessage(conversationId, text, messageId)) return;
+    await conversationStore.appendMessage({
+      ...(messageId ? { id: messageId } : {}),
+      conversationId,
+      author: "employee",
+      authorId: employeeId,
+      parts,
+      createdAt,
+    });
+  }
+
+  /**
+   * O chamado da oferta, conferido com o funcionário da sessão: de outra pessoa ou inexistente,
+   * 404 (o botão só aparece para os dele). Com o sistema de chamados fora, a transferência segue
+   * sem afirmar o vencimento: chamar um analista não pode depender do legado.
+   */
+  async function overdueTicketFor(
+    employeeId: string,
+    ticketNumber: string,
+  ): Promise<{ isOverdue: boolean } | undefined> {
+    try {
+      const ticket = toTicketDetails(
+        await ticketGateway.getTicket(employeeId, ticketNumber),
+        clock.now(),
+      );
+      return { isOverdue: ticket.isOpen && ticket.deadline?.isOverdue === true };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "TICKETS_UNAVAILABLE") return undefined;
+      throw error;
+    }
+  }
+
+  /** R38: resposta rápida clicada, classificada pelo código (ou undefined, se não confere). */
+  async function classifyQuickAnswer(
+    previous: MessageRow[],
+    answer: string,
+  ): Promise<ClassificationResult | undefined> {
+    const last = previous.at(-1);
+    if (!last) return undefined;
+    const askingTurn = (await decisionService.forMessages([last.id])).get(last.id);
+    return quickAnswerClassification(toUIMessage(last), askingTurn, answer);
+  }
+
   /** Histórico da conversa; com `since`, só a partir dessa data (a sessão atual, para o agent). */
   async function loadHistory(
     conversationId: string,
     toMessage: (row: MessageRow) => UIMessage,
     since?: Date,
+    limit: number = HISTORY_WINDOW,
   ): Promise<UIMessage[]> {
-    const rows = await conversationStore.listRecentMessages(conversationId, HISTORY_WINDOW, since);
-    const result = await safeValidateUIMessages({ messages: rows.map(toMessage) });
-    if (!result.success) {
-      throw new AppError("INTERNAL", "Histórico da conversa ilegível.");
-    }
-    return result.data;
+    return readMessages(conversationStore, conversationId, toMessage, limit, since);
   }
 
   /** Uma ação por vez em cada conversa (R06): mensagens, nova sessão e pedido de analista. */
   async function withConversationLock<T>(conversationId: string, action: () => Promise<T>) {
-    if (busyConversations.has(conversationId)) {
-      throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
-    }
-    busyConversations.add(conversationId);
-    try {
-      return await action();
-    } finally {
-      busyConversations.delete(conversationId);
-    }
+    return locks.run(conversationId, BUSY_MESSAGE, action);
   }
 
   return {
     /** A conversa como a tela mostra, com o registro de decisão de cada resposta do agent (RF05). */
     async getConversation(employee: UserRow): Promise<ConversationView> {
+      // A20: "online" no console e o ✓✓ das mensagens que saíram para ele.
+      await userStore.markSeen(employee.id, clock.now());
       const conversation = await conversationStore.findOpenByEmployee(employee.id);
-      if (!conversation) return { conversation: null, session: null, messages: [], drafts: [] };
-      const messages = await loadHistory(conversation.id, toUIMessage);
-      const decisions = await decisionService.forMessages(messages.map((message) => message.id));
+      if (!conversation)
+        return { conversation: null, session: null, messages: [], drafts: [], isBusy: false };
+      // Lido antes das mensagens: se o turno terminar no meio da leitura, o pior é um "ocupado"
+      // a mais (a tela confere de novo), nunca uma resposta ainda a caminho tida como perdida.
+      const isBusy = locks.isBusy(conversation.id);
+      // R27: quem atende aparece pelo nome e setor, na pílula do topo e nas bolhas do analista.
+      const analysts = await conversationReader.analysts();
+      const messages = await conversationReader.messages(conversation.id, analysts);
+      // Só com a conversa no analista: devolvida ao agent, quem atendeu não aparece mais no topo.
+      const assignedAnalyst =
+        conversation.mode === "analyst" && conversation.assignedAnalystId
+          ? analysts.get(conversation.assignedAnalystId)
+          : undefined;
       return {
-        conversation: { id: conversation.id, mode: conversation.mode },
+        conversation: {
+          id: conversation.id,
+          mode: conversation.mode,
+          analyst: assignedAnalyst ?? null,
+        },
         session: await chatSessionService.view(conversation),
         drafts: await draftService.listForConversation(employee.id, conversation.id),
-        messages: messages.map((message) => {
-          const decision = decisions.get(message.id);
-          return decision
-            ? { ...message, metadata: { ...authorMetadata(message), decision } }
-            : message;
-        }),
+        messages,
+        isBusy,
       };
     },
 
@@ -152,15 +267,36 @@ export function createChatService({
      * "Falar com um analista" pelo botão (11.5): transfere sem passar pelo agent. É o caminho
      * quando a sessão chegou ao limite e a mensagem por texto já não é aceita.
      */
-    async requestAnalyst(employee: UserRow) {
+    async requestAnalyst(employee: UserRow, options: { ticketNumber?: string } = {}) {
+      const ticketNumber = options.ticketNumber
+        ? parseTicketNumber(options.ticketNumber)
+        : undefined;
+      if (options.ticketNumber && !ticketNumber) {
+        throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      }
       const conversation = await openConversationFor(employee);
       return withConversationLock(conversation.id, async () => {
+        // Já com os analistas (o recarregamento depois do primeiro clique falhou, ou há duas abas):
+        // o pedido já foi atendido. Responde com o que está gravado, sem outra linha na conversa.
+        const existing = await conversationStore.findById(conversation.id);
+        if (existing && !agentMayReply(existing.mode)) {
+          const alreadyRequested = await handoffService.latestView(conversation.id);
+          if (alreadyRequested) return alreadyRequested;
+        }
+        // Com o chamado (oferta de um chamado vencido, tela 3), o resumo só afirma o que o código
+        // conferiu: o chamado é dele (RN09) e está vencido. O handoff confere o motivo de novo.
+        const offered = ticketNumber
+          ? await overdueTicketFor(employee.id, ticketNumber)
+          : undefined;
         const transfer = await handoffService.transfer({
           employeeId: employee.id,
           conversationId: conversation.id,
-          reason: "employee_request",
+          reason: offered?.isOverdue ? "overdue" : "employee_request",
+          ...(ticketNumber ? { ticketNumber } : {}),
           summary: {
-            problem: "O funcionário pediu um analista pelo botão do chat.",
+            problem: offered?.isOverdue
+              ? `O funcionário pediu um analista para o chamado ${ticketNumber}, sem atualização da TI dentro do prazo.`
+              : "O funcionário pediu um analista pelo botão do chat.",
             attempted: await chatSessionService.describeCurrent(conversation),
           },
         });
@@ -171,8 +307,104 @@ export function createChatService({
           messageId: transfer.notice.id,
           description: "Funcionário pediu um analista pelo botão.",
           at: clock.now(),
+          intent: "talk_to_analyst",
+          step: "analyst_button",
         });
         return transfer.view;
+      });
+    },
+
+    /**
+     * Clique num chamado da lista (tela 3, 11.5): a resposta é montada pelo código, sem o modelo.
+     * O chamado é buscado com o funcionário da sessão, então só os dele aparecem (RN09). Com a
+     * conversa num analista (antes ou durante a busca), o clique fica registrado para ele e
+     * ninguém responde (RN08). Não conta no limite da sessão (R42: não vai ao agent), mas a
+     * mantém viva e recomeça a vencida, como uma mensagem.
+     */
+    async selectTicket(employee: UserRow, number: string) {
+      const ticketNumber = parseTicketNumber(number);
+      if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      const conversation = await openConversationFor(employee);
+      return withConversationLock(conversation.id, async () => {
+        // Busca antes de gravar: se o chamado não é dele (RN09) ou o sistema caiu, nada fica
+        // pela metade. A bolha do clique leva número e título, como no protótipo.
+        const ticket = toTicketDetails(
+          await ticketGateway.getTicket(employee.id, ticketNumber),
+          clock.now(),
+        );
+        const clickText = `${ticket.number} · ${ticket.title}`;
+        // A busca pode levar segundos (novas tentativas): a conversa pode ter sido transferida
+        // nesse meio-tempo, por um chamado crítico confirmado pelo card (A04, RN08).
+        const current = await conversationStore.findById(conversation.id);
+        await chatSessionService.touch(conversation);
+        await saveEmployeeMessage(conversation.id, employee.id, clickText, clock.now(), undefined);
+        if (!current || !agentMayReply(current.mode)) return;
+        const session = await chatSessionService.current(current);
+        const replyId = randomUUID();
+        const reply = await conversationStore.appendMessage({
+          id: replyId,
+          conversationId: conversation.id,
+          author: "agent",
+          authorId: null,
+          parts: selectedTicketParts(ticket, `select-${replyId}`, {
+            sessionAtLimit: isSessionAtLimit(session),
+          }),
+          createdAt: clock.now(),
+        });
+        await decisionService.recordButtonAction({
+          conversationId: conversation.id,
+          conversationVersion: current.version,
+          messageId: reply.id,
+          description: `Funcionário escolheu o chamado ${ticketNumber} na lista.`,
+          at: reply.createdAt,
+          intent: "ticket_status",
+          step: "ticket_selection",
+        });
+      });
+    },
+
+    /**
+     * "Não, obrigado" à oferta de analista de um chamado vencido (tela 3, 11.5): resposta pelo
+     * código, sem o modelo. Só repete o número que o próprio funcionário recebeu na oferta.
+     */
+    async declineOffer(employee: UserRow, number: string) {
+      const ticketNumber = parseTicketNumber(number);
+      if (!ticketNumber) throw new AppError("INVALID_REQUEST", "Número de chamado inválido.");
+      const conversation = await openConversationFor(employee);
+      return withConversationLock(conversation.id, async () => {
+        // Só vale para a oferta que a resposta mais recente fez, sem nada dito depois dela.
+        const [last] = await conversationStore.listRecentMessages(conversation.id, 1);
+        if (!last || offeredTicketNumber(toUIMessage(last)) !== ticketNumber) {
+          throw new AppError("CONFLICT", "Essa oferta não está mais valendo.");
+        }
+        // Relida dentro da trava: um crítico confirmado pelo card pode ter transferido a conversa
+        // (A04); aí o "Não, obrigado" fica para o analista e ninguém responde (RN08).
+        const current = await conversationStore.findById(conversation.id);
+        await chatSessionService.touch(conversation);
+        await saveEmployeeMessage(
+          conversation.id,
+          employee.id,
+          "Não, obrigado",
+          clock.now(),
+          undefined,
+        );
+        if (!current || !agentMayReply(current.mode)) return;
+        const reply = await conversationStore.appendMessage({
+          conversationId: conversation.id,
+          author: "agent",
+          authorId: null,
+          parts: [{ type: "text", text: declinedOfferText(ticketNumber) }],
+          createdAt: clock.now(),
+        });
+        await decisionService.recordButtonAction({
+          conversationId: conversation.id,
+          conversationVersion: current.version,
+          messageId: reply.id,
+          description: `Funcionário recusou a oferta de analista para o ${ticketNumber}.`,
+          at: reply.createdAt,
+          intent: "ticket_status",
+          step: "decline_button",
+        });
       });
     },
 
@@ -183,7 +415,7 @@ export function createChatService({
     async sendMessage(
       employee: UserRow,
       text: string,
-      client: { ip: string },
+      client: { ip: string; messageId?: string; quickOption?: boolean },
     ): Promise<ReadableStream<UIMessageChunk>> {
       const conversation = await openConversationFor(employee);
       if (!agentMayReply(conversation.mode)) {
@@ -192,25 +424,41 @@ export function createChatService({
             "RATE_LIMITED",
             "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
           );
-        await conversationStore.appendMessage({
-          conversationId: conversation.id,
-          author: "employee",
-          authorId: employee.id,
-          parts: [{ type: "text", text }],
-          createdAt: clock.now(),
+        // Na trava e relendo o estado: se o analista devolveu ou encerrou neste instante, a
+        // mensagem não fica gravada para ninguém (RN08 ao contrário).
+        const stillWithAnalyst = await locks.run(conversation.id, BUSY_MESSAGE, async () => {
+          const current = await conversationStore.findById(conversation.id);
+          if (!current || agentMayReply(current.mode)) return false;
+          await saveEmployeeMessage(
+            conversation.id,
+            employee.id,
+            text,
+            clock.now(),
+            client.messageId,
+          );
+          await chatSessionService.touch(current);
+          return true;
         });
-        await chatSessionService.touch(conversation);
-        return createUIMessageStream({ execute: () => undefined });
+        if (stillWithAnalyst) return createUIMessageStream({ execute: () => undefined });
+        throw new AppError(
+          "CONFLICT",
+          "O atendimento acabou de voltar ao assistente; envie a mensagem de novo.",
+        );
       }
-      if (busyConversations.has(conversation.id)) {
-        throw new AppError("CONFLICT", "Aguarde a resposta anterior do Nexo Assist.");
-      }
-      busyConversations.add(conversation.id);
-      const release = () => busyConversations.delete(conversation.id);
+      const release = locks.acquire(conversation.id, BUSY_MESSAGE);
 
       try {
-        // RN14: com a sessão no limite, recusa antes de gastar a cota de uso.
-        await chatSessionService.assertBelowLimit(conversation);
+        const delivery = await classifyDelivery(conversation.id, text, client.messageId);
+        // A mensagem já tem resposta (ou outra coisa depois dela): o turno aconteceu e o cliente
+        // só não viu o fim. Nada roda de novo; a tela recarrega e mostra o que está gravado.
+        if (delivery === "answered_resend") {
+          release();
+          return createUIMessageStream({ execute: () => undefined });
+        }
+        const isResend = delivery === "unanswered_resend";
+        // RN14: com a sessão no limite, recusa antes de gastar a cota de uso. O reenvio não é
+        // mensagem nova: ele já foi contado quando chegou da primeira vez.
+        if (!isResend) await chatSessionService.assertBelowLimit(conversation);
         // A cota do modelo é gasta aqui, com a trava da conversa e a mesma leitura que decidiu
         // chamar o agent (ADR-0010, A13).
         const withinQuota = await quota.tryConsumeForAgent({
@@ -223,21 +471,27 @@ export function createChatService({
             "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
           );
         // RN14: conta a mensagem na sessão (ou recusa, na 31ª).
-        const session = await chatSessionService.countAgentMessage(conversation);
+        const session = isResend
+          ? await chatSessionService.current(conversation)
+          : await chatSessionService.countAgentMessage(conversation);
         const turnStartedAt = clock.now();
         // Etapa 1 (R05): o classificador vê a mensagem nova e um pouco do que veio antes.
         const previous = await conversationStore.listRecentMessages(
           conversation.id,
           CLASSIFIER_CONTEXT,
         );
-        const classification = await classifier.classify(previous.map(toTranscriptLine), text);
-        await conversationStore.appendMessage({
-          conversationId: conversation.id,
-          author: "employee",
-          authorId: employee.id,
-          parts: [{ type: "text", text }],
-          createdAt: turnStartedAt,
-        });
+        const quickAnswer = client.quickOption
+          ? await classifyQuickAnswer(previous, text)
+          : undefined;
+        const classification =
+          quickAnswer ?? (await classifier.classify(previous.map(toTranscriptLine), text));
+        await saveEmployeeMessage(
+          conversation.id,
+          employee.id,
+          text,
+          turnStartedAt,
+          client.messageId,
+        );
         // A classificação leva segundos: a conversa pode ter sido transferida nesse meio-tempo
         // (por exemplo, um chamado crítico confirmado pelo botão). Aí a mensagem fica para o
         // analista e o agent não responde (RN08).
@@ -306,6 +560,8 @@ export function createChatService({
             try {
               if (responseMessage.parts.length > 0) {
                 const saved = await conversationStore.appendMessage({
+                  // O mesmo id do stream: a tela não troca a bolha ao recarregar a conversa.
+                  id: responseMessage.id,
                   conversationId: conversation.id,
                   author: "agent",
                   authorId: null,
@@ -313,7 +569,7 @@ export function createChatService({
                   createdAt: clock.now(),
                 });
                 // R04: só o rascunho que a resposta gravada mostra ("D-12") conta como visto.
-                await draftService.markShownInReply(conversation.id, textOf(responseMessage));
+                await draftService.markShownInReply(conversation.id, textOf(responseMessage.parts));
                 await decisionService.record({
                   ...turn,
                   messageId: saved.id,
@@ -354,7 +610,7 @@ export function keepWithinCharBudget(messages: UIMessage[], maxChars: number): U
   const kept: UIMessage[] = [];
   let used = 0;
   for (const message of [...messages].reverse()) {
-    const size = textOf(message).length;
+    const size = textOf(message.parts).length;
     if (kept.length > 0 && used + size > maxChars) break;
     kept.unshift(message);
     used += size;
@@ -370,7 +626,7 @@ const SPEAKERS: Record<MessageRow["author"], TranscriptLine["speaker"]> = {
 };
 
 function toTranscriptLine(row: MessageRow): TranscriptLine {
-  return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row)) };
+  return { speaker: SPEAKERS[row.author], text: textOf(toUIMessage(row).parts) };
 }
 
 /**
@@ -388,38 +644,12 @@ function describeTurnContext(
   return lines.join("\n");
 }
 
-/** Faixas de confiança com os mesmos nomes do prompt do classificador. */
-function confidenceLevel(confidence: number): string {
-  if (confidence < LOW_CONFIDENCE_THRESHOLD) return "baixa";
-  return confidence < HIGH_CONFIDENCE ? "média" : "alta";
-}
-
 /**
  * A classificação da etapa 1 como o agent a recebe (R05). Só intenção e confiança: o "entendido"
  * parafraseia o texto do funcionário e não pode entrar no contexto de sistema do agent.
  */
 function describeClassification({ classification }: ClassificationResult): string {
   return `Classificação da mensagem atual, feita antes de você (etapa 1): intenção "${INTENT_LABELS[classification.intent]}"; confiança ${confidenceLevel(classification.confidence)} (${classification.confidence}).`;
-}
-
-function authorMetadata(message: UIMessage): Record<string, unknown> {
-  return typeof message.metadata === "object" && message.metadata !== null
-    ? { ...message.metadata }
-    : {};
-}
-
-function textOf(message: UIMessage): string {
-  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
-}
-
-/** Mensagem como a tela mostra; o autor vai junto, para a tela distinguir agent, analista e sistema. */
-function toUIMessage(row: MessageRow): UIMessage {
-  return {
-    id: row.id,
-    role: row.author === "employee" ? "user" : "assistant",
-    metadata: { author: row.author, createdAt: row.createdAt.toISOString() },
-    parts: JSON.parse(row.parts) as UIMessage["parts"],
-  };
 }
 
 /** Como o agent identifica o que não foi ele que escreveu (R18). */

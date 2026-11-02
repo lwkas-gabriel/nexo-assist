@@ -8,6 +8,7 @@ import {
   checkReopen,
   describeElapsed,
   formatBrasiliaDateTime,
+  formatBrasiliaDayMonth,
   getSlaStatus,
   isOpenStatus,
   slaClockStart,
@@ -41,8 +42,11 @@ export function toTicketSummary(ticket: TicketDto, now: Date) {
     category: TICKET_CATEGORY_LABELS[ticket.category],
     priority: TICKET_PRIORITY_LABELS[ticket.priority],
     status: TICKET_STATUS_LABELS[ticket.status],
+    // O código, para a tela escolher a cor do status (status-styles), e a data curta da lista.
+    statusCode: ticket.status,
     isOpen: isOpenStatus(ticket.status),
     openedAt: formatBrasiliaDateTime(createdAt),
+    openedOn: formatBrasiliaDayMonth(createdAt),
     // null quando a TI ainda não respondeu: o agent não pode inventar uma atualização.
     lastTeamUpdateAt: lastStaffUpdateAt ? formatBrasiliaDateTime(lastStaffUpdateAt) : null,
     // Desde a última resposta da TI ou, sem resposta, desde a abertura (A17).

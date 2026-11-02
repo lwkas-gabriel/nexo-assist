@@ -21,3 +21,14 @@ export async function readJson(request: { json(): Promise<unknown> }): Promise<u
     throw new AppError("INVALID_REQUEST", "Corpo da requisição não é um JSON válido.");
   }
 }
+
+/** Como `readJson`, para rotas em que o corpo é opcional: sem corpo, vale `{}`. */
+export async function readOptionalJson(request: { text(): Promise<string> }): Promise<unknown> {
+  const text = await request.text();
+  if (text.trim() === "") return {};
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new AppError("INVALID_REQUEST", "Corpo da requisição não é um JSON válido.");
+  }
+}

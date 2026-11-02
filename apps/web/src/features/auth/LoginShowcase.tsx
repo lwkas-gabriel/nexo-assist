@@ -52,7 +52,7 @@ function ConversationPreview() {
         <div className="flex flex-col gap-1.5">
           <p className="flex gap-1.5 text-[12.5px]">
             <span className="font-semibold whitespace-nowrap text-paper/80">Nexo Assist</span>
-            <span className="text-paper/45">consultou seus chamados · criou um chamado</span>
+            <span className="text-paper/55">consultou seus chamados · criou um chamado</span>
           </p>
           <p className="max-w-[380px] rounded-[4px_12px_12px_12px] bg-paper/8 px-3.5 py-2.5 text-[13.5px]">
             Pronto: abri o chamado com prioridade alta. Um analista fala com você em até 4 h úteis.

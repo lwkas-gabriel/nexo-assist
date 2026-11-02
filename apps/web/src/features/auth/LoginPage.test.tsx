@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ANNOUNCE_AFTER_MOUNT_MS } from "../../lib/use-announce-after-mount.ts";
 import { setViewportWidth } from "../../test-setup.ts";
 import { LoginPage } from "./LoginPage.tsx";
 
@@ -43,6 +44,48 @@ function renderLogin() {
     </QueryClientProvider>,
   );
 }
+
+describe("aviso de sessão expirada (10.3)", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("a região de status nasce vazia e o texto entra depois, para o leitor de tela anunciar", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      stubApi({});
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(["session-notice"], "Sua sessão expirou. Entre de novo para continuar.");
+      render(
+        <QueryClientProvider client={client}>
+          <LoginPage />
+        </QueryClientProvider>,
+      );
+
+      const region = screen.getAllByRole("status")[0] as HTMLElement;
+      expect(region.textContent).toBe("");
+
+      await act(() => vi.advanceTimersByTimeAsync(ANNOUNCE_AFTER_MOUNT_MS + 10));
+      expect(region.textContent).toBe("Sua sessão expirou. Entre de novo para continuar.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sem aviso, a região fica vazia", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      stubApi({});
+      renderLogin();
+
+      await act(() => vi.advanceTimersByTimeAsync(ANNOUNCE_AFTER_MOUNT_MS + 10));
+
+      expect((screen.getAllByRole("status")[0] as HTMLElement).textContent).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("tela de login (RF01, tela 1)", () => {
   beforeEach(() => {

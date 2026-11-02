@@ -1,50 +1,54 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { createAppQueryClient } from "./features/auth/app-query-client.ts";
 import { LoginPage } from "./features/auth/LoginPage.tsx";
 import { useAuth } from "./features/auth/use-auth.ts";
 import { ChatPage } from "./features/chat/ChatPage.tsx";
+import { ConsolePage } from "./features/console/ConsolePage.tsx";
+import { ErrorState, LoadingState, Skeleton } from "./ui/Feedback.tsx";
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
-});
+const appQueryClient = createAppQueryClient();
 
-export function App() {
+/** `client` só muda nos testes, que não podem dividir o cache entre si. */
+export function App({ client = appQueryClient }: { client?: QueryClient }) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <AuthenticatedArea />
     </QueryClientProvider>
   );
 }
 
-/** Decide a tela pelo usuário logado: login, chat do funcionário ou (em breve) console do analista. */
+/** Decide a tela pelo usuário logado: login, chat do funcionário ou console do analista. */
 function AuthenticatedArea() {
-  const { user, isLoading, loadError, logout } = useAuth();
+  const { userView, isRetrying, retry, logout } = useAuth();
 
-  if (isLoading) return <p className="chat__status">Carregando…</p>;
-  if (loadError) {
+  if (userView.status === "loading") {
     return (
-      <p role="alert" className="chat__error">
-        {loadError.message}
-      </p>
+      <LoadingState label="Carregando…" className="flex min-h-dvh items-center justify-center p-6">
+        <Skeleton className="h-10 w-64" />
+      </LoadingState>
     );
   }
+  if (userView.status === "error") {
+    return (
+      <ErrorState
+        message={userView.message}
+        onRetry={retry}
+        isRetrying={isRetrying}
+        className="min-h-dvh justify-center"
+      />
+    );
+  }
+  const user = userView.data;
   if (!user) return <LoginPage />;
 
+  if (user.role === "employee") {
+    return (
+      <ChatPage user={user} isLoggingOut={logout.isPending} onLogout={() => logout.mutate()} />
+    );
+  }
+
+  // Telas 4 e 5: o console do analista.
   return (
-    <main className="chat">
-      <header className="chat__header">
-        <h1>Nexo Assist</h1>
-        <p>
-          {user.name} · {user.email}
-        </p>
-        <button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
-          Sair
-        </button>
-      </header>
-      {user.role === "employee" ? (
-        <ChatPage />
-      ) : (
-        <p>Console do analista: em construção (tarefas T23 e T24).</p>
-      )}
-    </main>
+    <ConsolePage user={user} isLoggingOut={logout.isPending} onLogout={() => logout.mutate()} />
   );
 }

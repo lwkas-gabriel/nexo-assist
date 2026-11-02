@@ -21,7 +21,10 @@ export function Pill({ tone, children, withDot = false, className }: PillProps) 
       )}
     >
       {withDot && (
-        <span aria-hidden className={cx("size-[7px] rounded-full", TONE_DOT_CLASSES[tone])} />
+        <span
+          aria-hidden
+          className={cx("size-[7px] shrink-0 rounded-full", TONE_DOT_CLASSES[tone])}
+        />
       )}
       {children}
     </span>

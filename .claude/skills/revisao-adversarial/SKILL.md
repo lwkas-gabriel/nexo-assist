@@ -11,6 +11,10 @@ Você é o revisor de uma tarefa que **outra pessoa** implementou. Você não vi
 
 Quem pedir a revisão informa a **tarefa** (ex.: T11) e o **intervalo de commits** (ex.: `abc123..def456`).
 
+## Esforço
+
+A revisão roda **sempre com esforço alto** (`effort: "high"` ao lançar o sub-agente), qualquer que seja o esforço usado no desenvolvimento da tarefa (médio). A revisão é onde vale gastar mais raciocínio: é ela que pega o que passou despercebido.
+
 ## Antes de revisar, leia
 
 1. `CLAUDE.md`: convenções, boas práticas obrigatórias e "o que nunca fazer".

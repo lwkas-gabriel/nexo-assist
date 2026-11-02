@@ -18,6 +18,16 @@ export function createUserStore(db: Database) {
       return db.query.users.findFirst({ where: eq(users.id, id) });
     },
 
+    /** O funcionário carregou a conversa agora: "online" no console e mensagens vistas (A20). */
+    async markSeen(userId: string, at: Date): Promise<void> {
+      await db.update(users).set({ lastSeenAt: at }).where(eq(users.id, userId));
+    },
+
+    /** Os analistas, para o funcionário ver quem o atende (nome e setor, tela 2, R27). */
+    async listAnalysts(): Promise<UserRow[]> {
+      return db.query.users.findMany({ where: eq(users.role, "analyst") });
+    },
+
     /** Garante que as pessoas de demonstração existam, com os dados atuais (idempotente). */
     async upsertAll(people: readonly DemoUser[]): Promise<void> {
       for (const person of people) {

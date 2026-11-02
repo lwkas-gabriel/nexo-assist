@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { cx } from "./cx.ts";
 
 const VARIANT_CLASSES = {
@@ -19,7 +19,7 @@ const SIZE_CLASSES = {
 
 export type ButtonVariant = keyof typeof VARIANT_CLASSES;
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = ComponentProps<"button"> & {
   variant?: ButtonVariant;
   size?: keyof typeof SIZE_CLASSES;
 };

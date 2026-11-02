@@ -1,0 +1,94 @@
+import { TICKET_STATUSES } from "@nexo/shared/domain";
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { z } from "zod";
+
+/**
+ * Chamados que as tools devolveram (tela 3), lidos das partes da mensagem, sem React. A api manda
+ * o resumo já em português e com o prazo calculado (ticket-view.ts); aqui só se confere a forma.
+ */
+
+const ticketSummarySchema = z.object({
+  number: z.string(),
+  title: z.string(),
+  category: z.string(),
+  priority: z.string(),
+  status: z.string(),
+  statusCode: z.enum(TICKET_STATUSES),
+  isOpen: z.boolean(),
+  openedAt: z.string(),
+  openedOn: z.string(),
+  lastTeamUpdateAt: z.string().nullable(),
+  timeWithoutTeamResponse: z.string(),
+  deadline: z.object({ rule: z.string(), dueAt: z.string(), isOverdue: z.boolean() }).nullable(),
+});
+export type TicketSummaryView = z.infer<typeof ticketSummarySchema>;
+
+const ticketDetailsSchema = ticketSummarySchema.extend({ description: z.string() });
+export type TicketDetailsView = z.infer<typeof ticketDetailsSchema>;
+
+const listOutputSchema = z.object({ ok: z.literal(true), tickets: z.array(ticketSummarySchema) });
+const getOutputSchema = z.object({ ok: z.literal(true), ticket: ticketDetailsSchema });
+
+/** Saída já concluída da última chamada da tool, pelo nome. */
+function lastOutput(message: UIMessage, toolName: string): unknown {
+  const part = message.parts
+    .filter(isToolUIPart)
+    .findLast((candidate) => getToolName(candidate) === toolName);
+  return part?.state === "output-available" ? part.output : undefined;
+}
+
+/** RF08: os chamados que o agent listou, para o funcionário escolher um. */
+export function listedTicketsOf(message: UIMessage): TicketSummaryView[] | undefined {
+  const parsed = listOutputSchema.safeParse(lastOutput(message, "list_my_tickets"));
+  return parsed.success && parsed.data.tickets.length > 0 ? parsed.data.tickets : undefined;
+}
+
+export type EmptyTicketList = "open" | "all";
+
+/**
+ * 10.5, lista vazia: a consulta deu certo e não há chamado nenhum. Diz se o agent pediu só os
+ * abertos ou todos (o `filter` da chamada); sem o filtro gravado vale "open", que é verdade nos
+ * dois casos (quem não tem chamado algum também não tem aberto).
+ */
+export function emptyTicketListOf(message: UIMessage): EmptyTicketList | undefined {
+  const part = message.parts
+    .filter(isToolUIPart)
+    .findLast((candidate) => getToolName(candidate) === "list_my_tickets");
+  if (part?.state !== "output-available") return undefined;
+  const parsed = listOutputSchema.safeParse(part.output);
+  if (!parsed.success || parsed.data.tickets.length > 0) return undefined;
+  const input: unknown = part.input;
+  return typeof input === "object" && input !== null && "filter" in input && input.filter === "all"
+    ? "all"
+    : "open";
+}
+
+/** RF09: o chamado consultado (pelo agent ou pela escolha na lista). */
+export function consultedTicketOf(message: UIMessage): TicketDetailsView | undefined {
+  const parsed = getOutputSchema.safeParse(lastOutput(message, "get_ticket"));
+  return parsed.success ? parsed.data.ticket : undefined;
+}
+
+/** RN07, A04: aberto e com o prazo vencido, o assistente oferece um analista. */
+export function isOverdueAndOpen(ticket: TicketSummaryView): boolean {
+  return ticket.isOpen && ticket.deadline?.isOverdue === true;
+}
+
+export type SuggestedAction = "analyst" | "add_info" | "decline";
+
+/** A oferta de um chamado vencido: as três saídas do protótipo. */
+const OVERDUE_TICKET_ACTIONS: readonly SuggestedAction[] = ["analyst", "add_info", "decline"];
+/** Com o sistema de chamados fora do ar não há chamado a que ligar: só o analista (10.5). */
+const TICKETS_UNAVAILABLE_ACTIONS: readonly SuggestedAction[] = ["analyst"];
+
+/**
+ * As ações oferecidas. No limite da sessão (RN14) não há campo de mensagem, então "Adicionar
+ * informação" some.
+ */
+export function offeredActions(
+  offer: "overdue_ticket" | "tickets_unavailable",
+  canAddInfo: boolean,
+): readonly SuggestedAction[] {
+  if (offer === "tickets_unavailable") return TICKETS_UNAVAILABLE_ACTIONS;
+  return OVERDUE_TICKET_ACTIONS.filter((action) => action !== "add_info" || canAddInfo);
+}

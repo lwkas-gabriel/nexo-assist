@@ -2,11 +2,12 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { ANNOUNCE_AFTER_MOUNT_MS } from "../lib/use-announce-after-mount.ts";
 import { setViewportWidth } from "../test-setup.ts";
 import { Avatar } from "./Avatar.tsx";
 import { avatarToneFor } from "./avatar-tones.ts";
 import { Button } from "./Button.tsx";
-import { Kbd, Toast } from "./Feedback.tsx";
+import { EmptyState, ErrorState, Kbd, LoadingState, SyncNotice, Toast } from "./Feedback.tsx";
 import { initialsOf } from "./initials.ts";
 import { Pill } from "./Pill.tsx";
 import { SidePanel } from "./SidePanel.tsx";
@@ -79,6 +80,97 @@ describe("componentes base (10.4)", () => {
 
     rerender(<Toast message="Não consegui confirmar." tone="danger" />);
     expect(screen.getByRole("alert").textContent).toBe("Não consegui confirmar.");
+  });
+});
+
+describe("estados de carregamento, erro e vazio (10.5)", () => {
+  it("ErrorState: é um alerta, e Tentar novamente chama a nova tentativa", async () => {
+    const onRetry = vi.fn();
+    render(<ErrorState message="Não foi possível falar com o servidor." onRetry={onRetry} />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Não foi possível falar com o servidor.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("ErrorState: enquanto tenta, o botão diz Tentando… e fica aria-disabled; sem foco automático", () => {
+    render(<ErrorState message="Falhou." onRetry={() => undefined} isRetrying />);
+
+    const button = screen.getByRole("button", { name: "Tentando…" });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("ErrorState: tentando, o botão não perde o foco e o clique não chama a nova tentativa de novo", async () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(<ErrorState message="Falhou." onRetry={onRetry} />);
+    const button = screen.getByRole("button", { name: "Tentar novamente" });
+    button.focus();
+
+    rerender(<ErrorState message="Falhou." onRetry={onRetry} isRetrying />);
+    await userEvent.click(button);
+
+    expect(document.activeElement).toBe(button);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("ErrorState: sem onRetry, não há botão", () => {
+    render(<ErrorState message="Falhou." />);
+
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("LoadingState: a região nasce vazia e o rótulo entra depois, sem aria-busy, para o leitor de tela anunciar", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <LoadingState label="Carregando conversas">
+          <div data-testid="bloco" />
+        </LoadingState>,
+      );
+
+      const region = screen.getByRole("status");
+      expect(region.textContent).toBe("");
+      expect(document.querySelector("[aria-busy]")).toBeNull();
+
+      await act(() => vi.advanceTimersByTimeAsync(ANNOUNCE_AFTER_MOUNT_MS + 10));
+      expect(screen.getByRole("status")).toBe(region);
+      expect(region.textContent).toBe("Carregando conversas");
+      expect(screen.getByTestId("bloco").closest("[aria-hidden]")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("SyncNotice: a região já existe vazia, e só o texto muda", () => {
+    const { rerender } = render(<SyncNotice message={null} />);
+    const region = screen.getByRole("status");
+    expect(region.textContent).toBe("");
+
+    rerender(<SyncNotice message="Não consegui atualizar agora; tentando de novo." />);
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region.textContent).toBe("Não consegui atualizar agora; tentando de novo.");
+
+    rerender(<SyncNotice message={null} />);
+    expect(region.textContent).toBe("");
+  });
+
+  it("EmptyState: título, descrição e uma ação opcional", async () => {
+    const onAction = vi.fn();
+    render(
+      <EmptyState
+        title="Nenhuma conversa neste filtro."
+        description="Troque o filtro."
+        action={<button onClick={onAction}>Limpar busca</button>}
+      />,
+    );
+
+    expect(screen.getByText("Nenhuma conversa neste filtro.")).toBeDefined();
+    expect(screen.getByText("Troque o filtro.")).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+    expect(onAction).toHaveBeenCalledOnce();
   });
 });
 

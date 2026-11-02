@@ -1,6 +1,8 @@
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "../../ui/Button.tsx";
+import { useAnnounceAfterMount } from "../../lib/use-announce-after-mount.ts";
+import { Toast } from "../../ui/Feedback.tsx";
 import { Checkbox } from "../../ui/Checkbox.tsx";
 import { IconButton } from "../../ui/IconButton.tsx";
 import { SidePanel } from "../../ui/SidePanel.tsx";
@@ -18,7 +20,9 @@ const FORGOT_HINT_ID = "forgot-password-hint";
  * aceita qualquer senha, por requisito do desafio; a tela diz isso nas contas de demonstração.
  */
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, sessionNotice } = useAuth();
+  // A tela já abre com o aviso: a região monta vazia e o texto entra depois, para ser anunciado.
+  const announcedNotice = useAnnounceAfterMount(sessionNotice);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -71,6 +75,9 @@ export function LoginPage() {
                 Use seu e-mail corporativo e a senha da rede Nexo.
               </p>
             </div>
+
+            {/* Por que a pessoa voltou ao login (ex.: sessão expirada). */}
+            <Toast message={announcedNotice} tone="warning" />
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-7">
               <div className="flex flex-col gap-[18px]">

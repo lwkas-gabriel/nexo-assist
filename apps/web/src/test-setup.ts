@@ -46,6 +46,9 @@ window.matchMedia = (query: string) =>
     dispatchEvent: () => false,
   }) as unknown as MediaQueryList;
 
+// O jsdom não rola a página; a conversa chama scrollIntoView a cada mensagem nova.
+Element.prototype.scrollIntoView = () => undefined;
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

@@ -9,6 +9,10 @@ import { createClassifier } from "./agent/classifier.ts";
 import { createModel, createNexoMastra } from "./agent/nexo-agent.ts";
 import { createAuthService, type AuthService } from "./app/auth-service.ts";
 import { createChatService, type ChatService } from "./app/chat-service.ts";
+import { createConsoleActions, type ConsoleActions } from "./app/console-actions.ts";
+import { createConsoleService, type ConsoleService } from "./app/console-service.ts";
+import { createConversationLocks } from "./app/conversation-locks.ts";
+import { createConversationReader } from "./app/conversation-reader.ts";
 import { createChatSessionService } from "./app/chat-session-service.ts";
 import { createDecisionService } from "./app/decision-service.ts";
 import { createDraftActions, type DraftActions } from "./app/draft-actions.ts";
@@ -41,15 +45,15 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
 /** Um pouco mais que um funcionário: cabe uma sala com IP compartilhado, não todas as contas de uma vez. */
-const CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
+const DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
 /**
  * Bem abaixo do teto global do dia (120): uma pessoa num IP não esgota o dia de todos sozinha.
  * Cabem uns 2 funcionários por IP, o bastante para quem divide a rede do escritório.
  */
-const CHAT_MESSAGES_PER_IP_PER_DAY = 40;
+const DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY = 40;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
 const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
-const LOGINS_PER_IP_PER_MINUTE = 20;
+const DEFAULT_LOGINS_PER_IP_PER_MINUTE = 20;
 
 /** O que o container precisa da config: banco, modelo e acesso ao serviço de chamados. */
 export type ContainerConfig = LlmConfig & {
@@ -58,11 +62,18 @@ export type ContainerConfig = LlmConfig & {
   TICKETS_SERVICE_TOKEN: string;
   CHAT_MESSAGES_PER_MINUTE: number;
   CHAT_MESSAGES_PER_DAY: number;
+  /** Sem ela, vale `DEFAULT_LOGINS_PER_IP_PER_MINUTE`. */
+  LOGINS_PER_IP_PER_MINUTE?: number | undefined;
+  /** Sem elas, valem `DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR` e `DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY`. */
+  CHAT_MESSAGES_PER_IP_PER_HOUR?: number | undefined;
+  CHAT_MESSAGES_PER_IP_PER_DAY?: number | undefined;
 };
 
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
 export type Container = {
   db: Database;
+  consoleService: ConsoleService;
+  consoleActions: ConsoleActions;
   mastra: Mastra;
   ticketGateway: TicketGateway;
   authService: AuthService;
@@ -103,18 +114,28 @@ export async function createContainer(
       serviceToken: config.TICKETS_SERVICE_TOKEN,
     });
   const model = overrides.model ?? createModel(config);
+  const draftStore = createDraftStore(db);
+  const handoffStore = createHandoffStore(db);
   const draftService = createDraftService({
-    draftStore: createDraftStore(db),
+    draftStore,
     ticketGateway,
     clock,
   });
   const handoffService = createHandoffService({
     conversationStore,
-    handoffStore: createHandoffStore(db),
+    handoffStore,
     ticketGateway,
     clock,
   });
   const decisionStore = createDecisionStore(db);
+  // Uma ação por vez em cada conversa, entre o chat e o console (R06).
+  const locks = createConversationLocks();
+  const chatSessionService = createChatSessionService({
+    chatSessionStore: createChatSessionStore(db),
+    conversationStore,
+    decisionStore,
+    clock,
+  });
   const decisionService = createDecisionService({ decisionStore, handoffService, clock });
   // Limites em memória por janela curta; os tetos diários ficam no banco (agent-quota.ts).
   const chatLimits: ChatLimits = {
@@ -123,7 +144,11 @@ export async function createContainer(
       windowMs: HOUR_MS,
       clock,
     }),
-    perIp: createRateLimiter({ limit: CHAT_MESSAGES_PER_IP_PER_HOUR, windowMs: HOUR_MS, clock }),
+    perIp: createRateLimiter({
+      limit: config.CHAT_MESSAGES_PER_IP_PER_HOUR ?? DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR,
+      windowMs: HOUR_MS,
+      clock,
+    }),
     globalPerMinute: createRateLimiter({
       limit: config.CHAT_MESSAGES_PER_MINUTE,
       windowMs: MINUTE_MS,
@@ -142,7 +167,10 @@ export async function createContainer(
   };
   const quota = createAgentQuota({
     limits: chatLimits,
-    dailyCaps: { global: config.CHAT_MESSAGES_PER_DAY, perIp: CHAT_MESSAGES_PER_IP_PER_DAY },
+    dailyCaps: {
+      global: config.CHAT_MESSAGES_PER_DAY,
+      perIp: config.CHAT_MESSAGES_PER_IP_PER_DAY ?? DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY,
+    },
     usageCounterStore: createUsageCounterStore(db),
     clock,
   });
@@ -158,6 +186,30 @@ export async function createContainer(
 
   return {
     db,
+    // Tela 5: assumir, responder, devolver e encerrar (RF20).
+    consoleActions: createConsoleActions({
+      conversationStore,
+      handoffStore,
+      ticketGateway,
+      chatSessionService,
+      locks,
+      clock,
+    }),
+    // Console do analista (tela 4): leitura das conversas e dos chamados de quem está nelas.
+    consoleService: createConsoleService({
+      conversationStore,
+      handoffStore,
+      decisionStore,
+      draftStore,
+      draftService,
+      ticketGateway,
+      conversationReader: createConversationReader({
+        conversationStore,
+        decisionService,
+        userStore,
+      }),
+      clock,
+    }),
     mastra,
     ticketGateway,
     authService: createAuthService({ userStore, sessionStore: createSessionStore(db), clock }),
@@ -170,15 +222,14 @@ export async function createContainer(
       classifier: createClassifier(model),
       decisionService,
       quota,
-      chatSessionService: createChatSessionService({
-        chatSessionStore: createChatSessionStore(db),
-        conversationStore,
-        decisionStore,
-        clock,
-      }),
+      ticketGateway,
+      userStore,
+      locks,
+      chatSessionService,
       clock,
     }),
     draftActions: createDraftActions({
+      locks,
       draftService,
       handoffService,
       decisionService,
@@ -189,7 +240,7 @@ export async function createContainer(
     chatLimits,
     statsService: createStatsService({ statsStore: createStatsStore(db), clock }),
     loginLimiter: createRateLimiter({
-      limit: LOGINS_PER_IP_PER_MINUTE,
+      limit: config.LOGINS_PER_IP_PER_MINUTE ?? DEFAULT_LOGINS_PER_IP_PER_MINUTE,
       windowMs: MINUTE_MS,
       clock,
     }),

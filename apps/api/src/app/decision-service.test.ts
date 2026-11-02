@@ -28,6 +28,7 @@ describe("limiar de confiança (R39)", () => {
       // A mensagem anterior também foi vaga.
       previousClassifierConfidence: () => Promise.resolve(0.3),
       listSince: () => Promise.resolve([]),
+      latestForConversation: () => Promise.resolve(undefined),
       byMessage: () => Promise.resolve(new Map()),
     };
     const decisions = createDecisionService({ decisionStore: brokenStore, handoffService, clock });
@@ -55,6 +56,7 @@ describe("limiar de confiança (R39)", () => {
       create: () => Promise.resolve(),
       previousClassifierConfidence: () => Promise.resolve(0.3),
       listSince: () => Promise.resolve([]),
+      latestForConversation: () => Promise.resolve(undefined),
       byMessage: () => Promise.resolve(new Map()),
     };
     const decisions = createDecisionService({ decisionStore: store, handoffService, clock });

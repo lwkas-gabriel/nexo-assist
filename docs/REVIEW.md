@@ -59,13 +59,13 @@ Objetivo: achar o que quebraria, causaria retrabalho ou contradiz o próprio pla
 | R27 | O mock não mostra o lado do funcionário durante a transferência e o atendimento humano | **[corrigir]** Estados desenhados em 10.5 |
 | R28 | No console, as mensagens do agent não têm chips, mas o analista precisa entender por que recebeu a conversa (história 2 do analista) | **[corrigir]** ActionChips + DecisionPanel reutilizados no console |
 | R29 | "Ver todos os chamados da Ana" aponta para uma tela inexistente | **[corrigir]** Expande no próprio painel |
-| R30 | O mock mostra confirmação de leitura (✓✓), "digitando…" e "online" | **[corrigir]** Suposição **A20**: "online" = funcionário fez polling nos últimos 60 s (barato); ✓ entregue / ✓✓ lida quando o analista abre a conversa; "digitando…" fora do escopo (documentado) |
+| R30 | O mock mostra confirmação de leitura (✓✓), "digitando…" e "online" | **[corrigir]** Suposição **A20**: "online" = funcionário fez polling nos últimos 60 s (barato); ✓ entregue / ✓✓ lida quando o analista abre a conversa; "digitando…" fora do escopo (documentado) **Ajustado na T23:** ✓✓ = o funcionário viu o que o agent ou o analista mandou; a leitura do analista conta as não lidas. |
 | R31 | Ao assumir, o chamado muda para "Em atendimento" (tela 5): status de chamado e conversa estão acoplados | **[corrigir]** Máquinas de estado explícitas (11.3); "assumir" atualiza o chamado vinculado. A12 inclui "Em atendimento" |
 | R32 | O console mostra o setor ("Financeiro") e o nível ("Suporte N2") | **[corrigir]** Campos `setor` e `nível` no seed de usuários |
 | R33 | Atalho ⌘↵ não existe no Windows | **[corrigir]** Ctrl+Enter no Windows/Linux, ⌘+Enter no Mac; o Kbd mostra conforme o SO |
 | R34 | Opções numeradas sugerem atalho de teclado | **[corrigir]** Teclas 1–4 quando o campo de texto está vazio |
 | R35 | "resposta até 13:43" é calculado no rascunho; se a confirmação vier 20 min depois, o prazo muda | **[corrigir]** Prazo recalculado ao confirmar; se mudar, o card criado mostra o valor novo |
-| R36 | "Disponível" do analista e "contato em 25 min" | **[corrigir]** Disponível é só visual, salvo no perfil (A21); a contagem regressiva é recalculada no cliente a cada minuto |
+| R36 | "Disponível" do analista e "contato em 25 min" | **[corrigir]** Disponível é só visual, salvo no navegador (A21; a T25 manteve assim, o perfil é do funcionário, AI_LOG 71); a contagem regressiva é recalculada no cliente a cada minuto |
 | R37 | O mock não mostra contas de demonstração; o avaliador não sabe com que e-mail entrar | **[corrigir]** Bloco discreto "Contas de demonstração" abaixo do formulário (A22), também listadas no README |
 
 ### Rodada 3: backend × requisitos não funcionais

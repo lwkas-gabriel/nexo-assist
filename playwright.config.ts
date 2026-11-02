@@ -24,11 +24,19 @@ export default defineConfig({
   },
   // Fluxos validados no desktop do protótipo e num celular (ver docs/FRONTEND.md 10.6).
   projects: [
+    // Entra uma vez com as contas dos testes de estados (e2e/support/shared-sessions.ts).
+    { name: "setup", testMatch: /shared-sessions.setup.ts/ },
     {
       name: "desktop",
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    {
+      name: "mobile",
+      dependencies: ["setup"],
+      // O Pixel 7 tem 412 px de largura; o 10.6 pede 390 × 844 (o celular mais estreito do dia a dia).
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+    },
   ],
   webServer: [
     {
@@ -55,9 +63,17 @@ export default defineConfig({
         SEED_ON_START: "false",
         TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
         TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
-        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo.
+        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo, inclusive
+        // os por IP (padrão de 60 por hora e 40 por dia): todo o E2E sai do mesmo IP, nos dois
+        // projetos, e a suíte já gastava 36 das 40 mensagens por dia. Cada texto enviado ao agent
+        // e cada resposta rápida clicada gastam uma; clique em Confirmar ou Cancelar, não.
         CHAT_MESSAGES_PER_MINUTE: "1000",
         CHAT_MESSAGES_PER_DAY: "1000",
+        CHAT_MESSAGES_PER_IP_PER_HOUR: "1000",
+        CHAT_MESSAGES_PER_IP_PER_DAY: "1000",
+        // Todos os testes entram do mesmo IP, nos dois projetos (desktop e celular), e o E2E já
+        // usa os 20 logins por minuto do padrão; a folga evita falha por "muitas tentativas".
+        LOGINS_PER_IP_PER_MINUTE: "1000",
       },
       url: `http://localhost:${E2E_API_PORT}/api/health`,
       reuseExistingServer: false,

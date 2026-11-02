@@ -19,4 +19,5 @@ O agent precisa seguir as regras do service desk (Anexo A): confirmar antes de c
 ## Consequências
 - As regras críticas têm testes unitários determinísticos.
 - Prompt injection não consegue criar chamado nem ler dados de outro funcionário.
+- **Nota (revisão final, 02/11/2026):** a decisão acima é a mesma; só o texto foi corrigido. A garantia de confirmação vale para criar e atualizar chamados. A transferência para um analista (`handoff_to_analyst`, RN07) também grava sem confirmação: muda o chamado ligado para "aguardando analista" e registra o resumo escrito pelo modelo, mas só no chamado do próprio funcionário (RN09) e com nível e prazo calculados pelo código.
 - Mais código de servidor em volta das tools.

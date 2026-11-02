@@ -37,11 +37,30 @@ const envSchema = z
      */
     CHAT_MESSAGES_PER_MINUTE: z.coerce.number().int().positive(),
     CHAT_MESSAGES_PER_DAY: z.coerce.number().int().positive(),
+    /**
+     * Logins por minuto por IP (RT10). Opcional: sem ela vale o padrão do container. Só o E2E a
+     * sobe, porque seus testes entram todos do mesmo IP.
+     */
+    LOGINS_PER_IP_PER_MINUTE: z.coerce.number().int().positive().optional(),
+    /**
+     * Tetos de mensagens ao agent por IP, por hora e por dia. Opcionais: sem elas valem os padrões
+     * do container (60 e 40). Só o E2E as sobe, porque todos os seus testes saem do mesmo IP.
+     */
+    CHAT_MESSAGES_PER_IP_PER_HOUR: z.coerce.number().int().positive().optional(),
+    CHAT_MESSAGES_PER_IP_PER_DAY: z.coerce.number().int().positive().optional(),
   })
   .and(llmSchema);
 
 export type Config = z.infer<typeof envSchema>;
 export type LlmConfig = z.infer<typeof llmSchema>;
+
+/**
+ * Só a parte do modelo, para quem não precisa do resto (a avaliação do agent, T27): sem banco,
+ * porta HTTP nem serviço de chamados (menor privilégio).
+ */
+export function loadLlmConfig(source: Record<string, string | undefined> = process.env): LlmConfig {
+  return parseEnv(llmSchema, source);
+}
 
 export function loadConfig(source: Record<string, string | undefined> = process.env): Config {
   return parseEnv(envSchema, source);

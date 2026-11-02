@@ -1,12 +1,8 @@
-import type { Clock } from "@nexo/shared/domain";
+import { LOW_CONFIDENCE_THRESHOLD, type Clock } from "@nexo/shared/domain";
 import { AppError } from "@nexo/shared/errors";
 import type { UIMessage } from "ai";
-import type { ClassificationResult } from "../agent/classifier.ts";
-import {
-  LOW_CONFIDENCE_THRESHOLD,
-  buildDecisionTrace,
-  type DecisionTrace,
-} from "../agent/decision-trace.ts";
+import type { ClassificationResult, Intent } from "../agent/classifier.ts";
+import { buildDecisionTrace, type DecisionTrace } from "../agent/decision-trace.ts";
 import type { DecisionStore } from "../db/decision-store.ts";
 import type { HandoffService } from "./handoff-service.ts";
 
@@ -78,8 +74,9 @@ export function createDecisionService({
     },
 
     /**
-     * Botão da tela (confirmar, cancelar, editar): ação determinística, sem LLM, com confiança 100%
-     * (11.5, ADR-0006). Conta como turno para o limiar: um clique no meio zera a sequência.
+     * Botão da tela (card do rascunho, analista, seleção de chamado): ação determinística, sem LLM,
+     * com confiança 100% (11.5, ADR-0006). Conta como turno para o limiar: um clique no meio zera
+     * a sequência.
      */
     async recordButtonAction(action: {
       conversationId: string;
@@ -87,16 +84,21 @@ export function createDecisionService({
       messageId: string;
       description: string;
       at: Date;
+      /** O que o clique quer dizer (confirmar, falar com um analista, consultar um chamado...). */
+      intent: Intent;
+      /** Nome do passo no registro (o "tool" do detalhe da decisão). */
+      step: string;
     }) {
       const classification: ClassificationResult = {
         ok: true,
         tokens: undefined,
+        decidedBy: "button",
         classification: {
-          intent: "confirm_draft",
+          intent: action.intent,
           understood: action.description,
           extracted: {},
           confidence: 1,
-          reason: "Ação pelo botão do card: determinística, sem passar pelo LLM.",
+          reason: "Ação por um botão da tela: determinística, sem passar pelo LLM.",
         },
       };
       const response: UIMessage = {
@@ -105,8 +107,8 @@ export function createDecisionService({
         parts: [{ type: "text", text: action.description }],
       };
       const trace = buildDecisionTrace(classification, response, {
-        steps: [{ tool: "draft_button", ok: true, outcome: action.description }],
-        rules: ["11.5: ação do card tratada pelo código, sem o LLM"],
+        steps: [{ tool: action.step, ok: true, outcome: action.description }],
+        rules: ["11.5: ação da tela tratada pelo código, sem o LLM"],
       });
       await saveSafely(
         {

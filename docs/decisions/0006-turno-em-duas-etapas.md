@@ -12,6 +12,7 @@ A transparência é a parte mais importante do desafio: cada resposta precisa mo
 
   O registro de decisão junta as duas etapas. A confiança final é ajustada por sinais determinísticos (campo faltando, mais de um candidato a duplicidade, central de ajuda sem resultado).
 - **Cliques** (selecionar chamado, Confirmar, Cancelar, "Falar com um analista") enviam uma ação estruturada e são tratados por código, **sem chamar o LLM**. O registro marca "ação determinística".
+- **Resposta rápida** (atualizado na T19b, 31/10/2026): a opção responde a uma pergunta do agent, que precisa dela para seguir. O clique dispensa só o classificador; a classificação é feita pelo código quando o texto é uma das opções da pergunta mais recente, e o agent continua respondendo. Se o turno que perguntou não tinha entendido, o clique passa pelo classificador (R39).
 - Confiança baixa leva primeiro a uma pergunta de esclarecimento; a conversa só é transferida para um analista se a confiança continuar baixa.
 
 ## Alternativas descartadas
@@ -19,5 +20,5 @@ A transparência é a parte mais importante do desafio: cada resposta precisa mo
 - **Tudo pelo LLM, inclusive cliques:** mais caro, mais lento e sujeito a interpretar errado algo que já está determinado.
 
 ## Consequências
-- Até duas chamadas ao LLM por mensagem de texto, mitigadas com modelo pequeno e prompt caching. Tokens e latência são gravados por turno e reportados no README.
+- Até duas chamadas ao LLM por mensagem de texto, e uma por resposta rápida clicada, mitigadas com modelo pequeno e prompt caching. Tokens e latência são gravados por turno e reportados no README.
 - Dois caminhos de tratamento, separados de forma explícita no código.

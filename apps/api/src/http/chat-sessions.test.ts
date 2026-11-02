@@ -21,6 +21,12 @@ type ConversationResponse = {
 };
 
 const HOUR_MS = 60 * 60 * 1000;
+/**
+ * O teste do limite faz 30 turnos do agent (com banco e streaming) antes da 31ª mensagem. Com a
+ * suíte inteira em paralelo ele passa do limite global de 15 s da api (vitest.config.ts), então
+ * tem o seu, 5 s acima.
+ */
+const THIRTY_TURNS_TIMEOUT_MS = 20_000;
 
 /** App com relógio controlado, modelo que grava os prompts e sem o limite por hora (tem teste próprio). */
 async function setup() {
@@ -78,31 +84,35 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     });
   });
 
-  it("RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota", async () => {
-    const { container, recording, send, say, conversation } = await setup();
-    for (let index = 0; index < SESSION_MESSAGE_LIMIT; index += 1) {
-      await say(`Qual o horário do service desk? (${index})`);
-    }
-    const callsAtLimit = recording.counter.calls;
-    const messagesAtLimit = (await conversation()).messages.length;
-    // Teto de 1 por minuto: se a recusa gastasse cota, a segunda já viria como 429.
-    container.chatLimits.globalPerMinute = createRateLimiter({
-      limit: 1,
-      windowMs: HOUR_MS,
-      clock: { now: () => new Date() },
-    });
+  it(
+    "RN14: a 31ª mensagem é recusada sem chamar o modelo nem gastar a cota",
+    { timeout: THIRTY_TURNS_TIMEOUT_MS },
+    async () => {
+      const { container, recording, send, say, conversation } = await setup();
+      for (let index = 0; index < SESSION_MESSAGE_LIMIT; index += 1) {
+        await say(`Qual o horário do service desk? (${index})`);
+      }
+      const callsAtLimit = recording.counter.calls;
+      const messagesAtLimit = (await conversation()).messages.length;
+      // Teto de 1 por minuto: se a recusa gastasse cota, a segunda já viria como 429.
+      container.chatLimits.globalPerMinute = createRateLimiter({
+        limit: 1,
+        windowMs: HOUR_MS,
+        clock: { now: () => new Date() },
+      });
 
-    const blocked = await send("Mais uma pergunta");
-    const blockedAgain = await send("E mais uma");
+      const blocked = await send("Mais uma pergunta");
+      const blockedAgain = await send("E mais uma");
 
-    expect(await blocked.json()).toMatchObject({ error: { code: "SESSION_LIMIT" } });
-    // A recusa vem do limite da sessão, não do teto de uso: ele continua livre.
-    expect(blockedAgain.status).toBe(409);
-    expect(recording.counter.calls).toBe(callsAtLimit);
-    const saved = await conversation();
-    expect(saved.session).toMatchObject({ agentMessages: 30, isAtLimit: true });
-    expect(saved.messages).toHaveLength(messagesAtLimit);
-  });
+      expect(await blocked.json()).toMatchObject({ error: { code: "SESSION_LIMIT" } });
+      // A recusa vem do limite da sessão, não do teto de uso: ele continua livre.
+      expect(blockedAgain.status).toBe(409);
+      expect(recording.counter.calls).toBe(callsAtLimit);
+      const saved = await conversation();
+      expect(saved.session).toMatchObject({ agentMessages: 30, isAtLimit: true });
+      expect(saved.messages).toHaveLength(messagesAtLimit);
+    },
+  );
 
   it("R03: nova sessão zera o contador e abre com o resumo da anterior", async () => {
     const { post, say, conversation } = await setup();
@@ -147,6 +157,18 @@ describe("sessões de atendimento (RF10, RN14)", () => {
     await say("Qual o horário do service desk?");
 
     expect(recording.lastAgentPrompt().system).not.toContain("IGNORE AS REGRAS");
+  });
+
+  it("R03: o botão Falar com um analista não vira assunto no resumo da sessão", async () => {
+    const { post, say, conversation } = await setup();
+    await say("Qual o horário do service desk?");
+    await post("/handoff");
+
+    await post("/sessions");
+
+    const summary = (await conversation()).session?.previousSummary ?? "";
+    expect(summary).toMatch(/Assuntos: dúvida de TI\.$/);
+    expect(summary).not.toContain("falar com um analista");
   });
 
   it("R03: clicar duas vezes em nova sessão não troca o resumo verdadeiro por um vazio", async () => {

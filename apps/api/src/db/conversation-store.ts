@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, ne } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, ne } from "drizzle-orm";
 import type { Database } from "./database.ts";
 import {
   conversations,
@@ -15,11 +15,16 @@ import {
 export type ConsoleConversationSummary = {
   id: string;
   mode: ConversationMode;
+  version: number;
+  assignedAnalystId: string | null;
+  analystReadAt: Date | null;
   updatedAt: Date;
-  employee: { id: string; name: string; department: string };
+  employee: { id: string; name: string; department: string; lastSeenAt: Date | null };
 };
 
 export type NewMessage = {
+  /** Id já usado na tela (bolha otimista ou stream); sem ele, o servidor gera um. */
+  id?: string;
   conversationId: string;
   author: MessageAuthor;
   authorId: string | null;
@@ -77,12 +82,33 @@ export function createConversationStore(db: Database) {
       return row;
     },
 
-    /** Grava uma mensagem com id gerado pelo servidor e atualiza a data da conversa. */
-    async appendMessage(message: NewMessage): Promise<MessageRow> {
+    /** Uma mensagem desta conversa pelo id (para reconhecer um reenvio depois de uma falha). */
+    async findMessage(conversationId: string, id: string): Promise<MessageRow | undefined> {
       const [row] = await db
-        .insert(messages)
-        .values({ ...message, id: randomUUID(), parts: JSON.stringify(message.parts) })
-        .returning();
+        .select()
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversationId), eq(messages.id, id)))
+        .limit(1);
+      return row;
+    },
+
+    /** Grava uma mensagem (com o id sugerido, se livre) e atualiza a data da conversa. */
+    async appendMessage(message: NewMessage): Promise<MessageRow> {
+      const values = { ...message, parts: JSON.stringify(message.parts) };
+      // O id sugerido só vale se estiver livre; repetido (retry, colisão), o servidor gera outro.
+      const [suggested] = message.id
+        ? await db
+            .insert(messages)
+            .values({ ...values, id: message.id })
+            .onConflictDoNothing()
+            .returning()
+        : [];
+      const [row] = suggested
+        ? [suggested]
+        : await db
+            .insert(messages)
+            .values({ ...values, id: randomUUID() })
+            .returning();
       if (!row) throw new Error("Falha ao gravar a mensagem");
       await db
         .update(conversations)
@@ -90,14 +116,68 @@ export function createConversationStore(db: Database) {
         .where(eq(conversations.id, message.conversationId));
       return row;
     },
+    /** Um analista abriu a conversa no console: as mensagens até aqui deixam de ser não lidas. */
+    async markReadByAnalyst(conversationId: string, at: Date): Promise<void> {
+      await db
+        .update(conversations)
+        .set({ analystReadAt: at })
+        .where(eq(conversations.id, conversationId));
+    },
+
+    /** Mensagens do funcionário depois de `since` (todas, sem `since`): as não lidas do console. */
+    async countEmployeeMessagesSince(conversationId: string, since: Date): Promise<number> {
+      const [row] = await db
+        .select({ total: count() })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.author, "employee"),
+            gt(messages.createdAt, since),
+          ),
+        );
+      return row?.total ?? 0;
+    },
+
+    /** Uma conversa em andamento como o console a lista, pelo id (sem refazer a lista toda). */
+    async findForConsole(conversationId: string): Promise<ConsoleConversationSummary | undefined> {
+      const [row] = await db
+        .select({
+          id: conversations.id,
+          mode: conversations.mode,
+          version: conversations.version,
+          assignedAnalystId: conversations.assignedAnalystId,
+          analystReadAt: conversations.analystReadAt,
+          updatedAt: conversations.updatedAt,
+          employee: {
+            id: users.id,
+            name: users.name,
+            department: users.department,
+            lastSeenAt: users.lastSeenAt,
+          },
+        })
+        .from(conversations)
+        .innerJoin(users, eq(users.id, conversations.employeeId))
+        .where(and(eq(conversations.id, conversationId), ne(conversations.mode, "closed")));
+      return row;
+    },
+
     /** Conversas em andamento, das mais recentes às mais antigas, com quem está conversando. */
     async listOpenForConsole(): Promise<ConsoleConversationSummary[]> {
       const rows = await db
         .select({
           id: conversations.id,
           mode: conversations.mode,
+          version: conversations.version,
+          assignedAnalystId: conversations.assignedAnalystId,
+          analystReadAt: conversations.analystReadAt,
           updatedAt: conversations.updatedAt,
-          employee: { id: users.id, name: users.name, department: users.department },
+          employee: {
+            id: users.id,
+            name: users.name,
+            department: users.department,
+            lastSeenAt: users.lastSeenAt,
+          },
         })
         .from(conversations)
         .innerJoin(users, eq(users.id, conversations.employeeId))

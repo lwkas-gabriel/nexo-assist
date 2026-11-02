@@ -15,3 +15,4 @@ Para mudar uma decisão, escreva um ADR novo que substitui o anterior e marque o
 | [0008](0008-modelo-claude-haiku.md) | Claude Haiku como modelo do agent | Substituída pelo ADR-0010 |
 | [0009](0009-migracoes-em-sql-puro.md) | Migrações em SQL puro, Drizzle só para consultas | Aceita |
 | [0010](0010-gemini-plano-gratuito.md) | Gemini no plano gratuito como modelo do agent | Aceita |
+| [0011](0011-navegacao-por-hash.md) | Navegação por hash no lugar das rotas do 10.3 | Aceita |

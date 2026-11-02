@@ -1,5 +1,10 @@
+import {
+  requestAnalystSchema,
+  sendMessageRequestSchema,
+  ticketActionRequestSchema,
+} from "@nexo/shared/contracts";
 import { AppError } from "@nexo/shared/errors";
-import { parseInput, readJson } from "@nexo/shared/http";
+import { parseInput, readJson, readOptionalJson } from "@nexo/shared/http";
 import { createUIMessageStreamResponse } from "ai";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -14,12 +19,6 @@ import { currentUser, requireRole } from "./session.ts";
 
 /** Limites de entrada: protegem custo e memória contra abuso (RT10, RT13). */
 const MAX_BODY_BYTES = 16 * 1024;
-const MAX_MESSAGE_CHARS = 2000;
-
-/** O navegador manda só o texto novo; o histórico vem do banco. */
-const sendMessageSchema = z.object({
-  text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
-});
 
 type ChatRoutesDependencies = {
   chatService: ChatService;
@@ -69,8 +68,12 @@ export function createChatRoutes({
   // travada, se a mensagem vai para o modelo ou para o analista.
   routes.post("/messages", smallBody, async (c) => {
     const employee = currentUser(c, "employee");
-    const { text } = parseInput(sendMessageSchema, await readJson(c.req));
-    const stream = await chatService.sendMessage(employee, text, { ip: clientIp(c) });
+    const { text, id, quickOption } = parseInput(sendMessageRequestSchema, await readJson(c.req));
+    const stream = await chatService.sendMessage(employee, text, {
+      ip: clientIp(c),
+      ...(id ? { messageId: id } : {}),
+      ...(quickOption ? { quickOption } : {}),
+    });
     return createUIMessageStreamResponse({ stream });
   });
 
@@ -87,10 +90,30 @@ export function createChatRoutes({
   routes.use("/drafts/*", limitButtonActions);
   routes.use("/sessions", limitButtonActions);
   routes.use("/handoff", limitButtonActions);
+  routes.use("/actions/*", limitButtonActions);
+
+  // Clique num chamado da lista (tela 3): resposta montada pelo código, sem o modelo (11.5).
+  routes.post("/actions/select-ticket", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(ticketActionRequestSchema, await readJson(c.req));
+    await chatService.selectTicket(currentUser(c, "employee"), ticketNumber);
+    return c.json({ ok: true });
+  });
+
+  // "Não, obrigado" à oferta de analista (tela 3): resposta pelo código, sem o modelo.
+  routes.post("/actions/decline-offer", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(ticketActionRequestSchema, await readJson(c.req));
+    await chatService.declineOffer(currentUser(c, "employee"), ticketNumber);
+    return c.json({ ok: true });
+  });
 
   // "Falar com um analista" pelo botão: transfere sem o agent (11.5), inclusive no limite da sessão.
-  routes.post("/handoff", async (c) => {
-    return c.json({ handoff: await chatService.requestAnalyst(currentUser(c, "employee")) });
+  // Com o número do chamado, é a oferta de um chamado vencido (tela 3).
+  routes.post("/handoff", smallBody, async (c) => {
+    const { ticketNumber } = parseInput(requestAnalystSchema, await readOptionalJson(c.req));
+    const handoff = await chatService.requestAnalyst(currentUser(c, "employee"), {
+      ...(ticketNumber ? { ticketNumber } : {}),
+    });
+    return c.json({ handoff });
   });
 
   // RN14: "Nova sessão", quando a atual chega ao limite ou o funcionário quer recomeçar.

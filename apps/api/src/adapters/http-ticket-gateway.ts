@@ -1,4 +1,8 @@
-import { listTicketsResponseSchema, ticketSchema } from "@nexo/shared/contracts";
+import {
+  listTicketsResponseSchema,
+  TICKET_SERVICE_MAX_ATTEMPTS,
+  ticketSchema,
+} from "@nexo/shared/contracts";
 import { AppError } from "@nexo/shared/errors";
 import { z } from "zod";
 import type { TicketGateway } from "../ports/ticket-gateway.ts";
@@ -18,7 +22,6 @@ type HttpTicketGatewayOptions = {
 
 /** Política de resiliência com o legado instável (RT05). */
 const DEFAULT_TIMEOUT_MS = 2000;
-const DEFAULT_MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 200;
 const BACKOFF_JITTER_MS = 100;
 
@@ -40,7 +43,7 @@ export function createHttpTicketGateway({
   sleep = defaultSleep,
   random = Math.random,
   timeoutMs = DEFAULT_TIMEOUT_MS,
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  maxAttempts = TICKET_SERVICE_MAX_ATTEMPTS,
 }: HttpTicketGatewayOptions): TicketGateway {
   async function request<Schema extends z.ZodType>(
     schema: Schema,
@@ -105,6 +108,16 @@ export function createHttpTicketGateway({
     transferTicket: (ownerId, number, summary, idempotencyKey) =>
       request(ticketSchema, "POST", `${ticketPath(number)}/transfer`, {
         body: { ownerId, summary },
+        idempotencyKey,
+      }),
+    releaseTicket: (ownerId, number, analystName, idempotencyKey) =>
+      request(ticketSchema, "POST", `${ticketPath(number)}/release`, {
+        body: { ownerId, analystName },
+        idempotencyKey,
+      }),
+    assumeTicket: (ownerId, number, analystName, idempotencyKey) =>
+      request(ticketSchema, "POST", `${ticketPath(number)}/assume`, {
+        body: { ownerId, analystName },
         idempotencyKey,
       }),
   };

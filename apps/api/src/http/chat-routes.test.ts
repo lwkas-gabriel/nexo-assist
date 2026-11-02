@@ -66,6 +66,7 @@ describe("chat do funcionário", () => {
       session: null,
       messages: [],
       drafts: [],
+      isBusy: false,
     });
   });
 
@@ -83,6 +84,22 @@ describe("chat do funcionário", () => {
     expect(saved.messages[1]?.parts.map((part) => part.type)).toContain(
       "tool-search_knowledge_base",
     );
+  });
+
+  it("RN14: o mesmo id e texto enviados de novo, depois do turno completo, não duplicam a resposta", async () => {
+    const { send, conversation } = await loggedInAsAna();
+    const body = { id: "msg-da-tela", text: "Como configuro a VPN?" };
+    await (await send(body)).text();
+
+    const again = await send(body);
+    await again.text();
+
+    const saved = (await conversation()) as ConversationResponse & {
+      session: { agentMessages: number };
+    };
+    expect(again.status).toBe(200);
+    expect(saved.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(saved.session.agentMessages).toBe(1);
   });
 
   it("RT06: a conversa sobrevive a um reinício da api (mesmo banco, novo processo)", async () => {

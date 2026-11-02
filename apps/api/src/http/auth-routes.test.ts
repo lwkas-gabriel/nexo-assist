@@ -15,6 +15,29 @@ function postJson(path: string, body: unknown, headers: Record<string, string> =
   };
 }
 
+describe("limite de logins por IP (RT10)", () => {
+  async function loginAttempts(config: Parameters<typeof testConfig>[0], attempts: number) {
+    const { app } = await createTestApp(await createContainer(testConfig(config)));
+    const { path, init } = postJson("/api/auth/login", { email: ANA_EMAIL, password: "x" });
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      statuses.push((await app.request(path, init)).status);
+    }
+    return statuses;
+  }
+
+  it("o padrão é 20 por minuto", async () => {
+    const statuses = await loginAttempts({}, 21);
+
+    expect(statuses.slice(0, 20).every((status) => status === 200)).toBe(true);
+    expect(statuses[20]).toBe(429);
+  });
+
+  it("a config troca o limite", async () => {
+    expect(await loginAttempts({ LOGINS_PER_IP_PER_MINUTE: 2 }, 3)).toEqual([200, 200, 429]);
+  });
+});
+
 describe("login", () => {
   it("RF01: aceita funcionário de demonstração com qualquer senha", async () => {
     const { app } = await createTestApp();
