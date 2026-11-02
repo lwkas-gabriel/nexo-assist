@@ -142,7 +142,7 @@ Três camadas, cada uma cobrindo o que a outra não alcança:
 2. **Avaliação roteirizada do agent (`pnpm eval`).** 18 conversas (22 mensagens) jogadas no **agent de verdade** (o mesmo container do chat), com banco em memória, sistema de chamados fictício e relógio injetado. Confere a **ação escolhida**, não a redação: qual tool foi chamada, tipo e prioridade do rascunho, se transferiu e para qual nível, se bloqueou a duplicidade. Em todo cenário valem os invariantes de privacidade e confirmação: só o dono da sessão é consultado ou recebe chamado (RN09), nenhuma resposta cita chamado alheio e nada é gravado sem um `confirm_draft` de um rascunho proposto em turno anterior. Cobre dúvida na central de ajuda, fora de escopo, pedido vago, incidente, requisição, duplicidade, chamado vencido, caso crítico, consulta sem número, pedido de analista, confirmação e prompt injection. Os cenários são dados validados por Zod em [apps/api/src/eval/scenarios.ts](apps/api/src/eval/scenarios.ts).
 3. **E2E (Playwright)** nos fluxos principais, em desktop (1440 × 900) e celular (390 × 844), com o modelo falso: abrir chamado com rascunho, editar, cancelar e confirmar; transferência, o analista assumir, responder e devolver, vistos pelos dois lados. Há também varredura de acessibilidade com axe em 11 estados.
 
-O CI ([ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request para `develop` e `main`: qualidade (tipos, lint, formatação, testes, build), E2E e segurança (varredura de segredos com gitleaks em todo o histórico e `pnpm audit`, que falha em vulnerabilidade alta ou crítica). As actions são fixadas pelo hash do commit e o workflow só tem permissão de leitura. Um hook de pre-commit roda o gitleaks localmente, se instalado.
+O CI ([ci.yml](.github/workflows/ci.yml)) roda a cada push e pull request para `develop` e `main`: qualidade (tipos, lint, formatação, testes, build), E2E e segurança (varredura de segredos com gitleaks em todo o histórico e `pnpm audit`, que falha em vulnerabilidade alta ou crítica). As actions são fixadas pelo hash do commit e o workflow só tem permissão de leitura. Um hook de pre-commit (ativado sozinho no `pnpm install`) roda o gitleaks localmente, se ele estiver instalado. É opcional, porque o CI faz a mesma varredura: `winget install Gitleaks.Gitleaks` (Windows) ou `brew install gitleaks` (macOS).
 
 **Dois modos da avaliação, escolhidos pelo `LLM_MODE` do `apps/api/.env`:**
 
@@ -185,6 +185,31 @@ Cada turno grava os tokens do classificador e do agent e a latência (RT10); `pn
 - **Chamadas ao modelo:** até 4 por mensagem de texto (classificador + até 3 passos do agent); resposta rápida clicada dispensa o classificador; botões não chamam o modelo.
 - **Medição real, com o Gemini:** uma única conversa (dúvida na central de ajuda, consulta de chamado e abertura de chamado) deu cerca de **10,7 mil tokens por turno**, quase tudo de entrada (instruções, definições das tools e histórico), **cerca de 32 mil por conversa**, e latência de **3,8 s no p50 e 5,7 s no p95** ([AI_LOG, entrada 50](docs/AI_LOG.md)). É uma amostra pequena, de uma conversa só; serve como ordem de grandeza.
 - **O que limita no plano gratuito** é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto), e os tetos acima cobrem isso. Os ganhos mais baratos que sobraram, e não foram feitos, são o cache de prompt do provedor e enxugar as descrições das tools.
+
+## Trade-offs e limites conhecidos
+
+**Trade-offs assumidos**
+
+- **Mais código no servidor em troca de garantias.** Confirmação, pausa e privacidade são código testado, não instrução de prompt. Custa mais código em volta das tools.
+- **Duas etapas por turno.** O classificador garante o registro de decisão, ao custo de uma chamada a mais por mensagem de texto (mais latência e mais cota).
+- **Plano gratuito do Gemini.** Custo zero, mas com cotas por minuto e por dia (um avaliador mandando muitas mensagens seguidas pode ver o aviso de limite) e com o Google podendo usar o conteúdo, aceitável só porque os dados são fictícios.
+- **SQLite e uma instância.** Um processo de escrita por banco; os limites de janela curta ficam em memória.
+- **Polling de 3 s** no console e na conversa transferida, em vez de WebSocket: mais simples, ao custo de requisições repetidas.
+- **Feriados ignorados no cálculo de prazo** (A10): num exemplo do seed, em 30/10/2026, o prazo do chamado da Carla caía em 02/11 (Finados), que o cálculo trata como dia útil.
+- **O resumo de uma sessão é montado pelo código**, não pelo modelo: não gasta cota nem inventa, mas é menos rico.
+
+**Limites e o que não foi verificado**
+
+- **Nada foi medido com o Gemini real na avaliação (T27).** O `pnpm eval` no mock só prova que o harness funciona. Dependem de uma chave e continuam pendentes: a nota real, a calibração das expectativas dos 6 cenários que exigem o modelo real, o limiar de confiança 0,5 e a decisão sobre o sinal "categoria ambígua" (R09), que não foi implementado.
+- **Sem deploy público** (ver [Deploy](#deploy)).
+- **E2E só em Chromium**, com o modelo falso: desktop (1440 × 900) e celular emulado (390 × 844). Safari, Firefox e celular físico não foram testados.
+- **Leitor de tela real não testado.** A acessibilidade foi conferida com axe (11 estados), testes de DOM e teclado. Zoom de 200% e alto contraste do Windows também não. A borda de campos e botões secundários tem contraste de 1,27:1, abaixo dos 3:1 do WCAG 1.4.11; vem do protótipo e ficou registrada, sem correção ([FRONTEND.md](docs/FRONTEND.md), 10.7).
+- **Node 24 pedido, verificação local no 22.** O projeto exige o Node 24 (`engines` e `.nvmrc`), e o CI usa o `.nvmrc`; o último CI da `develop` passou nele. Já as verificações feitas no ambiente de desenvolvimento e a conferência do "como rodar" num clone limpo rodaram no Node 22.23, onde também passaram.
+- **Estados raros só têm teste unitário.** "Sistema de chamados instável" e "resposta interrompida" não têm E2E, porque o E2E roda sem falhas simuladas.
+- **N+1 na lista do console:** cada atualização (a cada 3 s) faz algumas consultas por conversa. Com as poucas conversas da demonstração é barato; em escala, viria uma consulta agregada. Do mesmo modo, o polling do funcionário com o analista traz a conversa inteira (até 200 mensagens) a cada 3 s.
+- **Sem limite de tempo próprio para o LLM no servidor.** A cota esgotada e as falhas do provedor viram aviso, mas um modelo que demora muito deixa o turno esperando (o ARCHITECTURE prevê 30 s, não implementado).
+- **"Histórico anterior recolhido" não foi feito:** ao abrir uma nova sessão, o histórico segue visível acima do resumo (10.5 do FRONTEND.md).
+- **A cota gratuita pode mudar.** Os tetos de uso foram calibrados pela cota vista no AI Studio em 30/10/2026.
 
 ## Deploy
 
