@@ -42,6 +42,12 @@ const envSchema = z
      * sobe, porque seus testes entram todos do mesmo IP.
      */
     LOGINS_PER_IP_PER_MINUTE: z.coerce.number().int().positive().optional(),
+    /**
+     * Tetos de mensagens ao agent por IP, por hora e por dia. Opcionais: sem elas valem os padrões
+     * do container (60 e 40). Só o E2E as sobe, porque todos os seus testes saem do mesmo IP.
+     */
+    CHAT_MESSAGES_PER_IP_PER_HOUR: z.coerce.number().int().positive().optional(),
+    CHAT_MESSAGES_PER_IP_PER_DAY: z.coerce.number().int().positive().optional(),
   })
   .and(llmSchema);
 

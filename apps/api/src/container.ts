@@ -45,12 +45,12 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const CHAT_MESSAGES_PER_USER_PER_HOUR = 30;
 /** Um pouco mais que um funcionário: cabe uma sala com IP compartilhado, não todas as contas de uma vez. */
-const CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
+const DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR = 60;
 /**
  * Bem abaixo do teto global do dia (120): uma pessoa num IP não esgota o dia de todos sozinha.
  * Cabem uns 2 funcionários por IP, o bastante para quem divide a rede do escritório.
  */
-const CHAT_MESSAGES_PER_IP_PER_DAY = 40;
+const DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY = 40;
 const DRAFT_ACTIONS_PER_USER_PER_HOUR = 60;
 const MESSAGES_TO_ANALYST_PER_USER_PER_HOUR = 60;
 const DEFAULT_LOGINS_PER_IP_PER_MINUTE = 20;
@@ -64,6 +64,9 @@ export type ContainerConfig = LlmConfig & {
   CHAT_MESSAGES_PER_DAY: number;
   /** Sem ela, vale `DEFAULT_LOGINS_PER_IP_PER_MINUTE`. */
   LOGINS_PER_IP_PER_MINUTE?: number | undefined;
+  /** Sem elas, valem `DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR` e `DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY`. */
+  CHAT_MESSAGES_PER_IP_PER_HOUR?: number | undefined;
+  CHAT_MESSAGES_PER_IP_PER_DAY?: number | undefined;
 };
 
 /** Tudo de que as rotas precisam, criado num único lugar. Nos testes, basta montar outro. */
@@ -141,7 +144,11 @@ export async function createContainer(
       windowMs: HOUR_MS,
       clock,
     }),
-    perIp: createRateLimiter({ limit: CHAT_MESSAGES_PER_IP_PER_HOUR, windowMs: HOUR_MS, clock }),
+    perIp: createRateLimiter({
+      limit: config.CHAT_MESSAGES_PER_IP_PER_HOUR ?? DEFAULT_CHAT_MESSAGES_PER_IP_PER_HOUR,
+      windowMs: HOUR_MS,
+      clock,
+    }),
     globalPerMinute: createRateLimiter({
       limit: config.CHAT_MESSAGES_PER_MINUTE,
       windowMs: MINUTE_MS,
@@ -160,7 +167,10 @@ export async function createContainer(
   };
   const quota = createAgentQuota({
     limits: chatLimits,
-    dailyCaps: { global: config.CHAT_MESSAGES_PER_DAY, perIp: CHAT_MESSAGES_PER_IP_PER_DAY },
+    dailyCaps: {
+      global: config.CHAT_MESSAGES_PER_DAY,
+      perIp: config.CHAT_MESSAGES_PER_IP_PER_DAY ?? DEFAULT_CHAT_MESSAGES_PER_IP_PER_DAY,
+    },
     usageCounterStore: createUsageCounterStore(db),
     clock,
   });

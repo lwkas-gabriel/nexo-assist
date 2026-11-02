@@ -60,26 +60,27 @@ A saída é uma tabela por cenário (ok, FALHOU ou não avaliado, com a ação e
 
 Cada app tem o próprio `.env.example`, com só o que aquele app precisa. Nenhum valor de ambiente fica no código: tudo é lido e validado num único `config.ts` por app, e a aplicação não sobe se faltar alguma variável.
 
-| App             | Variável                   | Para quê                                                                                     |
-| --------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
-| api             | `PORT`                     | Porta HTTP da api                                                                            |
-| api             | `DATABASE_URL`             | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)                   |
-| api             | `COOKIE_SECURE`            | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local                   |
-| api             | `SEED_ON_START`            | `true` apaga as conversas de demonstração a cada inicialização (deploy)                      |
-| api             | `LLM_MODE`                 | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)                   |
-| api             | `GEMINI_API_KEY`           | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`                     |
-| api             | `LLM_MODEL`                | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`       |
-| api             | `CHAT_MESSAGES_PER_MINUTE` | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (3 no plano gratuito) |
-| api             | `CHAT_MESSAGES_PER_DAY`    | Teto global de mensagens ao agent por dia, dentro da cota do modelo (120 no plano gratuito)  |
-| api             | `LOGINS_PER_IP_PER_MINUTE` | Opcional. Logins por minuto por IP (padrão 20); só o E2E sobe, porque entra tudo do mesmo IP |
-| api             | `TICKETS_SERVICE_URL`      | Endereço do serviço de chamados                                                              |
-| api             | `TICKETS_SERVICE_TOKEN`    | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`             |
-| tickets-service | `PORT`                     | Porta HTTP do serviço de chamados                                                            |
-| tickets-service | `DATABASE_URL`             | Banco SQLite do serviço (`file:./data/tickets.db`)                                           |
-| tickets-service | `SERVICE_TOKEN`            | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`                   |
-| tickets-service | `FAILURE_RATE`             | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável          |
-| tickets-service | `SEED_ON_START`            | `true` recria os dados de demonstração a cada inicialização (deploy)                         |
-| web             | `API_PROXY_TARGET`         | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                         |
+| App             | Variável                                                        | Para quê                                                                                                    |
+| --------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| api             | `PORT`                                                          | Porta HTTP da api                                                                                           |
+| api             | `DATABASE_URL`                                                  | Banco SQLite da api: conversas, mensagens e sessões (`file:./data/api.db`)                                  |
+| api             | `COOKIE_SECURE`                                                 | `true` em produção (cookie só por HTTPS), `false` no desenvolvimento local                                  |
+| api             | `SEED_ON_START`                                                 | `true` apaga as conversas de demonstração a cada inicialização (deploy)                                     |
+| api             | `LLM_MODE`                                                      | `mock` (modelo de teste, sem chave) ou `gemini` (Gemini no plano gratuito)                                  |
+| api             | `GEMINI_API_KEY`                                                | Chave gratuita do Google AI Studio. Obrigatória só com `LLM_MODE=gemini`                                    |
+| api             | `LLM_MODEL`                                                     | Id do modelo do Gemini (`gemini-3.5-flash-lite`). Obrigatória só com `LLM_MODE=gemini`                      |
+| api             | `CHAT_MESSAGES_PER_MINUTE`                                      | Teto global de mensagens ao agent por minuto, dentro da cota do modelo (3 no plano gratuito)                |
+| api             | `CHAT_MESSAGES_PER_DAY`                                         | Teto global de mensagens ao agent por dia, dentro da cota do modelo (120 no plano gratuito)                 |
+| api             | `LOGINS_PER_IP_PER_MINUTE`                                      | Opcional. Logins por minuto por IP (padrão 20); só o E2E sobe, porque entra tudo do mesmo IP                |
+| api             | `CHAT_MESSAGES_PER_IP_PER_HOUR`, `CHAT_MESSAGES_PER_IP_PER_DAY` | Opcionais. Mensagens ao agent por IP, por hora e por dia (padrão 60 e 40); só o E2E sobe, pelo mesmo motivo |
+| api             | `TICKETS_SERVICE_URL`                                           | Endereço do serviço de chamados                                                                             |
+| api             | `TICKETS_SERVICE_TOKEN`                                         | O mesmo segredo do `SERVICE_TOKEN`. Gerado automaticamente pelo `pnpm setup:env`                            |
+| tickets-service | `PORT`                                                          | Porta HTTP do serviço de chamados                                                                           |
+| tickets-service | `DATABASE_URL`                                                  | Banco SQLite do serviço (`file:./data/tickets.db`)                                                          |
+| tickets-service | `SERVICE_TOKEN`                                                 | Segredo que só a api conhece. Gerado automaticamente pelo `pnpm setup:env`                                  |
+| tickets-service | `FAILURE_RATE`                                                  | Fração das requisições que falham de propósito (0 a 1), simulando o legado instável                         |
+| tickets-service | `SEED_ON_START`                                                 | `true` recria os dados de demonstração a cada inicialização (deploy)                                        |
+| web             | `API_PROXY_TARGET`                                              | Só no desenvolvimento: para onde o Vite encaminha as chamadas `/api`                                        |
 
 Os testes E2E sobem servidores próprios, em outras portas e sempre com `LLM_MODE=mock`: rodar `pnpm test:e2e` nunca chama o modelo real nem gasta a cota gratuita, qualquer que seja o seu `.env`.
 

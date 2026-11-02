@@ -67,6 +67,28 @@ describe("loadConfig", () => {
     }
   });
 
+  it("os tetos de mensagens por IP são opcionais e, quando vêm, precisam ser inteiros positivos", () => {
+    const without = loadConfig({ ...baseEnv, LLM_MODE: "mock" });
+    const withLimits = loadConfig({
+      ...baseEnv,
+      LLM_MODE: "mock",
+      CHAT_MESSAGES_PER_IP_PER_HOUR: "500",
+      CHAT_MESSAGES_PER_IP_PER_DAY: "900",
+    });
+
+    expect(without.CHAT_MESSAGES_PER_IP_PER_HOUR).toBeUndefined();
+    expect(without.CHAT_MESSAGES_PER_IP_PER_DAY).toBeUndefined();
+    expect(withLimits.CHAT_MESSAGES_PER_IP_PER_HOUR).toBe(500);
+    expect(withLimits.CHAT_MESSAGES_PER_IP_PER_DAY).toBe(900);
+    for (const name of ["CHAT_MESSAGES_PER_IP_PER_HOUR", "CHAT_MESSAGES_PER_IP_PER_DAY"]) {
+      for (const invalid of ["0", "-1", "muitos", "1.5"]) {
+        expect(() => loadConfig({ ...baseEnv, LLM_MODE: "mock", [name]: invalid })).toThrowError(
+          new RegExp(name),
+        );
+      }
+    }
+  });
+
   it("exige COOKIE_SECURE explícito (true ou false), sem valor padrão no código", () => {
     expect(() => loadConfig({ ...baseEnv, COOKIE_SECURE: "sim", LLM_MODE: "mock" })).toThrowError(
       /COOKIE_SECURE/,
