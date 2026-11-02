@@ -185,8 +185,8 @@ Cada turno grava os tokens do classificador e do agent e a latência (RT10); `pn
 
 - **Dinheiro:** zero. O Gemini é usado no plano gratuito ([ADR-0010](docs/decisions/0010-gemini-plano-gratuito.md)). Não calculei o custo em dinheiro de um plano pago, porque o preço não está nos documentos do projeto.
 - **Chamadas ao modelo:** até 4 por mensagem de texto (classificador + até 3 passos do agent); resposta rápida clicada dispensa o classificador; botões não chamam o modelo.
-- **Medição real, com o Gemini:** uma única conversa (dúvida na central de ajuda, consulta de chamado e abertura de chamado) deu cerca de **10,7 mil tokens por turno**, quase tudo de entrada (instruções, definições das tools e histórico), **cerca de 32 mil por conversa**, e latência de **3,8 s no p50 e 5,7 s no p95** ([AI_LOG, entrada 50](docs/AI_LOG.md)). É uma amostra pequena, de uma conversa só; serve como ordem de grandeza.
-- **O que limita no plano gratuito** é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto), e os tetos acima cobrem isso. Os ganhos mais baratos que sobraram, e não foram feitos, são o cache de prompt do provedor e enxugar as descrições das tools.
+- **Medição real, com o Gemini, feita na T16 (31/10/2026):** uma única conversa de 3 turnos (dúvida na central de ajuda, consulta de chamado e abertura de chamado) deu cerca de **10,7 mil tokens por turno**, quase tudo de entrada (instruções, definições das tools e histórico), **cerca de 32 mil por conversa**, e latência de **3,8 s no p50 e 5,7 s no p95** ([AI_LOG, entrada 50](docs/AI_LOG.md)). Com 3 turnos, o p95 é na prática o maior valor. A soma de tokens do relatório inclui o classificador e o agent. A medição é anterior à mudança de prompt da T19 (entrada 57) e ao teto de 16 mil caracteres no histórico do agent (entrada 51), então os números de hoje podem ser diferentes. Serve como ordem de grandeza.
+- **O que limita no plano gratuito** é o número de requisições por minuto e por dia, não os tokens (250 mil por minuto), e os tetos acima cobrem isso. Os ganhos mais baratos que sobraram, e não foram feitos, são o cache explícito de prompt (o Gemini já faz cache implícito de prefixos repetidos, ADR-0010; o explícito não foi feito) e enxugar as descrições das tools.
 
 ## Trade-offs e limites conhecidos
 
@@ -285,6 +285,6 @@ O padrão que se repete: o autor testa o caminho feliz, e o revisor sem contexto
 - Fazer o deploy no Railway, conferindo o IP real atrás do proxy.
 - Um limite de tempo para o LLM no servidor, e E2E dos estados "sistema instável" e "resposta interrompida".
 - Trocar o polling por um endpoint leve ("houve mudança desde X?") e agregar a lista do console numa consulta só.
-- Cache de prompt do provedor e descrições de tools mais enxutas, para baixar os ~10,7 mil tokens por turno; limites de uso no banco ou num Redis para mais de uma instância.
+- Cache explícito de prompt e descrições de tools mais enxutas, para baixar os ~10,7 mil tokens por turno; limites de uso no banco ou num Redis para mais de uma instância.
 - Testar com leitor de tela real, Safari, Firefox e celular físico; decidir sobre o contraste das bordas de campos (1,27:1).
 - Calendário de feriados no cálculo de prazo e presença real do analista na tela de login (hoje são as sessões abertas).
