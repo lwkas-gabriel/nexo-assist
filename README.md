@@ -211,6 +211,8 @@ Cada turno grava os tokens do classificador e do agent e a latência (RT10); `pn
 - **N+1 na lista do console:** cada atualização (a cada 3 s) faz algumas consultas por conversa. Com as poucas conversas da demonstração é barato; em escala, viria uma consulta agregada. Do mesmo modo, o polling do funcionário com o analista traz a conversa inteira (até 200 mensagens) a cada 3 s.
 - **Sem limite de tempo próprio para o LLM no servidor.** A cota esgotada e as falhas do provedor viram aviso, mas um modelo que demora muito deixa o turno esperando (o ARCHITECTURE prevê 30 s, não implementado).
 - **"Histórico anterior recolhido" não foi feito:** ao abrir uma nova sessão, o histórico segue visível acima do resumo (10.5 do FRONTEND.md).
+- **O E2E já foi intermitente.** O teste do console (analista assume, responde, devolve e encerra) falhou por timeout de 30 s em 4 de 6 rodadas completas (entrada 75). Foi resolvido subindo o timeout desse teste para 90 s; a causa (carga em paralelo) não foi provada: a falha não se repetiu nas rodadas seguintes, então só se deu margem (entrada 76).
+- **Duas promessas dos documentos não foram cumpridas.** O ADR-0003 dizia que o custo do Railway ficaria no README (o Railway não tem plano gratuito; o custo não está calculado), e o R24 do REVIEW pedia registrar a retenção de dados, já que traces e mensagens guardam dados pessoais (não há política de retenção).
 - **A cota gratuita pode mudar.** Os tetos de uso foram calibrados pela cota vista no AI Studio em 30/10/2026.
 
 ## Deploy
@@ -277,14 +279,16 @@ O padrão que se repete: o autor testa o caminho feliz, e o revisor sem contexto
 - **Commits que saíram quebrados:** um com o typecheck falhando (entrada 34), outro com a suíte vermelha por um teste lento (entrada 71) e outro que só compila junto com o seguinte (entrada 76). Desde então, a regra é conferir antes de commitar.
 - **Tarefa seguiu sem revisão (T25, entrada 72).** Foi marcada como concluída antes da revisão independente; ao fazê-la, saiu um achado alto (a conversa desmontada abortava o envio em curso).
 - **Número estimado de cabeça (entrada 74):** o desenvolvedor disse "cerca de 18 logins" no E2E quando eram 20 de 20; o revisor mediu. Repetiu-se na T28 (entrada 78).
+- **A IA sobrescreveu um arquivo existente (T15, entrada 48):** ao criar o repositório de sessões de chat, reusou o nome `session-store.ts`, o das sessões de login. Percebeu na hora, restaurou o original do git e renomeou o novo para `chat-session-store.ts`.
 - **Commits que misturam assuntos** e **22 commits locais sem push** numa execução longa (entradas 74, 75 e 76), já no histórico e sem reescrita.
 
 ## O que faria com mais tempo
 
 - Rodar `pnpm eval` com o Gemini real, calibrar o limiar de confiança 0,5, as expectativas dos 6 cenários dependentes do modelo e decidir sobre o sinal "categoria ambígua".
-- Fazer o deploy no Railway, conferindo o IP real atrás do proxy.
+- Fazer o deploy no Railway, conferindo o IP real atrás do proxy e documentando o custo da plataforma (promessa do ADR-0003).
 - Um limite de tempo para o LLM no servidor, e E2E dos estados "sistema instável" e "resposta interrompida".
 - Trocar o polling por um endpoint leve ("houve mudança desde X?") e agregar a lista do console numa consulta só.
 - Cache explícito de prompt e descrições de tools mais enxutas, para baixar os ~10,7 mil tokens por turno; limites de uso no banco ou num Redis para mais de uma instância.
 - Testar com leitor de tela real, Safari, Firefox e celular físico; decidir sobre o contraste das bordas de campos (1,27:1).
+- Definir a retenção dos dados pessoais guardados em traces e mensagens (R24).
 - Calendário de feriados no cálculo de prazo e presença real do analista na tela de login (hoje são as sessões abertas).
