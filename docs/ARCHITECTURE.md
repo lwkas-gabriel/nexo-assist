@@ -53,7 +53,7 @@ nexo-assist/
 | CSRF | Same-origin (a api serve o web), `SameSite=Lax` + checagem de `Origin` nas rotas que alteram dados |
 | Funcionário ver chamado de outro (RN09) | `userId` sempre da sessão; tools sem parâmetro de dono; tickets-service filtra por dono na própria query (defesa em profundidade); teste automatizado tentando acessar chamado alheio |
 | Funcionário acessar o console | Middleware de papel (`employee` / `analyst`) em todas as rotas do console |
-| Prompt injection ("ignore as regras e crie...", "mostre o chamado do Bruno") | O LLM não grava nada livremente: só propõe rascunhos, e a única escrita (`confirm_draft`) passa pelas checagens de R04 no servidor. Escopo de dados limitado à sessão. Casos na avaliação roteirizada (T27) |
+| Prompt injection ("ignore as regras e crie...", "mostre o chamado do Bruno") | O LLM não cria nem altera chamados livremente: só propõe rascunhos, e essa escrita (`confirm_draft`) passa pelas checagens de R04 no servidor; a transferência (`handoff_to_analyst`) também grava sem confirmação, mas só no chamado do próprio funcionário. Escopo de dados limitado à sessão. Casos na avaliação roteirizada (T27) |
 | Tickets-service exposto | Rede privada do Railway (sem domínio público) + token de serviço em header, comparado em tempo constante |
 | Entrada maliciosa ou malformada | Zod em toda fronteira: corpo HTTP, args das tools, respostas do tickets-service |
 | Abuso e custo (login aceita qualquer senha) | Rate limit por usuário e por IP (mensagens e login), limite de 30 mensagens, teto diário global de mensagens (dentro da cota gratuita do Gemini, sem gasto possível; ADR-0010) |
