@@ -15,7 +15,7 @@ Monorepo `pnpm` com 3 apps e fronteiras explícitas:
 - `apps/tickets-service`: Hono, banco próprio, API REST de chamados, **injeção de falhas** configurável (simula legado instável). A API fala com ele via cliente HTTP com timeout + retry com backoff + mensagem honesta ao usuário quando esgota.
 - Persistência: SQLite via libSQL + Drizzle. Cada serviço tem seu próprio arquivo de banco (`api.db`, `tickets.db`), o que reforça a separação. Sem Docker para rodar local.
 - Local: `pnpm install && pnpm db:seed && pnpm dev` sobe web, api e tickets-service juntos.
-- Railway: 2 serviços no mesmo projeto (api servindo o build estático do web + tickets-service), cada um com seu volume para o SQLite; deploy contínuo a partir da `main` (que só recebe merges da `develop`). `ANTHROPIC_API_KEY` só como variável do Railway.
+- Railway: 2 serviços no mesmo projeto (api servindo o build estático do web + tickets-service), cada um com seu volume para o SQLite; deploy contínuo a partir da `main` (que só recebe merges da `develop`). A chave do Gemini (`GEMINI_API_KEY`) só como variável do Railway.
 - Tempo real no console e na conversa transferida: polling curto (2–3 s). SSE só para o streaming do agent. Simples > elaborado.
 
 ### 5.1 Estrutura do monorepo e camadas
@@ -81,7 +81,7 @@ Princípio: **o LLM interpreta, o código garante as regras.**
 - **Confirmação validada pelo código (RN04, R04):** o agent propõe o rascunho. A criação ou atualização só acontece pelo caso de uso `confirmDraft`, chamado pelo botão, pelo Ctrl/⌘+Enter ou pela tool `confirm_draft`. O servidor recusa se as condições de R04 não forem atendidas.
 - **Pausa por construção (RN08):** se a conversa está com analista, o servidor nem chama o LLM.
 - **Privacidade por construção (RN09):** o `userId` vem da sessão, injetado no contexto das tools; nenhuma tool aceita `userId` do modelo.
-- Tools (cada uma gera um chip em português e um passo de trace): `search_knowledge_base` ("buscou na central de ajuda"), `list_my_tickets` ("consultou seus chamados"), `get_ticket` ("consultou o INC-x"), `classify_priority` ("classificou a prioridade"), `compute_deadline` ("consultou o SLA"), `propose_draft` ("montou o rascunho"), `propose_update`, `confirm_draft`, `ask_with_options`, `handoff_to_analyst` ("chamou um analista").
+- Tools (cada uma gera um chip em português e um passo de trace): `search_knowledge_base` ("buscou na central de ajuda"), `list_my_tickets` ("consultou seus chamados"), `get_ticket` ("consultou o INC-x"), `propose_ticket_draft` ("montou o rascunho"), `propose_ticket_update`, `confirm_draft`, `ask_with_options` e `handoff_to_analyst` ("chamou um analista"). A prioridade e o prazo não são tools: o código os calcula dentro das tools de proposta (domínio).
 - Cada turno gera um **registro de decisão**: classificação da etapa 1 (intenção entendida, confiança, porquê) + ações da etapa 2 (tools chamadas, regras aplicadas, resultado). Persistido e exibido ao expandir os chips. Confiança ajustada por sinais determinísticos (R09) abaixo do limiar calibrado → transferência "agent pediu ajuda".
 - Custo: modelo barato e rápido, prompt de sistema curto, histórico em janela + resumo, KB pequena com busca por palavras-chave (sem embeddings).
 
