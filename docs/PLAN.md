@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T28 concluídas (a nota real do Gemini na T27 depende de uma chave); próxima: T29. Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T28 concluídas (a nota real do Gemini na T27 depende de uma chave); T29 parcial (README e seção de IA feitos; deploy no Railway pendente, por o cadastro não estar liberado). Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -174,7 +174,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 - [x] T28 E2E Playwright: (1) abrir chamado com rascunho e confirmação; (2) transferência → analista assume → devolve (LLM mockado no E2E) — **concluída.** Os dois fluxos já tinham E2E de tarefas anteriores; a auditoria achou lacunas reais e acrescentou: editar e cancelar o rascunho com prioridade e prazo recalculados, nada gravado antes de confirmar (RN04), o chamado criado visível ao funcionário; e, no console, o chamado crítico transferido automaticamente (A04), "em atendimento" ao assumir (R31) e "em andamento" ao devolver (R18), contador pausado (RN14), agent calado com o analista (RN08), RN09, tudo visto pelos dois lados no desktop e no celular (390 × 844). Os tetos de mensagens por IP viraram configuráveis por variável opcional (`CHAT_MESSAGES_PER_IP_PER_HOUR` e `CHAT_MESSAGES_PER_IP_PER_DAY`, produção em 60 e 40), e só o servidor do E2E os sobe. Revisão adversarial independente: 10 achados, nenhum crítico, todos tratados ou registrados (AI_LOG 78).
 
 **Fase 4**
-- [ ] T29 Revisão final do README + seção de IA a partir do AI_LOG.md + **deploy no Railway** (adiado da T02b: projeto, variáveis, domínio e link no README) com o Gemini no plano gratuito
+- [ ] T29 Revisão final do README + seção de IA a partir do AI_LOG.md + **deploy no Railway** (adiado da T02b: projeto, variáveis, domínio e link no README) com o Gemini no plano gratuito — **PARCIAL (README e seção de IA feitos, deploy pendente).** Feito: revisão final do README (como rodar conferido num clone limpo, decisões, como o agent decide, qualidade, segurança, custo, trade-offs e limites, seção de IA a partir do AI_LOG) e alinhamento do ARCHITECTURE; revisão adversarial independente: 1 crítico (de entrega, README velho na `main`, decisão do dono), 4 importantes (afirmações falsas), 13 menores, todos tratados ou registrados (AI_LOG 79). **Pendente:** o deploy no Railway (o cadastro não está sendo liberado; o link de deploy é opcional no formulário de entrega), o `railway.json` nunca foi testado, e a rodada do `pnpm eval` com o Gemini real (T27) para a nota e a calibração do limiar.
 
 ## 7.1 README (em português), foco em **como rodar** e **principais decisões**
 O esqueleto nasce na T01 e é atualizado a cada tarefa que mude como rodar ou alguma decisão. Assim ele nunca fica para o fim.
