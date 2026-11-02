@@ -63,12 +63,14 @@ export default defineConfig({
         SEED_ON_START: "false",
         TICKETS_SERVICE_URL: `http://localhost:${E2E_TICKETS_PORT}`,
         TICKETS_SERVICE_TOKEN: E2E_SERVICE_TOKEN,
-        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo. Fica de
-        // fora o teto por IP (40 mensagens ao agent por dia, fixo em container.ts): todo o E2E
-        // sai do mesmo IP, então ele vale para a suíte inteira, nos dois projetos. Conte as
-        // mensagens de um teste novo (cada envio de texto ao agent gasta uma; clique em botão, não).
+        // Sem cota de modelo real no modo mock: tetos altos para os testes em paralelo, inclusive
+        // os por IP (padrão de 60 por hora e 40 por dia): todo o E2E sai do mesmo IP, nos dois
+        // projetos, e a suíte já gastava 36 das 40 mensagens por dia. Cada texto enviado ao agent
+        // e cada resposta rápida clicada gastam uma; clique em Confirmar ou Cancelar, não.
         CHAT_MESSAGES_PER_MINUTE: "1000",
         CHAT_MESSAGES_PER_DAY: "1000",
+        CHAT_MESSAGES_PER_IP_PER_HOUR: "1000",
+        CHAT_MESSAGES_PER_IP_PER_DAY: "1000",
         // Todos os testes entram do mesmo IP, nos dois projetos (desktop e celular), e o E2E já
         // usa os 20 logins por minuto do padrão; a folga evita falha por "muitas tentativas".
         LOGINS_PER_IP_PER_MINUTE: "1000",
