@@ -7,7 +7,7 @@
 > [REVIEW.md](REVIEW.md) — seção 9 (revisões adversariais R01–R47) ·
 > [AI_LOG.md](AI_LOG.md) — registro do uso de IA
 
-**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T27 concluídas (a nota real do Gemini na T27 depende de uma chave); próxima: T28. Modelo: Gemini no plano gratuito (ADR-0010).
+**Status:** Fase 1 concluída (29/10/2026). Fase 2 concluída: T01, T02 e T02b (deploy adiado para a T29 por decisão do usuário). Fase 3 em andamento: T03 a T28 concluídas (a nota real do Gemini na T27 depende de uma chave); próxima: T29. Modelo: Gemini no plano gratuito (ADR-0010).
 
 ## Contexto
 Desafio técnico (vaga fullstack, desenvolvimento assistido por IA é avaliado). Construir o **Nexo Assist**: chat de service desk de TI com agent (Mastra), serviço de chamados simulado e console do analista, seguindo o protótipo `nexo.pen`. Entregáveis: repositório, deploy, comandos, README.
@@ -171,7 +171,7 @@ Fontes: `Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf` (PRD + Anexos A/B/C) e o protó
 
 **Fase 3 — Qualidade**
 - [x] T27 Avaliação do agent: conjunto de ~15 conversas roteirizadas (dúvida, fora de escopo, duplicidade, vencido, crítico, privacidade) checando a ação escolhida (critério "qualidade das decisões") — **concluída como harness; a nota do Gemini real continua pendente.** `pnpm eval` roda 18 cenários (22 mensagens) que conferem a ação escolhida (tool, rascunho, transferência) e os invariantes de privacidade e confirmação (RN09, RN04, R04), lidos do que o produto grava. No mock, 12 cenários são avaliados e 6 exigem o modelo real (cobertura 12/18); o resultado do mock só prova que o harness funciona e não mede o modelo. **Pendente, depende de uma chave do Gemini:** rodar `LLM_MODE=gemini pnpm eval`, calibrar as expectativas dos 6 cenários, calibrar o limiar de confiança 0,5 (T14) e decidir sobre o sinal "categoria ambígua" (R09). Revisão adversarial independente: 15 achados, nenhum crítico, 14 tratados (AI_LOG 77).
-- [ ] T28 E2E Playwright: (1) abrir chamado com rascunho e confirmação; (2) transferência → analista assume → devolve (LLM mockado no E2E)
+- [x] T28 E2E Playwright: (1) abrir chamado com rascunho e confirmação; (2) transferência → analista assume → devolve (LLM mockado no E2E) — **concluída.** Os dois fluxos já tinham E2E de tarefas anteriores; a auditoria achou lacunas reais e acrescentou: editar e cancelar o rascunho com prioridade e prazo recalculados, nada gravado antes de confirmar (RN04), o chamado criado visível ao funcionário; e, no console, o chamado crítico transferido automaticamente (A04), "em atendimento" ao assumir (R31) e "em andamento" ao devolver (R18), contador pausado (RN14), agent calado com o analista (RN08), RN09, tudo visto pelos dois lados no desktop e no celular (390 × 844). Os tetos de mensagens por IP viraram configuráveis por variável opcional (`CHAT_MESSAGES_PER_IP_PER_HOUR` e `CHAT_MESSAGES_PER_IP_PER_DAY`, produção em 60 e 40), e só o servidor do E2E os sobe. Revisão adversarial independente: 10 achados, nenhum crítico, todos tratados ou registrados (AI_LOG 78).
 
 **Fase 4**
 - [ ] T29 Revisão final do README + seção de IA a partir do AI_LOG.md + **deploy no Railway** (adiado da T02b: projeto, variáveis, domínio e link no README) com o Gemini no plano gratuito
