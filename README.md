@@ -8,7 +8,7 @@ Agent de atendimento do service desk de TI da Nexo (desafio técnico). O funcion
 
 ## Como rodar
 
-**Pré-requisitos:** Node.js 24 ou superior (`.nvmrc` e `engines`) e pnpm 12 (`corepack enable`, ou `npm install -g pnpm`). Não precisa de Docker nem de banco instalado: o SQLite é um arquivo local.
+**Pré-requisitos:** Node.js 24 ou superior (`.nvmrc` e `engines`; é o que o CI usa). O projeto também rodou e passou nos testes no Node 22.23, sem suporte oficial; outras versões 22 não foram testadas. Também é preciso o pnpm 12 (`corepack enable`, ou `npm install -g pnpm`). Não precisa de Docker nem de banco instalado: o SQLite é um arquivo local.
 
 ```bash
 pnpm install       # instala as dependências
@@ -17,7 +17,7 @@ pnpm db:seed       # cria os bancos e grava os dados de demonstração
 pnpm dev           # sobe web (http://localhost:5173), api (:3000) e tickets-service (:3001)
 ```
 
-Acesse http://localhost:5173 e entre com uma das [contas de demonstração](#contas-de-demonstração). Para conferir que a api subiu: `curl http://localhost:3000/api/health`.
+Acesse http://localhost:5173 e entre com uma das [contas de demonstração](#contas-de-demonstração). Para conferir que a api subiu: `curl http://localhost:3000/api/health`. Ao subir a api, o Mastra imprime o aviso "No `storage` configured on Mastra" (armazenamento em memória): é esperado. O projeto não usa o armazenamento do Mastra; conversas, mensagens e registros ficam no SQLite do próprio app, e a memória do Mastra fica desligada para não haver dois históricos (ARCHITECTURE, seção 5.1).
 
 Por padrão o agent roda com um **modelo de teste** (`LLM_MODE=mock`): funciona sem chave, com respostas roteirizadas por palavras-chave. Isso basta para ver o fluxo, mas **não representa a qualidade do modelo real**. Para usar o Gemini de verdade, no plano gratuito (sem cartão e sem custo), crie uma chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e edite `apps/api/.env`:
 
